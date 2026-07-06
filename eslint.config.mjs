@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Contenu tiers (skills.sh), pas du code du projet
+    ".agents/**",
   ]),
 ]);
 
