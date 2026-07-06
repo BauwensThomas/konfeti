@@ -17,6 +17,7 @@ export default async function ConnexionPage({
         alt="La mascotte Konfeti"
         width={200}
         height={200}
+        priority
         className="w-32"
       />
 

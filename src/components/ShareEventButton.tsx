@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 export function ShareEventButton({ title, url }: { title: string; url: string }) {
   const t = useTranslations("EventPage");
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState(false);
 
   async function handleShare() {
     if (navigator.share) {
@@ -22,14 +23,23 @@ export function ShareEventButton({ title, url }: { title: string; url: string })
       return;
     }
 
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    // La copie peut échouer pour des raisons hors de notre contrôle (page
+    // sans focus, permission refusée, contexte non sécurisé...) : sans ce
+    // try/catch, un échec silencieux ne donnait aucun retour à la personne.
+    try {
+      await navigator.clipboard.writeText(url);
+      setError(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError(true);
+      setTimeout(() => setError(false), 2000);
+    }
   }
 
   return (
     <Button variant="secondary" onClick={handleShare} className="text-sm">
-      {copied ? t("shareCopied") : t("shareButton")}
+      {copied ? t("shareCopied") : error ? t("shareError") : t("shareButton")}
     </Button>
   );
 }

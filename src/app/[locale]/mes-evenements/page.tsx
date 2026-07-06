@@ -42,6 +42,7 @@ export default async function MyEventsPage() {
             alt="La mascotte Konfeti"
             width={160}
             height={160}
+            priority
             className="w-28"
           />
           <p className="font-display text-lg text-foreground">{t("emptyTitle")}</p>

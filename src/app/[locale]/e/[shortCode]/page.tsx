@@ -228,6 +228,7 @@ export default async function EventPage({
           alt="La mascotte Konfeti"
           width={120}
           height={120}
+          priority
           className="w-24"
         />
         <h1 className="font-display text-2xl font-bold text-white">{preview.title}</h1>

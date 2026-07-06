@@ -163,6 +163,7 @@
     "editEvent": "Modifier",
     "shareButton": "Partager",
     "shareCopied": "Lien copié !",
+    "shareError": "Impossible de copier, réessaie.",
     "deleteEvent": "Supprimer l'événement",
     "deleteConfirm": "Es-tu sûr ? Cette action est définitive.",
     "deleteConfirmYes": "Oui, supprimer",
