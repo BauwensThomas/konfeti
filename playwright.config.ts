@@ -1,5 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Le process de test Playwright est séparé de celui du serveur Next.js (qui charge
+// .env.local tout seul) : on le charge explicitement ici pour que les tests qui
+// parlent directement à Supabase (vérification/nettoyage côté service_role) fonctionnent.
+try {
+  process.loadEnvFile(".env.local");
+} catch {
+  // absent en CI tant qu'aucun pipeline n'est configuré : pas bloquant ici
+}
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,

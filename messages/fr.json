@@ -1,6 +1,17 @@
 {
   "Home": {
     "title": "Konfeti",
-    "subtitle": "Des invitations qui donnent envie de venir."
+    "subtitle": "Des invitations qui donnent envie de venir.",
+    "description": "Bientôt, tout ton événement vit ici.\nRéponses, chat, cagnotte, playlist, ..\nFini le groupe qui part dans tous les sens.",
+    "waitlistHeading": "Sois prévenu au lancement"
+  },
+  "Waitlist": {
+    "emailLabel": "Ton adresse email",
+    "emailPlaceholder": "ton@email.com",
+    "submit": "Me prévenir",
+    "submitting": "Un instant...",
+    "success": "C'est noté, on te prévient dès que Konfeti est prêt !",
+    "errorInvalidEmail": "Cet email n'a pas l'air valide, tu peux vérifier ?",
+    "errorUnknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant."
   }
 }
