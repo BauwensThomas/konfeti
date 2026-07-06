@@ -61,9 +61,11 @@ next-env.d.ts
 /images
 /KONFETI-BRIEF-COMPLET.md
 
-# fichiers de travail Claude Code
+# fichiers de travail Claude Code / agents IA (jamais sur GitHub, demande de Thomas)
 .claude/
+CLAUDE.md
 CLAUDE.local.md
+AGENTS.md
 
 # dumps SQL
 *.sql.dump
