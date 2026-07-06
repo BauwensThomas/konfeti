@@ -9,6 +9,8 @@ import { EventTabs } from "@/components/EventTabs";
 import { EventPhotoEditor } from "@/components/EventPhotoEditor";
 import { CancelEventButton } from "@/components/CancelEventButton";
 import { DatePollVoting } from "@/components/DatePollVoting";
+import { GuestParticipation } from "@/components/GuestParticipation";
+import { GuestPendingScreen } from "@/components/GuestPendingScreen";
 import { Card } from "@/components/ui/Card";
 
 export default async function EventPage({
@@ -126,7 +128,7 @@ export default async function EventPage({
   // non validé.
   const { data: preview } = await supabase
     .from("events_public_data")
-    .select("short_code, title, theme")
+    .select("id, short_code, title, theme, allow_companions")
     .eq("short_code", shortCode)
     .maybeSingle();
 
@@ -134,6 +136,26 @@ export default async function EventPage({
 
   const t = await getTranslations("EventPage");
   const theme = EVENT_THEMES.find((th) => th.key === preview.theme) ?? EVENT_THEMES[0];
+
+  // La ligne rsvps brute reste lisible par son propriétaire même quand la
+  // policy RLS d'`events` ne renvoie encore rien (rsvps_select_own_or_admin
+  // n'exige pas d'être approuvé, contrairement à events_select_full_for_participants).
+  const { data: myRsvp } = user
+    ? await supabase
+        .from("rsvps")
+        .select("status")
+        .eq("event_id", preview.id)
+        .eq("profile_id", user.id)
+        .maybeSingle()
+    : { data: null };
+
+  const { data: myProfile } = user
+    ? await supabase
+        .from("profiles")
+        .select("first_name, last_name, phone, gender, avatar_kind, avatar_value")
+        .eq("id", user.id)
+        .maybeSingle()
+    : { data: null };
 
   return (
     <main className="flex flex-1 flex-col items-center gap-8 px-6 py-16 text-center sm:py-24">
@@ -153,6 +175,29 @@ export default async function EventPage({
         <h1 className="font-display text-2xl font-bold text-white">{preview.title}</h1>
       </div>
       <p className="max-w-sm lg:max-w-md text-sm text-foreground/70">{t("previewNotice")}</p>
+
+      {myRsvp ? (
+        <GuestPendingScreen />
+      ) : (
+        <GuestParticipation
+          eventId={preview.id}
+          shortCode={preview.short_code}
+          allowCompanions={preview.allow_companions}
+          hasSession={!!user}
+          initial={
+            myProfile && myProfile.first_name
+              ? {
+                  firstName: myProfile.first_name ?? "",
+                  lastName: myProfile.last_name ?? "",
+                  phone: myProfile.phone ?? "",
+                  gender: (myProfile.gender as "female" | "male" | null) ?? null,
+                  avatarKind: (myProfile.avatar_kind as "preset" | "photo") ?? "preset",
+                  avatarValue: myProfile.avatar_value ?? null,
+                }
+              : null
+          }
+        />
+      )}
     </main>
   );
 }
