@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -11,7 +12,53 @@ import { CancelEventButton } from "@/components/CancelEventButton";
 import { DatePollVoting } from "@/components/DatePollVoting";
 import { GuestParticipation } from "@/components/GuestParticipation";
 import { GuestPendingScreen } from "@/components/GuestPendingScreen";
+import { ShareEventButton } from "@/components/ShareEventButton";
 import { Card } from "@/components/ui/Card";
+
+// Open Graph dynamique (brief 5.7/Phase 3) : le titre/aperçu de partage
+// reflète l'événement (titre réel), mais ne se base QUE sur `events_public_data`
+// (titre + thème seulement), jamais sur la ligne `events` complète : un lien
+// partagé peut être "unfurl" par un bot (WhatsApp, Messenger...) sans jamais
+// passer par une session authentifiée, donc sans plus de droits qu'un
+// visiteur anonyme (brief 1.3). `robots: noindex` : jamais indexé par un
+// moteur de recherche (le vrai `robots.txt`, Phase 6, le confirmera aussi).
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ shortCode: string }>;
+}): Promise<Metadata> {
+  const { shortCode } = await params;
+  const supabase = await createClient();
+  const { data: preview } = await supabase
+    .from("events_public_data")
+    .select("title")
+    .eq("short_code", shortCode)
+    .maybeSingle();
+
+  if (!preview) {
+    return { robots: { index: false, follow: false } };
+  }
+
+  const t = await getTranslations("EventPage");
+  const ogImage = `/api/og/${shortCode}`;
+
+  return {
+    title: preview.title,
+    description: t("ogDescription"),
+    robots: { index: false, follow: false },
+    openGraph: {
+      title: preview.title,
+      description: t("ogDescription"),
+      images: [{ url: ogImage, width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: preview.title,
+      description: t("ogDescription"),
+      images: [ogImage],
+    },
+  };
+}
 
 export default async function EventPage({
   params,
@@ -90,6 +137,12 @@ export default async function EventPage({
         ).data?.signedUrl ?? null
       : null;
     const t = await getTranslations("EventPage");
+    // Bouton Partager (brief 4.2) : visible de l'hôte, et de tout participant
+    // approuvé si l'hôte a choisi "tous" (share_policy) plutôt que "admins
+    // seulement". Personne d'autre que l'hôte n'est encore approuvé en
+    // pratique (Phase 4, validation), mais le contrôle est déjà correct.
+    const canShare = isHost || event.share_policy === "all";
+    const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/e/${event.short_code}`;
 
     return (
       <main className="flex flex-1 flex-col items-center gap-6 px-6 py-8 sm:py-12">
@@ -107,6 +160,11 @@ export default async function EventPage({
               </Link>
               <CancelEventButton eventId={event.id} />
             </div>
+          </div>
+        )}
+        {canShare && (
+          <div className="flex w-full max-w-lg lg:max-w-2xl justify-center">
+            <ShareEventButton title={event.title} url={shareUrl} />
           </div>
         )}
         <EventTabs
@@ -230,6 +288,7 @@ type EventRow = {
   pot_goal_cents: number | null;
   pot_label: string | null;
   host_id: string;
+  share_policy: "all" | "admins";
 };
 
 async function EventAccueil({

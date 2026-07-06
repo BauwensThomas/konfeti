@@ -37,6 +37,17 @@ async function run() {
     .webp({ quality: 90 })
     .toFile("public/mascot.webp");
 
+  // Version PNG dédiée à l'image Open Graph dynamique (opengraph-image.tsx) :
+  // ImageResponse (next/og) embarque son propre sharp en interne, et charger
+  // un deuxième sharp (le nôtre) dans le même process au moment de la requête
+  // fait planter libvips (conflit de version). Pré-générée ici, hors du
+  // process du serveur Next.js, pour que la route se contente d'un `readFile`.
+  await mascotTrimmed
+    .clone()
+    .resize(220, 220, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toFile("public/mascot-og.png");
+
   // Version 256px, plus légère, pour les usages en petit (avatar, favicon de secours)
   await mascotTrimmed
     .clone()
