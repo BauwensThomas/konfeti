@@ -3,6 +3,7 @@ import { Baloo_2, Nunito } from "next/font/google";
 import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
+import { ConfettiBackground } from "@/components/ConfettiBackground";
 import "./globals.css";
 
 const balooTwo = Baloo_2({
@@ -42,6 +43,7 @@ export default async function LocaleLayout({
       className={`${balooTwo.variable} ${nunito.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <ConfettiBackground />
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>
     </html>
