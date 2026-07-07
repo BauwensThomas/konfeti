@@ -27,5 +27,5 @@ export const guestCodeSchema = z.object({
     .string()
     .trim()
     .toUpperCase()
-    .regex(/^[A-Z]+-[0-9]{4}$/, "guest_code_invalid"),
+    .regex(/^[A-Z]+-[A-Z0-9]{6}$/, "guest_code_invalid"),
 });

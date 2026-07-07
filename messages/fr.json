@@ -208,7 +208,7 @@
     "doorLogin": "Se connecter",
     "doorGuest": "Continuer sans compte",
     "doorCode": "J'ai déjà un code",
-    "codePlaceholder": "MOT-1234",
+    "codePlaceholder": "MOT-XXXXXX",
     "codeSubmit": "Retrouver ma place",
     "codeSubmitting": "Recherche...",
     "codeBack": "← Retour",

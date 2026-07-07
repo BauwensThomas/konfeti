@@ -1,22 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { generateGuestCode, generateShortCode } from "./short-code";
+import { generateShortCode } from "./short-code";
 
 describe("generateShortCode", () => {
-  it("génère un code au format MOT-1234", () => {
-    expect(generateShortCode()).toMatch(/^[A-Z]+-[0-9]{4}$/);
-  });
-});
-
-describe("generateGuestCode", () => {
-  it("génère un code au format MOT-1234", () => {
-    expect(generateGuestCode()).toMatch(/^[A-Z]+-[0-9]{4}$/);
+  it("génère un code au format MOT-XXXXXXXX (8 caractères alphanumériques)", () => {
+    expect(generateShortCode()).toMatch(/^[A-Z]+-[A-Z0-9]{8}$/);
   });
 
-  it("utilise des mots différents du code d'événement pour ne pas les confondre", () => {
-    const guestCode = generateGuestCode();
-    const word = guestCode.split("-")[0];
-    expect(["FIESTA", "PARTY", "CONFETTI", "SOIREE", "FETE", "DISCO", "GALA", "BOOM"]).not.toContain(
-      word,
-    );
+  it("génère des codes différents à chaque appel (entropie suffisante)", () => {
+    const codes = new Set(Array.from({ length: 20 }, () => generateShortCode()));
+    expect(codes.size).toBe(20);
   });
 });

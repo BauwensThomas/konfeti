@@ -74,7 +74,7 @@ test("un visiteur sans compte (porte 2) renseigne son identite et voit l'ecran d
       expect(rsvp?.status).toBe("pending");
       expect(rsvp?.first_name).toBe("Marc");
       expect(rsvp?.last_name).toBe("Untel");
-      expect(rsvp?.guest_code).toMatch(/^[A-Z]+-[0-9]{4}$/);
+      expect(rsvp?.guest_code).toMatch(/^[A-Z]+-[A-Z0-9]{6}$/);
       firstGuestUserId = rsvp!.profile_id;
 
       // Récupération cross-device : un deuxième appareil (contexte neuf) saisit
@@ -85,7 +85,7 @@ test("un visiteur sans compte (porte 2) renseigne son identite et voit l'ecran d
       try {
         await recoveryPage.goto(`/e/${event.short_code}`);
         await recoveryPage.getByRole("button", { name: "J'ai déjà un code" }).click();
-        await recoveryPage.getByPlaceholder("MOT-1234").fill(rsvp!.guest_code!);
+        await recoveryPage.getByPlaceholder("MOT-XXXXXX").fill(rsvp!.guest_code!);
         await recoveryPage.getByRole("button", { name: "Retrouver ma place" }).click();
 
         await expect(
