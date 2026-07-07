@@ -14,6 +14,17 @@ test("un evenement a des metadonnees Open Graph dynamiques et un bouton Partager
   const email = `e2e-share-og-${Date.now()}@example.com`;
   const user = await loginAs(page, email);
 
+  // navigator.share() ouvre la vraie feuille de partage native de l'OS en
+  // mode "headed" (navigateur visible, ex. le plugin Test de l'IDE) — une
+  // fenetre systeme que le test ne peut ni voir ni fermer, ce qui bloque le
+  // test indefiniment. En CLI headless, navigator.share n'existe pas du
+  // tout, donc ce risque passe inapercu. On neutralise l'API explicitement
+  // pour un comportement deterministe (repli "copier le lien") quel que
+  // soit le mode d'execution.
+  await page.addInitScript(() => {
+    Object.defineProperty(window.navigator, "share", { value: undefined, configurable: true });
+  });
+
   try {
     await page.goto("/profil/completer");
     await page.getByLabel("Ton numéro de téléphone").fill("+32470000095");
@@ -53,8 +64,8 @@ test("un evenement a des metadonnees Open Graph dynamiques et un bouton Partager
     expect(ogImage.headers()["content-type"]).toBe("image/png");
     expect((await ogImage.body()).length).toBeGreaterThan(1000);
 
-    // Bouton Partager : navigator.share n'est pas disponible en Chromium
-    // headless par defaut, donc le clic emprunte le repli "copier le lien".
+    // Bouton Partager : navigator.share neutralisee plus haut, le clic
+    // emprunte donc le repli "copier le lien".
     await page.goto(`/e/${event.short_code}`);
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.getByRole("button", { name: "Partager" }).click();
