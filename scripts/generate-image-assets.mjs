@@ -62,12 +62,19 @@ async function run() {
     .webp({ quality: 90 })
     .toFile("public/logo-texte.webp");
 
-  // Emoji photo (mascotte à l'appareil photo), placeholder rond affiché tant
-  // qu'aucune photo de couverture n'a été choisie pour un événement
-  await sharp("images/photo.png")
-    .trim()
-    .resize(300, 300, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-    .webp({ quality: 90 })
+  // Emoji photo (mascotte licorne), placeholder rond affiché tant qu'aucune
+  // photo de couverture/avatar n'a été choisie (remplace l'ancienne mascotte
+  // à l'appareil photo, demande de Thomas). Fond blanc explicite + WebP sans
+  // perte : même traitement que attention.webp/rdv.webp, la source est une
+  // image opaque sur fond blanc, pas une vraie transparence (voir DECISIONS.md
+  // pour le liseré de compression évité par ce choix). Seuil de trim relevé
+  // à 30 (défaut 10) : un pixel résiduel très pâle loin du personnage faisait
+  // sinon déborder la détection de contour bien au-delà du bras droit,
+  // décentrant visuellement le personnage vers la gauche une fois recadré.
+  await sharp("images/licorne.png")
+    .trim({ threshold: 30 })
+    .resize(300, 300, { fit: "contain", background: "#ffffff" })
+    .webp({ lossless: true })
     .toFile("public/photo-placeholder.webp");
 
   // Emoji attention (triangle d'avertissement), affiché dans les popups

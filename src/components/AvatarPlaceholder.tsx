@@ -1,7 +1,7 @@
 /**
  * Avatar générique rond affiché tant qu'aucune photo de couverture n'a été
- * choisie pour l'événement (demande de Thomas) : l'émoji "photo" du pack
- * maison (`images/photo.png`, optimisé par `scripts/generate-image-assets.mjs`
+ * choisie pour l'événement (demande de Thomas) : l'émoji "licorne" du pack
+ * maison (`images/licorne.png`, optimisé par `scripts/generate-image-assets.mjs`
  * vers `public/photo-placeholder.webp`), jamais l'original modifié à la main.
  * Le padding interne recule volontairement le personnage par rapport au bord
  * du cercle (retour de Thomas : l'image touchait les bords).

@@ -55,10 +55,11 @@ next-env.d.ts
 
 # --- Konfeti : fichiers propres au projet (brief section 0, règle absolue 3) ---
 
-# dossiers de travail hors code (backups, notes, visuels sources, le brief lui-meme)
+# dossiers de travail hors code (backups, notes, visuels/videos sources, le brief lui-meme)
 /backups
 /doc
 /images
+/videos
 /KONFETI-BRIEF-COMPLET.md
 
 # fichiers de travail Claude Code / agents IA (jamais sur GitHub, demande de Thomas)

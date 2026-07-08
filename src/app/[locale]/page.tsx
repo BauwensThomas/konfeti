@@ -36,6 +36,19 @@ export default function Home() {
         </p>
       </div>
 
+      <div className="flex w-full max-w-sm flex-col items-center gap-2">
+        <p className="font-display text-lg text-foreground">{t("videoHeading")}</p>
+        <div className="w-full overflow-hidden rounded-2xl border-4 border-primary shadow-lg">
+          <video
+            src="/video-presentation.mp4"
+            poster="/video-presentation-poster.jpg"
+            controls
+            preload="none"
+            className="w-full block"
+          />
+        </div>
+      </div>
+
       <div className="flex w-full max-w-sm flex-col items-center gap-4">
         <p className="font-display text-lg text-foreground">
           {t("waitlistHeading")}
