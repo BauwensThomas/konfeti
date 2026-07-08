@@ -1,0 +1,207 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import {
+  rsvpIdSchema,
+  approveRsvpSchema,
+  setParticipantRoleSchema,
+  updateMyAnswerSchema,
+} from "@/lib/validation/participants";
+import { isRateLimited } from "@/lib/rate-limit";
+
+export type ParticipantActionResult =
+  | { ok: true }
+  | { ok: false; error: "invalid" | "not_authenticated" | "rate_limited" | "unauthorized" | "unknown" };
+
+// Un admin valide une demande en attente en lui attribuant un rôle (brief
+// 1.3 étape 4). `admin_approve_rsvp` (security definer) vérifie elle-même
+// les droits et le statut de départ ("pending" uniquement).
+export async function approveRsvp(
+  rsvpId: string,
+  shortCode: string,
+  role: "guest" | "beneficiary",
+): Promise<ParticipantActionResult> {
+  const parsed = approveRsvpSchema.safeParse({ rsvpId, role });
+  if (!parsed.success) {
+    return { ok: false, error: "invalid" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "not_authenticated" };
+  }
+
+  if (isRateLimited(`approveRsvp:${user.id}`, 60, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
+  const { error } = await supabase.rpc("admin_approve_rsvp", {
+    p_rsvp_id: parsed.data.rsvpId,
+    p_role: parsed.data.role,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message.includes("not authorized") ? "unauthorized" : "unknown" };
+  }
+
+  revalidatePath(`/e/${shortCode}`);
+  return { ok: true };
+}
+
+// Refuser une demande "pending"/"restricted" ou retirer un participant
+// "approved" : même fonction SQL, même bouton côté admin selon le contexte
+// d'affichage (brief 1.3/1.5). `leave_or_remove_participant` anonymise la
+// ligne et nettoie les engagements (sondages, companions...), sans jamais
+// toucher à la cagnotte.
+export async function removeParticipant(
+  rsvpId: string,
+  shortCode: string,
+): Promise<ParticipantActionResult> {
+  const parsed = rsvpIdSchema.safeParse({ rsvpId });
+  if (!parsed.success) {
+    return { ok: false, error: "invalid" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "not_authenticated" };
+  }
+
+  if (isRateLimited(`removeParticipant:${user.id}`, 60, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
+  const { error } = await supabase.rpc("leave_or_remove_participant", {
+    p_rsvp_id: parsed.data.rsvpId,
+    p_new_status: "removed",
+  });
+
+  if (error) {
+    return { ok: false, error: error.message.includes("not authorized") ? "unauthorized" : "unknown" };
+  }
+
+  revalidatePath(`/e/${shortCode}`);
+  return { ok: true };
+}
+
+// Départ volontaire (brief 1.5) : même fonction que removeParticipant, mais
+// avec le statut "left" — leave_or_remove_participant impose elle-même que
+// seul le propriétaire de la ligne puisse choisir ce statut.
+export async function leaveEvent(
+  rsvpId: string,
+  shortCode: string,
+): Promise<ParticipantActionResult> {
+  const parsed = rsvpIdSchema.safeParse({ rsvpId });
+  if (!parsed.success) {
+    return { ok: false, error: "invalid" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "not_authenticated" };
+  }
+
+  if (isRateLimited(`leaveEvent:${user.id}`, 30, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
+  const { error } = await supabase.rpc("leave_or_remove_participant", {
+    p_rsvp_id: parsed.data.rsvpId,
+    p_new_status: "left",
+  });
+
+  if (error) {
+    return { ok: false, error: error.message.includes("not authorized") ? "unauthorized" : "unknown" };
+  }
+
+  revalidatePath(`/e/${shortCode}`);
+  return { ok: true };
+}
+
+// Change le rôle d'un participant déjà approuvé (invité <-> admin <->
+// bénéficiaire). `set_participant_role` vérifie elle-même les droits et
+// exige que la ligne ciblée soit déjà "approved".
+export async function setParticipantRole(
+  rsvpId: string,
+  shortCode: string,
+  role: "guest" | "admin" | "beneficiary",
+): Promise<ParticipantActionResult> {
+  const parsed = setParticipantRoleSchema.safeParse({ rsvpId, role });
+  if (!parsed.success) {
+    return { ok: false, error: "invalid" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "not_authenticated" };
+  }
+
+  if (isRateLimited(`setParticipantRole:${user.id}`, 60, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
+  const { error } = await supabase.rpc("set_participant_role", {
+    p_rsvp_id: parsed.data.rsvpId,
+    p_role: parsed.data.role,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message.includes("not authorized") ? "unauthorized" : "unknown" };
+  }
+
+  revalidatePath(`/e/${shortCode}`);
+  return { ok: true };
+}
+
+// Un participant change librement sa réponse à tout moment (décision
+// produit, voir DECISIONS.md) : "je peux pas" bascule immédiatement en accès
+// restreint, revenir sur "je viens"/"peut-être" depuis restricted renvoie
+// dans le circuit normal de validation. `update_my_answer` gère la
+// transition de statut elle-même.
+export async function updateMyAnswer(
+  rsvpId: string,
+  shortCode: string,
+  answer: "yes" | "maybe" | "no",
+): Promise<ParticipantActionResult> {
+  const parsed = updateMyAnswerSchema.safeParse({ rsvpId, answer });
+  if (!parsed.success) {
+    return { ok: false, error: "invalid" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "not_authenticated" };
+  }
+
+  if (isRateLimited(`updateMyAnswer:${user.id}`, 30, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
+  const { error } = await supabase.rpc("update_my_answer", {
+    p_rsvp_id: parsed.data.rsvpId,
+    p_answer: parsed.data.answer,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message.includes("not authorized") ? "unauthorized" : "unknown" };
+  }
+
+  revalidatePath(`/e/${shortCode}`);
+  return { ok: true };
+}

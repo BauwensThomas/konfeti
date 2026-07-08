@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { redeemGuestCode } from "@/app/[locale]/actions/rsvp";
 import { GuestIdentityForm } from "@/components/GuestIdentityForm";
-import { GuestPendingScreen } from "@/components/GuestPendingScreen";
 import { Button } from "@/components/ui/Button";
 
 type InitialIdentity = {
@@ -39,7 +38,7 @@ export function GuestParticipation({
   const t = useTranslations("GuestIdentity");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [view, setView] = useState<"doors" | "form" | "code" | "pending">(
+  const [view, setView] = useState<"doors" | "form" | "code">(
     hasSession ? "form" : "doors",
   );
   const [code, setCode] = useState("");
@@ -64,10 +63,6 @@ export function GuestParticipation({
     });
   }
 
-  if (view === "pending") {
-    return <GuestPendingScreen />;
-  }
-
   if (view === "form") {
     return (
       <GuestIdentityForm
@@ -75,7 +70,7 @@ export function GuestParticipation({
         shortCode={shortCode}
         allowCompanions={allowCompanions}
         initial={initial}
-        onSuccess={() => setView("pending")}
+        onSuccess={() => router.refresh()}
       />
     );
   }

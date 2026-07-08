@@ -250,6 +250,35 @@
     "errorUnknown": "Une erreur est survenue, réessaie.",
     "errorRateLimited": "Trop de tentatives, réessaie dans un instant.",
     "pendingTitle": "Ta demande est chez l'organisateur !",
-    "pendingBody": "Dès qu'il ou elle t'aura validé, tu découvriras tous les détails de l'événement."
+    "pendingBody": "Dès qu'il ou elle t'aura validé, tu découvriras tous les détails de l'événement.",
+    "restrictedTitle": "Pas de souci !",
+    "restrictedBody": "Tu ne verras pas les détails de cet événement, mais tu peux changer d'avis à tout moment.",
+    "restrictedPotLabel": "Cagnotte : {label}",
+    "restrictedPotGoal": "Objectif : {amount} €",
+    "restrictedPotOpen": "Montant libre",
+    "leaveButton": "Quitter l'événement",
+    "leaveConfirmTitle": "Es-tu sûr ? Cette action est définitive.",
+    "leaveConfirmYes": "Oui, quitter",
+    "leaveConfirmNo": "Annuler"
+  },
+  "Participants": {
+    "tabTitle": "Personnes",
+    "pendingSectionTitle": "En attente",
+    "pendingEmpty": "Aucune demande en attente.",
+    "approvedSectionTitle": "Participants",
+    "approveAsGuest": "Approuver comme invité",
+    "approveAsBeneficiary": "Approuver comme bénéficiaire",
+    "reject": "Refuser",
+    "remove": "Retirer",
+    "removeConfirmTitle": "Es-tu sûr ? Cette action est définitive.",
+    "removeConfirmYes": "Oui, retirer",
+    "removeConfirmNo": "Annuler",
+    "roleGuest": "Invité",
+    "roleAdmin": "Administrateur",
+    "roleBeneficiary": "Bénéficiaire",
+    "companionsCount": "{count, plural, =0 {} one {+1} other {+#}}",
+    "errorRateLimited": "Trop de tentatives, réessaie dans un instant.",
+    "errorUnauthorized": "Tu n'as pas les droits pour faire ça.",
+    "errorUnknown": "Une erreur est survenue, réessaie."
   }
 }

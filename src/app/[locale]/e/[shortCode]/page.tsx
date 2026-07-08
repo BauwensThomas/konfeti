@@ -12,6 +12,9 @@ import { CancelEventButton } from "@/components/CancelEventButton";
 import { DatePollVoting } from "@/components/DatePollVoting";
 import { GuestParticipation } from "@/components/GuestParticipation";
 import { GuestPendingScreen } from "@/components/GuestPendingScreen";
+import { GuestRestrictedScreen } from "@/components/GuestRestrictedScreen";
+import { MyParticipationCard } from "@/components/MyParticipationCard";
+import { EventPersonnes } from "@/components/EventPersonnes";
 import { ShareEventButton } from "@/components/ShareEventButton";
 import { Card } from "@/components/ui/Card";
 
@@ -83,6 +86,34 @@ export default async function EventPage({
   if (event) {
     const isHost = event.host_id === user?.id;
 
+    // L'hôte est toujours admin (bypass déjà géré côté RLS par
+    // is_event_admin/is_event_approved_participant, voir private.is_event_host) :
+    // pas besoin de lire sa propre ligne rsvps pour ça. Pour un non-hôte, la
+    // ligne rsvps du viewer sert à la fois au calcul du rôle (Personnes,
+    // masquage cagnotte bénéficiaire) et au contrôle "changer ma réponse"/
+    // "quitter" sur l'Accueil (brief 1.3/1.5).
+    const { data: myRsvpRow } = !isHost && user
+      ? await supabase
+          .from("rsvps")
+          .select("id, role, answer")
+          .eq("event_id", event.id)
+          .eq("profile_id", user.id)
+          .maybeSingle()
+      : { data: null };
+
+    const isAdmin = isHost || myRsvpRow?.role === "admin";
+    const isBeneficiary = myRsvpRow?.role === "beneficiary";
+
+    let pendingCount = 0;
+    if (isAdmin) {
+      const { count } = await supabase
+        .from("rsvps")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", event.id)
+        .eq("status", "pending");
+      pendingCount = count ?? 0;
+    }
+
     let dateOptions: {
       id: string;
       startsAt: string;
@@ -139,8 +170,7 @@ export default async function EventPage({
     const t = await getTranslations("EventPage");
     // Bouton Partager (brief 4.2) : visible de l'hôte, et de tout participant
     // approuvé si l'hôte a choisi "tous" (share_policy) plutôt que "admins
-    // seulement". Personne d'autre que l'hôte n'est encore approuvé en
-    // pratique (Phase 4, validation), mais le contrôle est déjà correct.
+    // seulement".
     const canShare = isHost || event.share_policy === "all";
     const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/e/${event.short_code}`;
 
@@ -172,10 +202,25 @@ export default async function EventPage({
             <EventAccueil
               event={event}
               isHost={isHost}
+              isBeneficiary={isBeneficiary}
               dateOptions={dateOptions}
               coverPhotoUrl={coverPhotoUrl}
+              myRsvp={
+                !isHost && myRsvpRow
+                  ? { id: myRsvpRow.id, answer: myRsvpRow.answer as "yes" | "maybe" | "no" }
+                  : null
+              }
             />
           }
+          personnes={
+            <EventPersonnes
+              eventId={event.id}
+              shortCode={event.short_code}
+              viewerRsvpId={myRsvpRow?.id ?? null}
+              isAdmin={isAdmin}
+            />
+          }
+          pendingCount={pendingCount}
         />
       </main>
     );
@@ -201,11 +246,22 @@ export default async function EventPage({
   const { data: myRsvp } = user
     ? await supabase
         .from("rsvps")
-        .select("status")
+        .select("id, status, answer")
         .eq("event_id", preview.id)
         .eq("profile_id", user.id)
         .maybeSingle()
     : { data: null };
+
+  // Accès restreint "cagnotte seule" (brief 1.3) : infos cagnotte via la
+  // table miroir dédiée, déjà exposée par RLS à un participant "restricted".
+  const { data: potInfo } =
+    myRsvp?.status === "restricted"
+      ? await supabase
+          .from("events_pot_data")
+          .select("pot_enabled, pot_mode, pot_goal_cents, pot_label")
+          .eq("id", preview.id)
+          .maybeSingle()
+      : { data: null };
 
   const { data: myProfile } = user
     ? await supabase
@@ -235,8 +291,19 @@ export default async function EventPage({
       </div>
       <p className="max-w-sm lg:max-w-md text-sm text-foreground/70">{t("previewNotice")}</p>
 
-      {myRsvp ? (
-        <GuestPendingScreen />
+      {myRsvp?.status === "restricted" ? (
+        <GuestRestrictedScreen
+          rsvpId={myRsvp.id}
+          shortCode={preview.short_code}
+          currentAnswer={myRsvp.answer as "yes" | "maybe" | "no"}
+          pot={potInfo}
+        />
+      ) : myRsvp ? (
+        <GuestPendingScreen
+          rsvpId={myRsvp.id}
+          shortCode={preview.short_code}
+          currentAnswer={myRsvp.answer as "yes" | "maybe" | "no"}
+        />
       ) : (
         <GuestParticipation
           eventId={preview.id}
@@ -295,11 +362,14 @@ type EventRow = {
 async function EventAccueil({
   event,
   isHost,
+  isBeneficiary,
   dateOptions,
   coverPhotoUrl,
+  myRsvp,
 }: {
   event: EventRow;
   isHost: boolean;
+  isBeneficiary: boolean;
   dateOptions: {
     id: string;
     startsAt: string;
@@ -308,6 +378,7 @@ async function EventAccueil({
     votedByMe: boolean;
   }[];
   coverPhotoUrl: string | null;
+  myRsvp: { id: string; answer: "yes" | "maybe" | "no" } | null;
 }) {
   const t = await getTranslations("EventPage");
   const tOccasions = await getTranslations("Occasions");
@@ -347,6 +418,17 @@ async function EventAccueil({
 
         <EventPhotoEditor eventId={event.id} isHost={isHost} initialPhotoUrl={coverPhotoUrl} />
       </div>
+
+      {myRsvp && (
+        <Card>
+          <MyParticipationCard
+            rsvpId={myRsvp.id}
+            shortCode={event.short_code}
+            currentAnswer={myRsvp.answer}
+            showLeaveButton={true}
+          />
+        </Card>
+      )}
 
       {(event.birthday_person || event.housewarming_hosts?.length || event.bachelor_person) && (
         <Card>
@@ -445,7 +527,7 @@ async function EventAccueil({
         </Card>
       )}
 
-      {event.pot_enabled && (
+      {event.pot_enabled && !isBeneficiary && (
         <Card>
           <p className="text-base text-foreground">
             {t("potLabel", { label: event.pot_label || "" })}
