@@ -65,7 +65,7 @@ export function GuestIdentityForm({
     if (result.ok) {
       setAvatarValue(result.path);
     } else {
-      setError(t("errorPhoto"));
+      setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorPhoto"));
     }
   }
 
@@ -115,7 +115,7 @@ export function GuestIdentityForm({
       if (result.ok) {
         onSuccess();
       } else {
-        setError(t("errorUnknown"));
+        setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
       }
     });
   }

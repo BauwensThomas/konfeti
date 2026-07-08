@@ -3,10 +3,11 @@
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
 import { ensureGuestSession } from "@/lib/supabase/guest-session";
+import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 export type UploadAvatarResult =
   | { ok: true; path: string }
-  | { ok: false; error: "invalid" | "too_large" | "unknown" };
+  | { ok: false; error: "invalid" | "too_large" | "rate_limited" | "unknown" };
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 Mo, avant redimensionnement
 const AVATAR_DIMENSION = 500; // px, côté le plus long
@@ -21,6 +22,14 @@ export async function uploadAvatarPhoto(formData: FormData): Promise<UploadAvata
 
   if (!user) {
     return { ok: false, error: "unknown" };
+  }
+
+  // Limité par IP (pas seulement par utilisateur) : une session anonyme se
+  // recrée gratuitement à volonté (ensureGuestSession), donc une limite par
+  // user.id seule serait triviale à contourner ici.
+  const ip = await getClientIp();
+  if (isRateLimited(`uploadAvatarPhoto:${ip}`, 20, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
   }
 
   const file = formData.get("photo");

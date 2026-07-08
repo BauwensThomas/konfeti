@@ -8,10 +8,11 @@ import {
   type CreateEventInput,
 } from "@/lib/validation/event";
 import { generateShortCode } from "@/lib/short-code";
+import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 export type CreateEventResult =
   | { ok: true; shortCode: string }
-  | { ok: false; error: "invalid" | "not_authenticated" | "unknown" };
+  | { ok: false; error: "invalid" | "not_authenticated" | "rate_limited" | "unknown" };
 
 function eventRowFromInput(data: CreateEventInput) {
   return {
@@ -65,10 +66,17 @@ export async function createEvent(
     return { ok: false, error: "not_authenticated" };
   }
 
+  const ip = await getClientIp();
+  if (isRateLimited(`createEvent:${user.id}`, 10, 60 * 60 * 1000) || isRateLimited(`createEvent:${ip}`, 20, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
   let event: { id: string; short_code: string } | null = null;
 
-  // Quelques essais en cas de collision sur short_code (très rare, 8000 combinaisons
-  // par mot mais la contrainte unique protège dans tous les cas). L'id est généré
+  // Quelques essais en cas de collision sur short_code (quasi impossible,
+  // ~8,8 × 10¹² combinaisons au total depuis l'augmentation d'entropie, voir
+  // DECISIONS.md) mais la contrainte unique protège dans tous les cas. L'id
+  // est généré
   // côté serveur (au lieu de laisser Postgres le faire) pour éviter un .select()
   // après l'insert : la ligne fraîchement créée ne passe pas encore la policy de
   // lecture (l'hôte n'a pas encore de ligne rsvp "admin"), donc un RETURNING
@@ -130,6 +138,10 @@ export async function updateEvent(
 
   if (!user || user.is_anonymous) {
     return { ok: false, error: "not_authenticated" };
+  }
+
+  if (isRateLimited(`updateEvent:${user.id}`, 30, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
   }
 
   const { error } = await supabase

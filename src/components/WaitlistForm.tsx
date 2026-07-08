@@ -40,7 +40,11 @@ export function WaitlistForm() {
         />
         {state?.ok === false && (
           <p role="alert" className="mt-2 px-2 text-sm text-accent-coral">
-            {state.error === "invalid_email" ? t("errorInvalidEmail") : t("errorUnknown")}
+            {state.error === "invalid_email"
+              ? t("errorInvalidEmail")
+              : state.error === "rate_limited"
+                ? t("errorRateLimited")
+                : t("errorUnknown")}
           </p>
         )}
       </div>

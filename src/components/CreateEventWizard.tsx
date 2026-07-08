@@ -155,7 +155,7 @@ export function CreateEventWizard({
     if (result.ok) {
       update("coverPhotoPath", result.path);
     } else {
-      setPhotoError(t("step1.photoError"));
+      setPhotoError(result.error === "rate_limited" ? t("step1.photoRateLimited") : t("step1.photoError"));
     }
   }
 
@@ -254,7 +254,7 @@ export function CreateEventWizard({
           : await createEvent(payload);
 
       if (result && !result.ok) {
-        setError(t("errorUnknown"));
+        setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
       }
     });
   }

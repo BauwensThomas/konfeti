@@ -62,7 +62,7 @@ export function EventPhotoEditor({
     setUploading(false);
 
     if (!result.ok) {
-      setError(t("photoUploadError"));
+      setError(result.error === "rate_limited" ? t("photoUploadRateLimited") : t("photoUploadError"));
       return;
     }
 

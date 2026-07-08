@@ -13,7 +13,8 @@
     "submitting": "Un instant...",
     "success": "C'est noté, on te prévient dès que Konfeti est prêt !",
     "errorInvalidEmail": "Cet email n'a pas l'air valide, tu peux vérifier ?",
-    "errorUnknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant."
+    "errorUnknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant.",
+    "errorRateLimited": "Trop de tentatives, réessaie dans un instant."
   },
   "Login": {
     "heading": "Connecte-toi",
@@ -80,6 +81,7 @@
     "submitEdit": "Enregistrer les modifications",
     "submittingEdit": "Enregistrement en cours...",
     "errorUnknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant.",
+    "errorRateLimited": "Trop de tentatives, réessaie dans un instant.",
     "step1": {
       "heading": "L'essentiel",
       "titleLabel": "Titre de l'événement",
@@ -92,6 +94,7 @@
       "photoDeleteConfirmNo": "Annuler",
       "photoUploading": "Envoi en cours...",
       "photoError": "L'envoi de la photo a échoué, réessaie.",
+      "photoRateLimited": "Trop d'envois, réessaie dans un instant.",
       "themeLabel": "Thème visuel",
       "dateModeLabel": "La date",
       "dateModeFixed": "Je connais la date",
@@ -177,6 +180,7 @@
     "photoDeleteConfirmNo": "Annuler",
     "photoUploading": "Envoi en cours...",
     "photoUploadError": "L'envoi de la photo a échoué, réessaie.",
+    "photoUploadRateLimited": "Trop d'envois, réessaie dans un instant.",
     "hostBadge": "Tu es l'organisateur",
     "finishedBadge": "Terminé",
     "previewNotice": "Les détails complets (date, lieu, invités...) sont réservés aux personnes invitées.",
@@ -244,6 +248,7 @@
     "submit": "Envoyer ma réponse",
     "errorPhoto": "L'envoi de la photo a échoué, réessaie.",
     "errorUnknown": "Une erreur est survenue, réessaie.",
+    "errorRateLimited": "Trop de tentatives, réessaie dans un instant.",
     "pendingTitle": "Ta demande est chez l'organisateur !",
     "pendingBody": "Dès qu'il ou elle t'aura validé, tu découvriras tous les détails de l'événement."
   }

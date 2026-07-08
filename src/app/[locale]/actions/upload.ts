@@ -2,10 +2,11 @@
 
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
+import { isRateLimited } from "@/lib/rate-limit";
 
 export type UploadPhotoResult =
   | { ok: true; path: string }
-  | { ok: false; error: "not_authenticated" | "invalid" | "too_large" | "unknown" };
+  | { ok: false; error: "not_authenticated" | "invalid" | "too_large" | "rate_limited" | "unknown" };
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 Mo, avant redimensionnement
 const MAX_DIMENSION = 1200; // px, côté le plus long
@@ -18,6 +19,12 @@ export async function uploadEventPhoto(formData: FormData): Promise<UploadPhotoR
 
   if (!user || user.is_anonymous) {
     return { ok: false, error: "not_authenticated" };
+  }
+
+  // Limite par utilisateur (pas par IP) : le traitement sharp est coûteux en
+  // ressources, à protéger d'un abus même depuis un compte légitime.
+  if (isRateLimited(`uploadEventPhoto:${user.id}`, 30, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
   }
 
   const file = formData.get("photo");

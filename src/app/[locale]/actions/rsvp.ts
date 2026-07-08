@@ -4,10 +4,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { ensureGuestSession } from "@/lib/supabase/guest-session";
 import { rsvpIdentitySchema, guestCodeSchema, type RsvpIdentityInput } from "@/lib/validation/rsvp";
+import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 export type SubmitRsvpResult =
   | { ok: true }
-  | { ok: false; error: "invalid" | "already_rsvped" | "unknown" };
+  | { ok: false; error: "invalid" | "already_rsvped" | "rate_limited" | "unknown" };
 
 // Crée la participation de l'appelant (statut "pending", brief 1.3 étape 3),
 // pour les deux portes (compte réel ou session anonyme créée à la volée).
@@ -24,6 +25,11 @@ export async function submitRsvp(
     return { ok: false, error: "invalid" };
   }
   const data = parsed.data;
+
+  const ip = await getClientIp();
+  if (isRateLimited(`submitRsvp:${ip}`, 10, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
 
   const supabase = await createClient();
   const user = await ensureGuestSession(supabase);
@@ -78,11 +84,19 @@ export async function submitRsvp(
 
 export type RedeemGuestCodeResult =
   | { ok: true; shortCode: string }
-  | { ok: false; error: "invalid" | "conflict" | "unknown" };
+  | { ok: false; error: "invalid" | "conflict" | "rate_limited" | "unknown" };
 
 // Récupération cross-device (brief 1.2) : rattache la participation
 // existante à la session courante (réelle ou anonyme créée à la volée).
+// Limite de débit particulièrement stricte ici : c'est la cible directe
+// d'une éventuelle attaque par force brute sur le guest_code (voir
+// DECISIONS.md, entropie déjà augmentée mais ce filet reste utile).
 export async function redeemGuestCode(code: string): Promise<RedeemGuestCodeResult> {
+  const ip = await getClientIp();
+  if (isRateLimited(`redeemGuestCode:${ip}`, 10, 15 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
   const parsed = guestCodeSchema.safeParse({ code });
   if (!parsed.success) {
     return { ok: false, error: "invalid" };

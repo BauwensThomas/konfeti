@@ -2,10 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { waitlistSchema } from "@/lib/validation/waitlist";
+import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 export type WaitlistResult =
   | { ok: true }
-  | { ok: false; error: "invalid_email" | "unknown" };
+  | { ok: false; error: "invalid_email" | "rate_limited" | "unknown" };
 
 export async function joinWaitlist(
   _prevState: WaitlistResult | null,
@@ -14,6 +15,11 @@ export async function joinWaitlist(
   const parsed = waitlistSchema.safeParse({ email: formData.get("email") });
   if (!parsed.success) {
     return { ok: false, error: "invalid_email" };
+  }
+
+  const ip = await getClientIp();
+  if (isRateLimited(`waitlist:${ip}`, 5, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
   }
 
   const supabase = await createClient();

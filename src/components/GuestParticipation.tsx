@@ -54,7 +54,11 @@ export function GuestParticipation({
         router.refresh();
       } else {
         setCodeError(
-          result.error === "conflict" ? t("codeErrorConflict") : t("codeErrorInvalid"),
+          result.error === "conflict"
+            ? t("codeErrorConflict")
+            : result.error === "rate_limited"
+              ? t("errorRateLimited")
+              : t("codeErrorInvalid"),
         );
       }
     });
