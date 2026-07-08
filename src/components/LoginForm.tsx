@@ -41,7 +41,7 @@ export function LoginForm() {
             required
             autoComplete="email"
             placeholder={t("emailPlaceholder")}
-            className="w-full rounded-full border border-border bg-surface px-5 py-3 text-base text-foreground placeholder:text-foreground/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="w-full rounded-full border border-border bg-surface px-5 py-3 text-base text-foreground placeholder:text-foreground/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           />
           {state?.ok === false && (
             <p role="alert" className="mt-2 px-2 text-sm text-accent-coral">

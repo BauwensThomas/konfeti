@@ -88,7 +88,7 @@ export function GuestParticipation({
           value={code}
           onChange={(e) => setCode(e.target.value)}
           placeholder={t("codePlaceholder")}
-          className="w-full rounded-konfeti border border-border bg-surface px-4 py-2.5 text-center text-base uppercase text-foreground placeholder:normal-case placeholder:text-foreground/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="w-full rounded-konfeti border border-border bg-surface px-4 py-2.5 text-center text-base uppercase text-foreground placeholder:normal-case placeholder:text-foreground/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         />
         {codeError && (
           <p role="alert" className="text-center text-sm text-accent-coral">

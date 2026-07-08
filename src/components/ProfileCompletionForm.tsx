@@ -30,7 +30,7 @@ export function ProfileCompletionForm({ next }: { next: string }) {
           required
           autoComplete="tel"
           placeholder={t("phonePlaceholder")}
-          className="w-full rounded-full border border-border bg-surface px-5 py-3 text-base text-foreground placeholder:text-foreground/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="w-full rounded-full border border-border bg-surface px-5 py-3 text-base text-foreground placeholder:text-foreground/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         />
       </div>
 

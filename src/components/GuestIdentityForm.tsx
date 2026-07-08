@@ -313,7 +313,7 @@ export function GuestIdentityForm({
 }
 
 const inputClass =
-  "w-full rounded-konfeti border border-border bg-surface px-4 py-2.5 text-base text-foreground placeholder:text-foreground/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
+  "w-full rounded-konfeti border border-border bg-surface px-4 py-2.5 text-base text-foreground placeholder:text-foreground/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
