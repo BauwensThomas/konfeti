@@ -195,20 +195,29 @@ export default async function EventPage({
 
     return (
       <main className="flex flex-1 flex-col items-center gap-6 px-6 py-8 sm:py-12">
-        {isAdmin && (
+        {user && (
+          // "Retour à mes événements" visible à TOUT utilisateur connecté
+          // (pas seulement un admin) : /mes-evenements liste désormais aussi
+          // les événements où l'on participe simplement, pas seulement ceux
+          // qu'on héberge (retour Thomas : "si un anonyme participe à
+          // plusieurs événements, il ne devrait pas avoir accès à... et voir
+          // la liste de ses événements ?"). Modifier/Supprimer restent, eux,
+          // réservés aux admins.
           <div className="flex w-full max-w-lg lg:max-w-2xl items-center justify-between gap-3">
             <Link href="/mes-evenements" className="text-sm font-semibold text-primary">
               {t("backToEvents")}
             </Link>
-            <div className="flex items-center gap-4">
-              <Link
-                href={`/e/${event.short_code}/modifier`}
-                className="text-sm font-semibold text-primary"
-              >
-                {t("editEvent")}
-              </Link>
-              <CancelEventButton eventId={event.id} />
-            </div>
+            {isAdmin && (
+              <div className="flex items-center gap-4">
+                <Link
+                  href={`/e/${event.short_code}/modifier`}
+                  className="text-sm font-semibold text-primary"
+                >
+                  {t("editEvent")}
+                </Link>
+                <CancelEventButton eventId={event.id} />
+              </div>
+            )}
           </div>
         )}
         {canShare && (

@@ -56,6 +56,24 @@ h4,
   box-shadow: 0 8px 24px -8px rgb(124 58 237 / 0.35);
 }
 
+/*
+ * Zones sûres mobile (encoche/caméra/batterie en haut, barre de gestes en
+ * bas) : nécessite `viewportFit: "cover"` (voir generateViewport dans
+ * layout.tsx) pour que ces valeurs `env()` ne soient pas figées à 0. Deux
+ * utilitaires plutôt qu'une valeur arbitraire Tailwind répétée partout, pour
+ * rester cohérent si la marge de confort change un jour.
+ */
+.pt-safe {
+  /* Purement additif (pas de minimum) : vient s'ajouter au padding déjà
+     prévu par chaque page, ne change rien sur un appareil sans encoche. */
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pb-safe {
+  /* Minimum de confort même sans barre de gestes (footer toujours un peu
+     détaché du bord), agrandi si l'appareil en a besoin. */
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

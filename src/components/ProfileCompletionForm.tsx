@@ -2,23 +2,53 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { completeProfile } from "@/app/[locale]/actions/profile";
+import { useRouter } from "@/i18n/navigation";
+import { completeProfile, updateProfile } from "@/app/[locale]/actions/profile";
 import { uploadAvatarPhoto } from "@/app/[locale]/actions/avatar";
 import { PRESET_AVATARS } from "@/lib/avatars";
 import { Button } from "@/components/ui/Button";
 
-export function ProfileCompletionForm({ next }: { next: string }) {
+type InitialProfile = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  gender: "female" | "male" | null;
+  avatarKind: "preset" | "photo";
+  avatarValue: string | null;
+  avatarPreviewUrl: string | null;
+};
+
+// Deux contextes d'utilisation (retour Thomas : lien "Modifier mon profil"
+// dans le footer, distinct du parcours obligatoire d'onboarding) : `mode`
+// bascule entre `completeProfile` (redirige toujours, formulaire vide au
+// départ) et `updateProfile` (ne redirige jamais — l'utilisateur peut venir
+// de n'importe quelle page — affiche une confirmation, et répercute le
+// changement sur les événements déjà rejoints). Mêmes champs/composants
+// dans les deux cas, `initial` préremplit uniquement en mode édition.
+export function ProfileCompletionForm({
+  next,
+  mode = "complete",
+  initial,
+}: {
+  next?: string;
+  mode?: "complete" | "edit";
+  initial?: InitialProfile;
+}) {
   const t = useTranslations("ProfileCompletion");
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [gender, setGender] = useState<"female" | "male" | null>(null);
-  const [avatarKind, setAvatarKind] = useState<"preset" | "photo">("preset");
-  const [avatarValue, setAvatarValue] = useState<string | null>(null);
-  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [firstName, setFirstName] = useState(initial?.firstName ?? "");
+  const [lastName, setLastName] = useState(initial?.lastName ?? "");
+  const [phone, setPhone] = useState(initial?.phone ?? "");
+  const [gender, setGender] = useState<"female" | "male" | null>(initial?.gender ?? null);
+  const [avatarKind, setAvatarKind] = useState<"preset" | "photo">(initial?.avatarKind ?? "preset");
+  const [avatarValue, setAvatarValue] = useState<string | null>(initial?.avatarValue ?? null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(
+    initial?.avatarKind === "photo" ? (initial.avatarPreviewUrl ?? null) : null,
+  );
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -55,22 +85,45 @@ export function ProfileCompletionForm({ next }: { next: string }) {
   function handleSubmit() {
     if (!canSubmit()) return;
     setError(null);
+    setSaved(false);
 
     startTransition(async () => {
+      const payload = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phone.trim(),
+        gender: gender!,
+        avatarKind,
+        avatarValue: avatarValue ?? undefined,
+      };
+
+      if (mode === "edit") {
+        const result = await updateProfile(payload);
+        if (result.ok) {
+          setSaved(true);
+          // Retour à la page précédente (retour Thomas : "je suis bloqué sur
+          // la page, il faut renvoyer vers la page que la personne était
+          // avant d'arriver dans le profil") — jamais de destination fixe
+          // possible ici, /profil est accessible depuis n'importe où via le
+          // footer. Court délai pour laisser voir la confirmation avant de
+          // quitter la page.
+          setTimeout(() => router.back(), 900);
+        } else {
+          setError(
+            result.error === "invalid"
+              ? t("errorInvalid")
+              : result.error === "rate_limited"
+                ? t("errorRateLimited")
+                : t("errorUnknown"),
+          );
+        }
+        return;
+      }
+
       // completeProfile redirige elle-même en cas de succès (comme
       // createEvent/updateEvent) : ce résultat ne s'observe donc jamais que
       // sur l'échec.
-      const result = await completeProfile(
-        {
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          phone: phone.trim(),
-          gender: gender!,
-          avatarKind,
-          avatarValue: avatarValue ?? undefined,
-        },
-        next,
-      );
+      const result = await completeProfile(payload, next ?? "/mes-evenements");
       if (!result.ok) {
         setError(result.error === "invalid" ? t("errorInvalid") : t("errorUnknown"));
       }
@@ -190,8 +243,14 @@ export function ProfileCompletionForm({ next }: { next: string }) {
         </p>
       )}
 
+      {mode === "edit" && saved && !error && (
+        <p role="status" className="text-sm font-semibold text-accent-mint">
+          {t("saved")}
+        </p>
+      )}
+
       <Button onClick={handleSubmit} disabled={isPending || !canSubmit()}>
-        {isPending ? t("submitting") : t("submit")}
+        {isPending ? t("submitting") : mode === "edit" ? t("save") : t("submit")}
       </Button>
     </div>
   );

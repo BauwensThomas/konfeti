@@ -6,6 +6,10 @@
     "videoHeading": "En vidéo :",
     "waitlistHeading": "Sois prévenu au lancement"
   },
+  "Footer": {
+    "editProfile": "Modifier mon profil",
+    "copyright": "Konfeti - {year} - Belgacai"
+  },
   "Waitlist": {
     "emailLabel": "Ton adresse email",
     "emailPlaceholder": "ton@email.com",
@@ -25,6 +29,7 @@
     "submitting": "Envoi en cours...",
     "success": "Vérifie ta boîte mail, on t'a envoyé un lien pour te connecter !",
     "errorInvalidEmail": "Cet email n'a pas l'air valide, tu peux vérifier ?",
+    "errorEmailTaken": "Cet email est déjà utilisé par un autre compte, connecte-toi directement avec.",
     "errorUnknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant.",
     "errorAuth": "La connexion a échoué, réessaie.",
     "or": "ou",
@@ -33,6 +38,8 @@
   "ProfileCompletion": {
     "heading": "Encore une petite étape",
     "subheading": "On a besoin de savoir qui tu es pour que les organisateurs et les autres invités te reconnaissent.",
+    "editHeading": "Modifier mon profil",
+    "editSubheading": "Ces informations sont utilisées partout où tu participes : chat, listes de participants...",
     "firstNameLabel": "Prénom",
     "firstNamePlaceholder": "Julie",
     "lastNameLabel": "Nom",
@@ -47,6 +54,8 @@
     "avatarPhotoOption": "Ma photo",
     "submit": "Continuer",
     "submitting": "Un instant...",
+    "save": "Enregistrer",
+    "saved": "Profil mis à jour !",
     "errorInvalid": "Vérifie tes informations, quelque chose ne va pas.",
     "errorUnknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant.",
     "errorPhoto": "L'envoi de la photo a échoué, réessaie.",
@@ -57,7 +66,10 @@
     "createButton": "Créer un événement",
     "emptyTitle": "Aucun événement pour l'instant",
     "emptyText": "Crée ta première invitation, ça prend une minute.",
+    "organizingHeading": "J'organise",
+    "attendingHeading": "Je participe",
     "hostBadge": "Organisateur",
+    "attendingBadge": "Invité",
     "finishedBadge": "Terminé",
     "dateTBD": "Date en cours de vote"
   },

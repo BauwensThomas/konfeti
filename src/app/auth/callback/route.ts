@@ -32,6 +32,35 @@ export async function GET(request: Request) {
         .maybeSingle();
 
       if (!profile?.phone || !profile?.first_name) {
+        // Ce compte vient peut-être d'être mis à niveau depuis une session
+        // anonyme (voir sendMagicLink/signInWithGoogle, updateUser/
+        // linkIdentity — même `auth.uid()` conservé) : il a alors déjà
+        // fourni son identité une fois en tant qu'invité, dans `rsvps`, pas
+        // dans `profiles`. La lui redemander serait redondant ("rien n'est
+        // perdu en créant un compte plus tard", brief 1.2) — on la reprend
+        // silencieusement depuis sa participation la plus récente plutôt que
+        // de forcer /profil/completer, uniquement si une identité complète y
+        // existe déjà.
+        const { data: latestRsvp } = await supabase
+          .from("rsvps")
+          .select("first_name, last_name, phone, gender, avatar_kind, avatar_value")
+          .eq("profile_id", user.id)
+          .not("first_name", "is", null)
+          .not("phone", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (latestRsvp) {
+          const { error: syncError } = await supabase
+            .from("profiles")
+            .update(latestRsvp)
+            .eq("id", user.id);
+          if (!syncError) {
+            return NextResponse.redirect(`${origin}${next}`);
+          }
+        }
+
         const completeUrl = new URL("/profil/completer", origin);
         completeUrl.searchParams.set("next", next);
         return NextResponse.redirect(completeUrl);

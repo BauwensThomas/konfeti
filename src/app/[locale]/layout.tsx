@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Baloo_2, Nunito } from "next/font/google";
 import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { ConfettiBackground } from "@/components/ConfettiBackground";
+import { Footer } from "@/components/Footer";
 import "./globals.css";
 
 const balooTwo = Baloo_2({
@@ -51,6 +52,18 @@ export async function generateMetadata({
   };
 }
 
+// `viewportFit: "cover"` : sans ça, `env(safe-area-inset-*)` (voir
+// globals.css, `.pt-safe`/`.pb-safe`) reste figé à 0 sur iOS — la page ne
+// "couvre" pas la zone de l'encoche/barre de gestes tant que ce réglage
+// n'est pas explicite, quel que soit le CSS écrit par ailleurs.
+export function generateViewport(): Viewport {
+  return {
+    width: "device-width",
+    initialScale: 1,
+    viewportFit: "cover",
+  };
+}
+
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
 }
@@ -74,7 +87,15 @@ export default async function LocaleLayout({
     >
       <body className="min-h-full flex flex-col">
         <ConfettiBackground />
-        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider>
+          {/* `pt-safe` : marge additionnelle pour l'encoche/la caméra/la
+              batterie en haut d'écran (retour Thomas), vient s'ajouter au
+              padding déjà prévu par chaque page. Footer toujours en bas,
+              hors de cette colonne, avec sa propre marge de sécurité
+              (`pb-safe`, voir Footer.tsx) pour la barre de gestes. */}
+          <div className="pt-safe flex flex-1 flex-col">{children}</div>
+          <Footer />
+        </NextIntlClientProvider>
       </body>
     </html>
   );

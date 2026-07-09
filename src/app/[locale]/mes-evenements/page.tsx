@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
@@ -7,27 +8,67 @@ import { computeUnreadCount } from "@/lib/chat/unread";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 
+type EventRow = {
+  id: string;
+  short_code: string;
+  title: string;
+  theme: string;
+  starts_at: string | null;
+  date_mode: string;
+};
+
 export default async function MyEventsPage() {
   const t = await getTranslations("MyEvents");
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // Accessible à une session anonyme désormais (voir proxy.ts) : seul le cas
+  // "aucune session du tout" reste à gérer explicitement ici.
+  if (!user) {
+    redirect("/connexion?next=/mes-evenements");
+  }
 
-  // Événements organisés par cet utilisateur. Les événements où il est seulement
-  // invité viendront s'ajouter ici plus tard (Phase 4, gestion des rôles/statuts) :
-  // tant qu'une invitation est "pending", RLS ne renvoie de toute façon que
-  // l'aperçu titre+thème (brief 1.3), pas assez pour cette liste.
-  const { data } = await supabase
+  const { data: hostedData } = await supabase
     .from("events")
     .select("id, short_code, title, theme, starts_at, date_mode")
     .eq("host_id", user!.id)
     .neq("status", "cancelled");
-  const events = sortEventsByDate(data ?? []);
+  const hostedEvents = sortEventsByDate(hostedData ?? []);
+  const hostedIds = new Set(hostedEvents.map((e) => e.id));
 
-  // Pastille non-lus (brief 4.3) : ne couvre que ces événements hébergés
-  // (limite préexistante de cette page, pas propre au chat — voir
-  // doc/TODO.md). 3 requêtes groupées plutôt qu'une boucle par événement.
+  // Événements où l'on participe simplement (pas l'hôte) : retour Thomas —
+  // "si un anonyme participe à plusieurs événements, il devrait pouvoir voir
+  // la liste de ses événements", pas seulement ceux qu'il organise. `events`
+  // (table brute) est déjà lisible par tout participant approuvé (policy
+  // `events_select_full_for_participants`), pas besoin de `events_public_data`
+  // ici. `host_id != user.id` exclu explicitement : l'hôte a lui aussi une
+  // ligne `rsvps` `approved` pour son propre événement (`ensure_own_rsvp`),
+  // qui apparaîtrait sinon en double dans les deux sections.
+  const { data: attendingRsvps } = await supabase
+    .from("rsvps")
+    .select("event_id")
+    .eq("profile_id", user!.id)
+    .eq("status", "approved");
+  const attendingEventIds = [...new Set((attendingRsvps ?? []).map((r) => r.event_id))].filter(
+    (id) => !hostedIds.has(id),
+  );
+  const { data: attendingData } =
+    attendingEventIds.length > 0
+      ? await supabase
+          .from("events")
+          .select("id, short_code, title, theme, starts_at, date_mode")
+          .in("id", attendingEventIds)
+          .neq("status", "cancelled")
+      : { data: [] as EventRow[] };
+  const attendingEvents = sortEventsByDate(attendingData ?? []);
+
+  const events = [...hostedEvents, ...attendingEvents];
+
+  // Pastille non-lus (brief 4.3), désormais sur les deux sections (avant :
+  // limité aux événements hébergés, voir doc/TODO.md — corrigé au passage
+  // puisque cette page couvre maintenant aussi les événements où l'on
+  // participe). 3 requêtes groupées plutôt qu'une boucle par événement.
   const eventIds = events.map((e) => e.id);
   const unreadCountByEvent = new Map<string, number>();
   if (eventIds.length > 0) {
@@ -50,6 +91,48 @@ export default async function MyEventsPage() {
         computeUnreadCount(relevant.map((m) => ({ rsvpId: m.rsvp_id })), myRsvpIdByEvent.get(eventId) ?? null),
       );
     }
+  }
+
+  function EventCard({ event, isHosted }: { event: EventRow; isHosted: boolean }) {
+    const finished = isEventFinished(event.starts_at, event.date_mode);
+    const unreadCount = unreadCountByEvent.get(event.id) ?? 0;
+    return (
+      <li key={event.id} className="relative">
+        {unreadCount > 0 && (
+          <span className="absolute -right-1 -top-1 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-accent-coral px-1.5 text-xs font-bold text-white">
+            {unreadCount}
+          </span>
+        )}
+        <Link href={`/e/${event.short_code}`}>
+          <Card className="flex items-center justify-between gap-4">
+            <div className="text-left">
+              <p className="font-display text-lg text-foreground">{event.title}</p>
+              <p className="text-sm text-foreground/60">
+                {event.date_mode === "poll" || !event.starts_at
+                  ? t("dateTBD")
+                  : new Date(event.starts_at).toLocaleString("fr-BE", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+              </p>
+            </div>
+            {finished ? (
+              <span className="rounded-full bg-accent-coral/10 px-3 py-1 text-xs font-semibold text-accent-coral">
+                {t("finishedBadge")}
+              </span>
+            ) : (
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                {isHosted ? t("hostBadge") : t("attendingBadge")}
+              </span>
+            )}
+          </Card>
+        </Link>
+      </li>
+    );
   }
 
   return (
@@ -77,51 +160,45 @@ export default async function MyEventsPage() {
           <p className="text-base text-foreground/70">{t("emptyText")}</p>
         </div>
       ) : (
-        <ul className="flex w-full max-w-lg lg:max-w-2xl flex-col gap-4">
-          {events.map((event) => {
-            const finished = isEventFinished(event.starts_at, event.date_mode);
-            const unreadCount = unreadCountByEvent.get(event.id) ?? 0;
-            return (
-              <li key={event.id} className="relative">
-                {unreadCount > 0 && (
-                  <span className="absolute -right-1 -top-1 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-accent-coral px-1.5 text-xs font-bold text-white">
-                    {unreadCount}
-                  </span>
-                )}
-                <Link href={`/e/${event.short_code}`}>
-                  <Card className="flex items-center justify-between gap-4">
-                    <div className="text-left">
-                      <p className="font-display text-lg text-foreground">
-                        {event.title}
-                      </p>
-                      <p className="text-sm text-foreground/60">
-                        {event.date_mode === "poll" || !event.starts_at
-                          ? t("dateTBD")
-                          : new Date(event.starts_at).toLocaleString("fr-BE", {
-                              weekday: "long",
-                              day: "numeric",
-                              month: "long",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                      </p>
-                    </div>
-                    {finished ? (
-                      <span className="rounded-full bg-accent-coral/10 px-3 py-1 text-xs font-semibold text-accent-coral">
-                        {t("finishedBadge")}
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                        {t("hostBadge")}
-                      </span>
-                    )}
-                  </Card>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="flex w-full max-w-lg lg:max-w-2xl flex-col gap-6">
+          {/* Titres de section seulement si les deux catégories coexistent :
+              pour le cas le plus courant (uniquement des événements
+              hébergés, ou uniquement des participations), une simple liste
+              plate reste plus lisible qu'un unique titre de section. */}
+          {hostedEvents.length > 0 && attendingEvents.length > 0 ? (
+            <>
+              <div className="flex flex-col gap-3">
+                <h2 className="font-display text-lg font-bold text-foreground">
+                  {t("organizingHeading")}
+                </h2>
+                <ul className="flex flex-col gap-4">
+                  {hostedEvents.map((event) => (
+                    <EventCard key={event.id} event={event} isHosted />
+                  ))}
+                </ul>
+              </div>
+              <div className="flex flex-col gap-3">
+                <h2 className="font-display text-lg font-bold text-foreground">
+                  {t("attendingHeading")}
+                </h2>
+                <ul className="flex flex-col gap-4">
+                  {attendingEvents.map((event) => (
+                    <EventCard key={event.id} event={event} isHosted={false} />
+                  ))}
+                </ul>
+              </div>
+            </>
+          ) : (
+            <ul className="flex flex-col gap-4">
+              {hostedEvents.map((event) => (
+                <EventCard key={event.id} event={event} isHosted />
+              ))}
+              {attendingEvents.map((event) => (
+                <EventCard key={event.id} event={event} isHosted={false} />
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </main>
   );

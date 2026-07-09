@@ -7,7 +7,17 @@ const intlMiddleware = createIntlMiddleware(routing);
 
 // Routes qui exigent un compte réel (pas une session anonyme d'invité "code d'accès"),
 // voir brief 4.1 (création réservée aux comptes) et 1.3 (un admin doit avoir un compte).
-const PROTECTED_PREFIXES = ["/mes-evenements", "/creer", "/profil"];
+// `/profil` et `/mes-evenements` (hors de cette liste) restent accessibles à
+// une session anonyme : un invité "code d'accès" a lui aussi rempli une
+// identité et peut participer à plusieurs événements — il doit pouvoir la
+// modifier (retour Thomas : "j'ai dû rentrer un nom, prénom et une photo
+// donc je devrais pouvoir aussi modifier non ?") et retrouver la liste de
+// ses événements (retour Thomas : "il ne devrait pas avoir accès à... et
+// voir la liste de ses événements ?"). Seuls `/profil/completer` (création
+// de compte) et `/creer` (brief 4.1, création réservée aux comptes) restent
+// réservés à un vrai compte. Ces deux pages gèrent elles-mêmes le cas
+// "aucune session du tout" (redirection vers /connexion).
+const PROTECTED_PREFIXES = ["/creer", "/profil/completer"];
 
 function isProtected(pathname: string) {
   return PROTECTED_PREFIXES.some(
