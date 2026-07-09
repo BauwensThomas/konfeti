@@ -198,10 +198,13 @@ test("acces restreint (je peux pas), cagnotte masquee au beneficiaire, et retour
     const guestPage = await guestContext.newPage();
 
     // "Je peux pas" bascule directement en acces restreint, sans jamais passer par pending.
+    // La cagnotte ne s'affiche plus instantanement (durci, retour Thomas) : le participant
+    // doit d'abord demander explicitement a y participer, puis l'admin doit l'autoriser.
     await submitGuestIdentity(guestPage, event.short_code, "Julie", "Je ne peux pas");
-    await expect(guestPage.getByText("Cadeau surprise", { exact: false })).toBeVisible({
+    await expect(guestPage.getByRole("heading", { name: "Pas de souci !" })).toBeVisible({
       timeout: 10_000,
     });
+    await expect(guestPage.getByText("Cadeau surprise", { exact: false })).not.toBeVisible();
     await expect(guestPage.getByText("Ta demande est chez l'organisateur !")).not.toBeVisible();
 
     const { data: rsvp } = await supabaseAdmin
@@ -212,6 +215,32 @@ test("acces restreint (je peux pas), cagnotte masquee au beneficiaire, et retour
       .maybeSingle();
     expect(rsvp?.status).toBe("restricted");
     guestId = rsvp!.profile_id;
+
+    // Elle demande explicitement a participer quand meme a la cagnotte.
+    await guestPage.getByRole("button", { name: "Oui, je participe" }).click();
+    await expect(guestPage.getByText("Demande envoyée", { exact: false })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // L'admin autorise explicitement l'acces a la cagnotte.
+    await page.goto(`/e/${event.short_code}`);
+    await page.getByRole("button", { name: "Personnes" }).click();
+    await page.getByRole("button", { name: "Approuver l'accès à la cagnotte" }).click();
+    await expect
+      .poll(async () => {
+        const { data } = await supabaseAdmin
+          .from("rsvps")
+          .select("pot_access_granted")
+          .eq("id", rsvp!.id)
+          .single();
+        return data?.pot_access_granted;
+      })
+      .toBe(true);
+
+    await guestPage.reload();
+    await expect(guestPage.getByText("Cadeau surprise", { exact: false })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Elle change d'avis : repasse dans le circuit normal de validation.
     await guestPage.getByRole("button", { name: "Je viens !" }).click();

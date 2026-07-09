@@ -32,16 +32,25 @@
   },
   "ProfileCompletion": {
     "heading": "Encore une petite étape",
-    "subheading": "On a besoin de ton numéro pour que les organisateurs puissent te joindre si besoin.",
+    "subheading": "On a besoin de savoir qui tu es pour que les organisateurs et les autres invités te reconnaissent.",
+    "firstNameLabel": "Prénom",
+    "firstNamePlaceholder": "Julie",
+    "lastNameLabel": "Nom",
+    "lastNamePlaceholder": "Dean",
     "phoneLabel": "Ton numéro de téléphone",
     "phonePlaceholder": "+32 470 00 00 00",
     "genderLabel": "Tu es",
     "genderFemale": "Une femme",
     "genderMale": "Un homme",
+    "avatarLabel": "Ton avatar",
+    "avatarOptionLabel": "Avatar {number}",
+    "avatarPhotoOption": "Ma photo",
     "submit": "Continuer",
     "submitting": "Un instant...",
-    "errorInvalid": "Vérifie ton numéro et ton choix, quelque chose ne va pas.",
-    "errorUnknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant."
+    "errorInvalid": "Vérifie tes informations, quelque chose ne va pas.",
+    "errorUnknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant.",
+    "errorPhoto": "L'envoi de la photo a échoué, réessaie.",
+    "errorRateLimited": "Trop de tentatives, réessaie dans un instant."
   },
   "MyEvents": {
     "heading": "Mes événements",
@@ -256,6 +265,9 @@
     "restrictedPotLabel": "Cagnotte : {label}",
     "restrictedPotGoal": "Objectif : {amount} €",
     "restrictedPotOpen": "Montant libre",
+    "restrictedPotAsk": "Tu ne viens pas, mais veux-tu quand même participer à la cagnotte ?",
+    "restrictedPotAskButton": "Oui, je participe",
+    "restrictedPotPending": "Demande envoyée : l'organisateur doit encore te donner accès aux détails de la cagnotte.",
     "leaveButton": "Quitter l'événement",
     "leaveConfirmTitle": "Es-tu sûr ? Cette action est définitive.",
     "leaveConfirmYes": "Oui, quitter",
@@ -265,7 +277,9 @@
     "tabTitle": "Personnes",
     "pendingSectionTitle": "En attente",
     "pendingEmpty": "Aucune demande en attente.",
+    "restrictedSectionTitle": "Ne peuvent pas venir",
     "approvedSectionTitle": "Participants",
+    "maybeSectionTitle": "Peut-être",
     "approveAsGuest": "Approuver comme invité",
     "approveAsBeneficiary": "Approuver comme bénéficiaire",
     "reject": "Refuser",
@@ -276,9 +290,57 @@
     "roleGuest": "Invité",
     "roleAdmin": "Administrateur",
     "roleBeneficiary": "Bénéficiaire",
+    "answerYes": "Vient",
+    "answerMaybe": "Peut-être",
+    "answerNo": "Ne peut pas venir",
+    "grantPotAccess": "Approuver l'accès à la cagnotte",
+    "potAccessGranted": "Accès cagnotte autorisé",
+    "revokePotAccess": "Révoquer l'accès",
     "companionsCount": "{count, plural, =0 {} one {+1} other {+#}}",
     "errorRateLimited": "Trop de tentatives, réessaie dans un instant.",
     "errorUnauthorized": "Tu n'as pas les droits pour faire ça.",
+    "errorLastAdmin": "Il doit toujours rester au moins un administrateur pour cet événement.",
     "errorUnknown": "Une erreur est survenue, réessaie."
+  },
+  "Chat": {
+    "tabs": {
+      "main": "Général",
+      "backstage": "Coulisses"
+    },
+    "emptyState": "Aucun message pour l'instant. Lance la conversation !",
+    "unreadDivider": "Messages non lus",
+    "anonymousAuthor": "Anonyme",
+    "deletedByAdmin": "Message supprimé par un·e admin",
+    "reply": "Répondre",
+    "editStart": "Modifier",
+    "editSave": "Enregistrer",
+    "editCancel": "Annuler",
+    "moderate": "Supprimer",
+    "moderateConfirmTitle": "Supprimer ce message pour tout le monde ?",
+    "moderateConfirmYes": "Oui, supprimer",
+    "moderateConfirmNo": "Annuler",
+    "composer": {
+      "placeholder": "Écris un message...",
+      "send": "Envoyer",
+      "addPhoto": "Ajouter une photo",
+      "replyingTo": "Réponse à",
+      "cancelReply": "Annuler"
+    },
+    "sendError": "L'envoi a échoué, réessaie.",
+    "addReaction": "Ajouter une réaction",
+    "moreActions": "Plus d'actions",
+    "systemMessages": {
+      "joined": "{name} a rejoint la fête !"
+    },
+    "reactions": {
+      "thumbsUp": "Pouce levé",
+      "thumbsDown": "Pouce vers le bas",
+      "crying": "Triste",
+      "smiling": "Content",
+      "rofl": "Mort de rire",
+      "angry": "Fâché",
+      "warning": "Attention",
+      "heart": "Cœur"
+    }
   }
 }

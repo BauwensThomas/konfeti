@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 /**
  * Pack d'avatars "maison" (brief 1.1) : personnages dans le style de la
  * mascotte, générés en une seule grille par Gemini puis découpés par
@@ -20,3 +22,32 @@ export const PRESET_AVATARS: PresetAvatar[] = [
   { key: "avatar-7", path: "/avatars/avatar-7.webp" },
   { key: "avatar-8", path: "/avatars/avatar-8.webp" },
 ];
+
+// Résout l'URL affichable d'un avatar (chemin statique du pack maison, ou
+// URL signée pour une photo perso dans le bucket privé "event-photos").
+// Partagé entre EventPersonnes (Personnes) et EventChat (Phase 5), pour ne
+// pas dupliquer la génération d'URL signées.
+export async function resolveAvatarUrl(
+  supabase: SupabaseClient,
+  avatarKind: "preset" | "photo",
+  avatarValue: string | null,
+): Promise<string | null> {
+  if (!avatarValue) return null;
+  if (avatarKind === "preset") {
+    return PRESET_AVATARS.find((a) => a.key === avatarValue)?.path ?? null;
+  }
+  const { data } = await supabase.storage.from("event-photos").createSignedUrl(avatarValue, 3600);
+  return data?.signedUrl ?? null;
+}
+
+// Même bucket privé "event-photos", pour une photo postée dans le chat
+// (brief 4.3) : le chemin stocké en base (`messages.photo_url`) n'est jamais
+// directement affichable, toujours une URL signée à générer à la lecture.
+export async function resolveEventPhotoUrl(
+  supabase: SupabaseClient,
+  path: string | null,
+): Promise<string | null> {
+  if (!path) return null;
+  const { data } = await supabase.storage.from("event-photos").createSignedUrl(path, 3600);
+  return data?.signedUrl ?? null;
+}

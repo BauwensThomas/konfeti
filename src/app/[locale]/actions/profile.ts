@@ -2,22 +2,17 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { profileCompletionSchema } from "@/lib/validation/profile";
+import { profileCompletionSchema, type ProfileCompletionInput } from "@/lib/validation/profile";
 
-export type ProfileCompletionResult = {
-  ok: false;
-  error: "invalid" | "unknown" | "not_authenticated";
-} | null;
+export type ProfileCompletionResult =
+  | { ok: true }
+  | { ok: false; error: "invalid" | "unknown" | "not_authenticated" };
 
 export async function completeProfile(
-  _prevState: ProfileCompletionResult,
-  formData: FormData,
+  input: ProfileCompletionInput,
+  next: string,
 ): Promise<ProfileCompletionResult> {
-  const parsed = profileCompletionSchema.safeParse({
-    phone: formData.get("phone"),
-    gender: formData.get("gender"),
-  });
-
+  const parsed = profileCompletionSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "invalid" };
   }
@@ -33,13 +28,19 @@ export async function completeProfile(
 
   const { error } = await supabase
     .from("profiles")
-    .update({ phone: parsed.data.phone, gender: parsed.data.gender })
+    .update({
+      first_name: parsed.data.firstName,
+      last_name: parsed.data.lastName,
+      phone: parsed.data.phone,
+      gender: parsed.data.gender,
+      avatar_kind: parsed.data.avatarKind,
+      avatar_value: parsed.data.avatarValue ?? null,
+    })
     .eq("id", user.id);
 
   if (error) {
     return { ok: false, error: "unknown" };
   }
 
-  const next = formData.get("next");
-  redirect(typeof next === "string" && next ? next : "/mes-evenements");
+  redirect(next || "/mes-evenements");
 }

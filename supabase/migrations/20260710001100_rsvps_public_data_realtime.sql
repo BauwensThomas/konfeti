@@ -1,0 +1,11 @@
+-- Bug reel signale par Thomas : le refresh automatique de "Personnes"
+-- fonctionnait pour un admin mais pas pour un simple participant. Cause :
+-- l'abonnement Realtime (EventTabs.tsx) ecoute la table brute `rsvps`, dont
+-- la policy `rsvps_select_own_or_admin` ne montre a un NON-admin que SA
+-- PROPRE ligne (`profile_id = auth.uid() OR is_event_admin(event_id)`) — un
+-- simple invite ne recevait donc jamais l'evenement Realtime pour le
+-- changement de quelqu'un d'autre. `rsvps_public_data` (table miroir,
+-- policy bien plus permissive : tout admin OU participant approuve peut
+-- voir les autres participants approuves/retires/partis) n'etait pas encore
+-- dans la publication Realtime.
+alter publication supabase_realtime add table rsvps_public_data;

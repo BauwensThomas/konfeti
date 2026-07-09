@@ -15,8 +15,11 @@ test("un organisateur complete son profil et cree un evenement", async ({ page }
   try {
     // Complétion du profil (obligatoire, brief 1.2)
     await page.goto("/profil/completer");
+    await page.getByPlaceholder("Julie").fill("Hôte");
+    await page.getByPlaceholder("Dean").fill("Test");
     await page.getByLabel("Ton numéro de téléphone").fill("+32470000099");
     await page.getByLabel("Une femme").check();
+    await page.getByRole("button", { name: "Avatar 1" }).click();
     await page.getByRole("button", { name: "Continuer" }).click();
     await expect(page).toHaveURL(/\/mes-evenements$/);
 

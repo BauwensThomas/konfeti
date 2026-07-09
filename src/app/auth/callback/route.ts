@@ -20,15 +20,18 @@ export async function GET(request: Request) {
     } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error && user) {
-      // Complétion du profil (téléphone, sexe) obligatoire après la première
-      // connexion, avant d'accéder au reste de l'app (brief 1.2).
+      // Complétion du profil (prénom, nom, téléphone, sexe, avatar)
+      // obligatoire après la première connexion, avant d'accéder au reste de
+      // l'app (brief 1.1/1.2). `first_name` sert aussi de signal "profil
+      // incomplet" pour les comptes créés avant l'ajout de ce champ (identité
+      // manquante, affichée "Anonyme" dans le chat par exemple).
       const { data: profile } = await supabase
         .from("profiles")
-        .select("phone")
+        .select("phone, first_name")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (!profile?.phone) {
+      if (!profile?.phone || !profile?.first_name) {
         const completeUrl = new URL("/profil/completer", origin);
         completeUrl.searchParams.set("next", next);
         return NextResponse.redirect(completeUrl);

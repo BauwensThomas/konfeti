@@ -315,11 +315,15 @@ export function GuestIdentityForm({
 const inputClass =
   "w-full rounded-konfeti border border-border bg-surface px-4 py-2.5 text-base text-foreground placeholder:text-foreground/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 
+// `<label>` (pas un simple `<div>`+`<span>`) : associe implicitement le champ
+// à son intitulé (accessibilité + `getByLabel` Playwright), même correctif
+// que ProfileCompletionForm (bug identique, découvert en investiguant un
+// test e2e bloqué sur ce même motif).
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1 text-left">
+    <label className="flex flex-col gap-1 text-left">
       <span className="text-sm font-semibold text-foreground">{label}</span>
       {children}
-    </div>
+    </label>
   );
 }

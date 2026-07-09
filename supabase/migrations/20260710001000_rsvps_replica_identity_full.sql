@@ -1,0 +1,14 @@
+-- Bug reel decouvert en diagnostiquant "je ne veux pas devoir refresh" : le
+-- canal Realtime "rsvps" (EventTabs) etait SUBSCRIBED cote client (aucune
+-- erreur visible dans l'app), mais ne recevait strictement AUCUN evenement
+-- (ni INSERT, ni UPDATE), malgre la table bien presente dans la publication
+-- supabase_realtime. Cause trouvee en inspectant les frames WebSocket brutes :
+-- le serveur Realtime renvoie un message "system" d'exception juste apres le
+-- "ok" de join, quand on demande `event: "*"` (INSERT+UPDATE+DELETE) avec un
+-- filtre sur une colonne (`event_id`) absente de la replica identity par
+-- defaut (juste la cle primaire) : impossible de filtrer un DELETE sans que
+-- `event_id` soit present dans la ligne "old", ce qui fait echouer
+-- l'abonnement pour LES TROIS types d'evenements a la fois, pas seulement
+-- DELETE. Meme classe de probleme deja rencontree (et corrigee) sur
+-- `message_reactions` en Phase 5, jamais appliquee a `rsvps`.
+alter table rsvps replica identity full;

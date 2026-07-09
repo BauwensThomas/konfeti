@@ -15,6 +15,7 @@ import { GuestPendingScreen } from "@/components/GuestPendingScreen";
 import { GuestRestrictedScreen } from "@/components/GuestRestrictedScreen";
 import { MyParticipationCard } from "@/components/MyParticipationCard";
 import { EventPersonnes } from "@/components/EventPersonnes";
+import { EventChat, getInitialUnreadCount } from "@/components/EventChat";
 import { ShareEventButton } from "@/components/ShareEventButton";
 import { Card } from "@/components/ui/Card";
 
@@ -86,13 +87,20 @@ export default async function EventPage({
   if (event) {
     const isHost = event.host_id === user?.id;
 
-    // L'hôte est toujours admin (bypass déjà géré côté RLS par
-    // is_event_admin/is_event_approved_participant, voir private.is_event_host) :
-    // pas besoin de lire sa propre ligne rsvps pour ça. Pour un non-hôte, la
+    // L'hôte est toujours admin de droit (bypass déjà géré côté RLS par
+    // is_event_admin/is_event_approved_participant, voir private.is_event_host),
+    // mais sa ligne rsvps reste créée paresseusement (ensure_own_rsvp,
+    // jusqu'ici seulement appelée depuis le chat) : sans elle, l'hôte
+    // n'apparaissait jamais dans l'onglet Personnes pour un événement tout
+    // juste créé. On la garantit ici, à chaque chargement de page, avant de
+    // lire la ligne — pour l'hôte comme pour tout autre participant, la
     // ligne rsvps du viewer sert à la fois au calcul du rôle (Personnes,
     // masquage cagnotte bénéficiaire) et au contrôle "changer ma réponse"/
     // "quitter" sur l'Accueil (brief 1.3/1.5).
-    const { data: myRsvpRow } = !isHost && user
+    if (isHost && user) {
+      await supabase.rpc("ensure_own_rsvp", { p_event_id: event.id });
+    }
+    const { data: myRsvpRow } = user
       ? await supabase
           .from("rsvps")
           .select("id, role, answer")
@@ -104,15 +112,24 @@ export default async function EventPage({
     const isAdmin = isHost || myRsvpRow?.role === "admin";
     const isBeneficiary = myRsvpRow?.role === "beneficiary";
 
+    // La pastille "Personnes" compte tout ce qui requiert une vraie décision
+    // de l'admin (retour Thomas) : les demandes "pending" classiques, PLUS
+    // les participants restreints ("je ne peux pas") ayant explicitement
+    // demandé à participer à la cagnotte et pas encore autorisés — pas les
+    // restricted qui n'ont rien demandé (aucune décision à prendre pour eux).
     let pendingCount = 0;
     if (isAdmin) {
       const { count } = await supabase
         .from("rsvps")
         .select("id", { count: "exact", head: true })
         .eq("event_id", event.id)
-        .eq("status", "pending");
+        .or(
+          "status.eq.pending,and(status.eq.restricted,wants_pot_access.eq.true,pot_access_granted.eq.false)",
+        );
       pendingCount = count ?? 0;
     }
+
+    const initialUnreadCount = await getInitialUnreadCount(event.id, myRsvpRow?.id ?? null);
 
     let dateOptions: {
       id: string;
@@ -168,15 +185,17 @@ export default async function EventPage({
         ).data?.signedUrl ?? null
       : null;
     const t = await getTranslations("EventPage");
-    // Bouton Partager (brief 4.2) : visible de l'hôte, et de tout participant
-    // approuvé si l'hôte a choisi "tous" (share_policy) plutôt que "admins
-    // seulement".
-    const canShare = isHost || event.share_policy === "all";
+    // Bouton Partager (brief 4.2) : visible de tout admin (host ou promu),
+    // et de tout participant approuvé si l'hôte a choisi "tous" (share_policy)
+    // plutôt que "admins seulement". `isHost || share_policy==='all'` oubliait
+    // qu'un admin PROMU (pas l'hôte) doit aussi voir ce bouton quand la
+    // politique est "admins" (retour Thomas : un admin promu n'y avait pas accès).
+    const canShare = isAdmin || event.share_policy === "all";
     const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/e/${event.short_code}`;
 
     return (
       <main className="flex flex-1 flex-col items-center gap-6 px-6 py-8 sm:py-12">
-        {isHost && (
+        {isAdmin && (
           <div className="flex w-full max-w-lg lg:max-w-2xl items-center justify-between gap-3">
             <Link href="/mes-evenements" className="text-sm font-semibold text-primary">
               {t("backToEvents")}
@@ -218,9 +237,21 @@ export default async function EventPage({
               shortCode={event.short_code}
               viewerRsvpId={myRsvpRow?.id ?? null}
               isAdmin={isAdmin}
+              potEnabled={event.pot_enabled}
             />
           }
           pendingCount={pendingCount}
+          chat={
+            <EventChat
+              eventId={event.id}
+              viewerRsvpId={myRsvpRow?.id ?? null}
+              isAdmin={isAdmin}
+              isBeneficiary={isBeneficiary}
+            />
+          }
+          eventId={event.id}
+          viewerRsvpId={myRsvpRow?.id ?? null}
+          initialUnreadCount={initialUnreadCount}
         />
       </main>
     );
@@ -231,7 +262,7 @@ export default async function EventPage({
   // non validé.
   const { data: preview } = await supabase
     .from("events_public_data")
-    .select("id, short_code, title, theme, allow_companions")
+    .select("id, short_code, title, theme, allow_companions, pot_enabled")
     .eq("short_code", shortCode)
     .maybeSingle();
 
@@ -246,16 +277,20 @@ export default async function EventPage({
   const { data: myRsvp } = user
     ? await supabase
         .from("rsvps")
-        .select("id, status, answer")
+        .select("id, status, answer, pot_access_granted, wants_pot_access")
         .eq("event_id", preview.id)
         .eq("profile_id", user.id)
         .maybeSingle()
     : { data: null };
 
   // Accès restreint "cagnotte seule" (brief 1.3) : infos cagnotte via la
-  // table miroir dédiée, déjà exposée par RLS à un participant "restricted".
+  // table miroir dédiée. N'importe qui répondant "je ne peux pas" y avait
+  // accès instantanément, sans validation (retour Thomas, question directe) —
+  // durci : ne s'affiche désormais qu'après que l'admin ait explicitement
+  // autorisé cet accès (`grant_pot_access`), la policy RLS l'exige aussi
+  // (`private.has_pot_access`), pas seulement ce filtre applicatif.
   const { data: potInfo } =
-    myRsvp?.status === "restricted"
+    myRsvp?.status === "restricted" && myRsvp.pot_access_granted
       ? await supabase
           .from("events_pot_data")
           .select("pot_enabled, pot_mode, pot_goal_cents, pot_label")
@@ -296,15 +331,24 @@ export default async function EventPage({
           rsvpId={myRsvp.id}
           shortCode={preview.short_code}
           currentAnswer={myRsvp.answer as "yes" | "maybe" | "no"}
+          potEnabled={preview.pot_enabled}
+          wantsPotAccess={myRsvp.wants_pot_access}
+          potAccessGranted={myRsvp.pot_access_granted}
           pot={potInfo}
         />
-      ) : myRsvp ? (
+      ) : myRsvp && myRsvp.status !== "left" && myRsvp.status !== "removed" ? (
         <GuestPendingScreen
           rsvpId={myRsvp.id}
           shortCode={preview.short_code}
           currentAnswer={myRsvp.answer as "yes" | "maybe" | "no"}
         />
       ) : (
+        // Statut "left"/"removed" (parti ou retiré) : traité comme "aucune
+        // participation" pour cet écran — le formulaire d'identité classique
+        // s'affiche à nouveau. `create_own_rsvp` reconnaît alors l'ancienne
+        // ligne (même compte, même événement) et la réactive plutôt que
+        // d'en créer une seconde (retour Thomas : revenir doit restaurer le
+        // nom sur l'historique de chat déjà lié à ce participant).
         <GuestParticipation
           eventId={preview.id}
           shortCode={preview.short_code}

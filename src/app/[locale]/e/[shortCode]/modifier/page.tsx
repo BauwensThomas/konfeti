@@ -21,7 +21,27 @@ export default async function EditEventPage({
     .maybeSingle();
 
   if (!event) notFound();
-  if (event.host_id !== user?.id) redirect(`/e/${shortCode}`);
+
+  // Un admin promu (pas seulement l'hôte littéral) doit pouvoir modifier
+  // l'événement (retour Thomas : "il n'a pas accès à modifier") — cohérent
+  // avec la policy RLS `events_update_by_admin`, qui autorise déjà
+  // `is_event_admin` (host OU role='admin'). `is_event_admin` vit dans le
+  // schéma `private` (jamais exposé via PostgREST) : impossible à appeler en
+  // RPC depuis ce code, d'où une requête directe sur `rsvps` à la place
+  // (protégée par `rsvps_select_own_or_admin`, même lecture "ma propre
+  // ligne" que `myRsvpRow` dans page.tsx).
+  const isHost = event.host_id === user?.id;
+  const { data: myRsvp } =
+    !isHost && user
+      ? await supabase
+          .from("rsvps")
+          .select("role, status")
+          .eq("event_id", event.id)
+          .eq("profile_id", user.id)
+          .maybeSingle()
+      : { data: null };
+  const isAdmin = isHost || (myRsvp?.status === "approved" && myRsvp?.role === "admin");
+  if (!isAdmin) redirect(`/e/${shortCode}`);
 
   const { data: dateOptions } = await supabase
     .from("date_options")

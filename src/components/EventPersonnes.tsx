@@ -1,16 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
-import { PRESET_AVATARS } from "@/lib/avatars";
+import { resolveAvatarUrl } from "@/lib/avatars";
 import { ParticipantsList, type ParticipantRow } from "@/components/ParticipantsList";
 
 type RawRsvpRow = {
   id: string;
   first_name: string | null;
   last_name: string | null;
+  phone: string | null;
   avatar_kind: "preset" | "photo";
   avatar_value: string | null;
   status: "pending" | "approved" | "restricted";
   role: "guest" | "admin" | "beneficiary";
   answer: "yes" | "maybe" | "no";
+  pot_access_granted: boolean;
+  wants_pot_access: boolean;
 };
 
 type RawPublicRsvpRow = {
@@ -32,11 +35,13 @@ export async function EventPersonnes({
   shortCode,
   viewerRsvpId,
   isAdmin,
+  potEnabled,
 }: {
   eventId: string;
   shortCode: string;
   viewerRsvpId: string | null;
   isAdmin: boolean;
+  potEnabled: boolean;
 }) {
   const supabase = await createClient();
 
@@ -45,7 +50,9 @@ export async function EventPersonnes({
   if (isAdmin) {
     const { data } = await supabase
       .from("rsvps")
-      .select("id, first_name, last_name, avatar_kind, avatar_value, status, role, answer")
+      .select(
+        "id, first_name, last_name, phone, avatar_kind, avatar_value, status, role, answer, pot_access_granted, wants_pot_access",
+      )
       .eq("event_id", eventId)
       .in("status", ["pending", "restricted", "approved"])
       .returns<RawRsvpRow[]>();
@@ -68,18 +75,26 @@ export async function EventPersonnes({
         id: r.id,
         firstName: r.first_name,
         lastName: r.last_name,
+        phone: r.phone,
         avatarUrl: await resolveAvatarUrl(supabase, r.avatar_kind, r.avatar_value),
         status: r.status,
         role: r.role,
         answer: r.answer,
         companionsCount: companionsCountByRsvp.get(r.id) ?? 0,
+        potAccessGranted: r.pot_access_granted,
+        wantsPotAccess: r.wants_pot_access,
       })),
     );
   } else {
+    // rsvps_public_data_select (RLS) inclut aussi désormais removed/left
+    // (Phase 5, pour que le chat puisse résoudre "Anonyme" sur un message
+    // d'un participant parti) : filtre status explicite ici pour ne garder
+    // que les participants réellement approuvés dans cette liste.
     const { data } = await supabase
       .from("rsvps_public_data")
       .select("id, first_name, last_initial, avatar_kind, avatar_value, status, role, answer, companions_count")
       .eq("event_id", eventId)
+      .eq("status", "approved")
       .returns<RawPublicRsvpRow[]>();
 
     const rsvpRows = data ?? [];
@@ -88,11 +103,14 @@ export async function EventPersonnes({
         id: r.id,
         firstName: r.first_name,
         lastName: r.last_initial,
+        phone: null,
         avatarUrl: await resolveAvatarUrl(supabase, r.avatar_kind, r.avatar_value),
         status: r.status,
         role: r.role,
         answer: r.answer,
         companionsCount: r.companions_count,
+        potAccessGranted: false,
+        wantsPotAccess: false,
       })),
     );
   }
@@ -102,20 +120,8 @@ export async function EventPersonnes({
       shortCode={shortCode}
       viewerRsvpId={viewerRsvpId}
       isAdmin={isAdmin}
+      potEnabled={potEnabled}
       rows={rows}
     />
   );
-}
-
-async function resolveAvatarUrl(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  avatarKind: "preset" | "photo",
-  avatarValue: string | null,
-): Promise<string | null> {
-  if (!avatarValue) return null;
-  if (avatarKind === "preset") {
-    return PRESET_AVATARS.find((a) => a.key === avatarValue)?.path ?? null;
-  }
-  const { data } = await supabase.storage.from("event-photos").createSignedUrl(avatarValue, 3600);
-  return data?.signedUrl ?? null;
 }
