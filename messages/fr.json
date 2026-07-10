@@ -168,6 +168,7 @@
       "rsvpDeadlineTooLate": "La date limite de réponse ne peut pas être après l'événement.",
       "kidsAllowedLabel": "Enfants bienvenus ?",
       "petsAllowedLabel": "Animaux bienvenus ?",
+      "choosePlaceholder": "Choisir...",
       "yes": "Oui",
       "no": "Non",
       "details": "Ça dépend"
@@ -186,7 +187,20 @@
       "potModeOpen": "Montant libre",
       "potGoalLabel": "Objectif (en euros)",
       "potLabelLabel": "Nom de la cagnotte",
-      "potLabelPlaceholder": "Cadeau collectif pour Julie"
+      "potLabelPlaceholder": "Cadeau collectif pour Julie",
+      "bringItemsLabel": "Qui apporte quoi",
+      "bringItemLabelPlaceholder": "Ex. Bouteilles de soda, gâteau, glaçons...",
+      "bringItemLabelAria": "Nom de l'item {index}",
+      "bringItemQuantityAria": "Quantité demandée pour l'item {index}",
+      "bringItemUnitAria": "Unité pour l'item {index}",
+      "bringUnit": {
+        "piece": "Pièce",
+        "liter": "Litre",
+        "gram": "Gramme",
+        "kilogram": "Kilo"
+      },
+      "removeBringItem": "Retirer cet item",
+      "addBringItem": "Ajouter un item"
     },
     "step5": {
       "heading": "Ce que voient les bénéficiaires",
@@ -248,6 +262,7 @@
     },
     "comingSoon": "Bientôt disponible.",
     "participantsListHidden": "L'organisateur a masqué la liste des participants pour toi.",
+    "bringListHidden": "L'organisateur a masqué \"qui apporte quoi\" pour toi.",
     "editEvent": "Modifier",
     "shareButton": "Partager",
     "shareCopied": "Lien copié !",
@@ -280,6 +295,12 @@
     "validateDateConfirmYes": "Oui, valider",
     "validateDateConfirmNo": "Annuler",
     "endsAtLabel": "Jusqu'à {time}",
+    "dateLocationHeading": "Quand et où ?",
+    "descriptionHeading": "Description",
+    "birthdaySentenceWithAge": "C'est l'anniversaire de {person}, qui fêtera ses {age} ans !",
+    "birthdaySentence": "C'est l'anniversaire de {person} !",
+    "housewarmingSentence": "C'est la crémaillère de {hosts} !",
+    "bachelorSentence": "C'est l'EVG/EVJF de {person} !",
     "dressCodeLabel": "Tenue",
     "bringGeneralLabel": "À prévoir",
     "instructionsLabel": "Bon à savoir",
@@ -438,6 +459,43 @@
       "angry": "Fâché",
       "warning": "Attention",
       "heart": "Cœur"
+    }
+  },
+  "Bring": {
+    "accueilHeading": "Qui apporte quoi",
+    "empty": "Aucun item pour l'instant.",
+    "gaugeCount": "{claimed} / {needed}",
+    "gaugeOverflow": "Et plus si affinités, merci !",
+    "broughtLabel": "Apporté",
+    "addMyClaim": "J'apporte",
+    "updateMyClaim": "Mettre à jour",
+    "removeMyClaim": "Retirer mon engagement",
+    "myClaimLabel": "Ma quantité",
+    "editQuantityLabel": "Quantité demandée (organisateur)",
+    "saveQuantity": "Enregistrer",
+    "deleteItem": "Supprimer l'item",
+    "deleteItemConfirmTitle": "Es-tu sûr ? Cette action est définitive.",
+    "deleteItemConfirmYes": "Oui, supprimer",
+    "deleteItemConfirmNo": "Annuler",
+    "errorUnknown": "Une erreur est survenue, réessaie.",
+    "pendingSectionTitle": "En attente d'approbation",
+    "proposedBy": "Proposé par {name}",
+    "approve": "Approuver",
+    "merge": "Fusionner",
+    "mergeHeading": "Fusionner avec quel item ?",
+    "reject": "Refuser",
+    "proposeHeading": "Proposer un item",
+    "proposeSuccess": "Merci ! Ta proposition attend la validation de l'organisateur.",
+    "proposeLabelPlaceholder": "Ex. Glaçons, jus d'orange...",
+    "proposeQuantityAria": "Quantité proposée",
+    "proposeUnitPlaceholder": "Choisir...",
+    "proposeUnitAria": "Unité proposée",
+    "proposeSubmit": "Proposer",
+    "unit": {
+      "piece": "Pièce",
+      "liter": "Litre",
+      "gram": "Gramme",
+      "kilogram": "Kilo"
     }
   }
 }

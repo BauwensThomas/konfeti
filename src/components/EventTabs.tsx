@@ -15,7 +15,9 @@ export function EventTabs({
   accueil,
   personnes,
   chat,
+  participer,
   pendingCount = 0,
+  pendingBringCount = 0,
   eventId,
   viewerRsvpId = null,
   initialUnreadCount = 0,
@@ -24,7 +26,12 @@ export function EventTabs({
   accueil: ReactNode;
   personnes?: ReactNode;
   chat?: ReactNode;
+  participer?: ReactNode;
   pendingCount?: number;
+  // Brief 4.4, retour Thomas : "une notif rouge sur participer comme pour
+  // personnes" -- items "qui apporte quoi" proposés par un invité, en
+  // attente de validation admin (même pattern que `pendingCount`).
+  pendingBringCount?: number;
   eventId?: string;
   viewerRsvpId?: string | null;
   initialUnreadCount?: number;
@@ -186,6 +193,45 @@ export function EventTabs({
     };
   }, [eventId, router]);
 
+  // "Qui apporte quoi" (brief 4.4) : canal Realtime SÉPARÉ, même précaution
+  // que `date_votes` ci-dessus. Sert à la fois la version compacte de
+  // l'Accueil et la liste complète de l'onglet Participer (BringListClient
+  // n'a plus sa propre souscription) -- un `router.refresh()` recharge tout
+  // l'arbre de Server Components de la page, peu importe quel onglet est
+  // actif au moment du changement.
+  useEffect(() => {
+    if (!eventId) return;
+    let cancelled = false;
+    const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    ensureRealtimeAuth(supabase).then(() => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`event-${eventId}-bring`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "bring_items" },
+          () => router.refresh(),
+        )
+        // `bring_claims` n'a pas de colonne `event_id` (comme
+        // `message_reactions`) : pas de filtre possible ici, on rafraîchit à
+        // chaque changement de claim tout court -- imprécision acceptée,
+        // même philosophie que le reste du projet (voir DECISIONS.md).
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "bring_claims" },
+          () => router.refresh(),
+        )
+        .subscribe();
+    });
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [eventId, router]);
+
   // Réf plutôt qu'une dépendance directe de l'effet Realtime ci-dessous (même
   // pattern qu'`activeRef`) : `chatAllowedChannels` est un tableau littéral
   // recréé à chaque rendu par l'appelant, l'ajouter aux dépendances
@@ -317,6 +363,11 @@ export function EventTabs({
                 {pendingCount}
               </span>
             )}
+            {tab === "participer" && pendingBringCount > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-coral px-1 text-xs font-bold text-white">
+                {pendingBringCount}
+              </span>
+            )}
             {/* Simple pastille (pas de chiffre) sur l'onglet Chat au niveau
                 page -- retour Thomas : "mettre juste une boule rouge à côté
                 de chat", le détail (combien, où) n'apparaît qu'une fois le
@@ -338,6 +389,8 @@ export function EventTabs({
         personnes
       ) : active === "chat" && chat ? (
         chat
+      ) : active === "participer" && participer ? (
+        participer
       ) : (
         <p className="py-16 text-center text-sm text-foreground/60">{t("comingSoon")}</p>
       )}

@@ -58,6 +58,57 @@ function eventRowFromInput(data: CreateEventInput) {
   };
 }
 
+// "Qui apporte quoi" (brief 4.4) : synchronisé par DIFF plutôt qu'un
+// delete+reinsert complet (comme `date_options` ci-dessous) -- un item déjà
+// présent (identifié par son `id` réel) est mis à jour sur place, jamais
+// recréé, pour ne JAMAIS faire tomber en cascade les `bring_claims` déjà
+// engagées par les invités sur un item qui n'a pas changé. Réutilisée telle
+// quelle par createEvent (aucun id existant, tout est un insert) et
+// updateEvent (diff réel). Retourne `true` en cas de succès.
+async function syncBringItems(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  eventId: string,
+  items: CreateEventInput["bringItems"],
+): Promise<boolean> {
+  const { data: existing, error: fetchError } = await supabase
+    .from("bring_items")
+    .select("id")
+    .eq("event_id", eventId);
+  if (fetchError) return false;
+
+  const existingIds = new Set((existing ?? []).map((r) => r.id as string));
+  const submittedIds = new Set(items.filter((i) => i.id).map((i) => i.id!));
+
+  const toDelete = [...existingIds].filter((id) => !submittedIds.has(id));
+  if (toDelete.length > 0) {
+    const { error } = await supabase.from("bring_items").delete().in("id", toDelete);
+    if (error) return false;
+  }
+
+  const toInsert = items.filter((i) => !i.id);
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from("bring_items").insert(
+      toInsert.map((i) => ({
+        event_id: eventId,
+        label: i.label,
+        unit: i.unit,
+        quantity_needed: i.quantityNeeded,
+      })),
+    );
+    if (error) return false;
+  }
+
+  for (const item of items.filter((i) => i.id)) {
+    const { error } = await supabase
+      .from("bring_items")
+      .update({ label: item.label, unit: item.unit, quantity_needed: item.quantityNeeded })
+      .eq("id", item.id!);
+    if (error) return false;
+  }
+
+  return true;
+}
+
 export async function createEvent(
   input: CreateEventInput,
 ): Promise<CreateEventResult> {
@@ -125,6 +176,10 @@ export async function createEvent(
     if (dateOptionsError) {
       return { ok: false, error: "unknown" };
     }
+  }
+
+  if (!(await syncBringItems(supabase, event.id, data.bringItems))) {
+    return { ok: false, error: "unknown" };
   }
 
   redirect("/mes-evenements");
@@ -210,6 +265,10 @@ export async function updateEvent(
     if (dateOptionsError) {
       return { ok: false, error: "unknown" };
     }
+  }
+
+  if (!(await syncBringItems(supabase, eventId, data.bringItems))) {
+    return { ok: false, error: "unknown" };
   }
 
   redirect(`/e/${shortCode}`);

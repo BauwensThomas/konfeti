@@ -16,6 +16,8 @@ import { GuestRestrictedScreen } from "@/components/GuestRestrictedScreen";
 import { MyParticipationCard } from "@/components/MyParticipationCard";
 import { EventPersonnes } from "@/components/EventPersonnes";
 import { EventChat, getInitialUnreadCount } from "@/components/EventChat";
+import { BringList } from "@/components/BringList";
+import { BringAccueilGauges } from "@/components/bring/BringAccueilGauges";
 import { ShareEventButton } from "@/components/ShareEventButton";
 import { LinkAccountBanner } from "@/components/LinkAccountBanner";
 import { Card } from "@/components/ui/Card";
@@ -140,6 +142,13 @@ export default async function EventPage({
     const isChatHiddenForBeneficiaries = hiddenBlocks.includes("chat");
     const isParticipantsHiddenForBeneficiaries = hiddenBlocks.includes("participants");
     const isParticipantsListHidden = isBeneficiary && isParticipantsHiddenForBeneficiaries;
+    // "Qui apporte quoi" (brief 4.4) : même pattern que Personnes -- masquage
+    // purement applicatif (pas de policy RLS dédiée sur bring_items/
+    // bring_claims au-delà de is_block_hidden_for_me déjà en place depuis la
+    // Phase 1), le bloc `bring` existait déjà dans le tableau, seule l'UI
+    // manquait jusqu'ici.
+    const isBringHiddenForBeneficiaries = hiddenBlocks.includes("bring");
+    const isBringListHidden = isBeneficiary && isBringHiddenForBeneficiaries;
 
     // Canaux de chat réellement accessibles à CE viewer (retour Thomas :
     // pastille non-lus par canal, sans jamais notifier un bénéficiaire
@@ -180,6 +189,20 @@ export default async function EventPage({
           "status.eq.pending,and(status.eq.restricted,wants_pot_access.eq.true,pot_access_granted.eq.false)",
         );
       pendingCount = count ?? 0;
+    }
+
+    // Pastille "Participer" (brief 4.4, retour Thomas : "une notif rouge sur
+    // participer comme pour personnes") : items "qui apporte quoi" proposés
+    // par un invité, en attente de validation admin -- même pattern que
+    // `pendingCount` ci-dessus.
+    let pendingBringCount = 0;
+    if (isAdmin) {
+      const { count } = await supabase
+        .from("bring_items")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", event.id)
+        .eq("status", "pending");
+      pendingBringCount = count ?? 0;
     }
 
     const initialUnreadCount = await getInitialUnreadCount(event.id, myRsvpRow?.id ?? null, chatAllowedChannels);
@@ -281,6 +304,7 @@ export default async function EventPage({
               dateOptions={dateOptions}
               coverPhotoUrl={coverPhotoUrl}
               beneficiaryNames={beneficiaryNames}
+              isBringListHidden={isBringListHidden}
               myRsvp={
                 !isHost && myRsvpRow
                   ? { id: myRsvpRow.id, answer: myRsvpRow.answer as "yes" | "maybe" | "no" }
@@ -309,6 +333,7 @@ export default async function EventPage({
             )
           }
           pendingCount={pendingCount}
+          pendingBringCount={pendingBringCount}
           chat={
             <EventChat
               eventId={event.id}
@@ -318,6 +343,18 @@ export default async function EventPage({
               isBackstageHidden={isBackstageHiddenForBeneficiaries}
               isChatHidden={isChatHiddenForBeneficiaries}
             />
+          }
+          participer={
+            isBringListHidden ? (
+              <Card className="text-center text-sm text-foreground/60">{t("bringListHidden")}</Card>
+            ) : (
+              <BringList
+                eventId={event.id}
+                shortCode={event.short_code}
+                viewerRsvpId={myRsvpRow?.id ?? null}
+                isAdmin={isAdmin}
+              />
+            )
           }
           eventId={event.id}
           viewerRsvpId={myRsvpRow?.id ?? null}
@@ -485,6 +522,7 @@ async function EventAccueil({
   coverPhotoUrl,
   beneficiaryNames,
   myRsvp,
+  isBringListHidden,
 }: {
   event: EventRow;
   isHost: boolean;
@@ -506,6 +544,11 @@ async function EventAccueil({
   // juste au-dessus).
   beneficiaryNames: string[];
   myRsvp: { id: string; answer: "yes" | "maybe" | "no" } | null;
+  // "Qui apporte quoi" (brief 4.4, retour Thomas : "dès que quelqu'un a
+  // rajouté un produit, on a un histogramme en barre à côté... sur la page
+  // d'accueil") -- même garde-fou de masquage que le reste (jamais montré au
+  // bénéficiaire concerné).
+  isBringListHidden: boolean;
 }) {
   const t = await getTranslations("EventPage");
   const tOccasions = await getTranslations("Occasions");
@@ -567,24 +610,39 @@ async function EventAccueil({
         </Card>
       )}
 
+      {/* Retour Thomas : "julie - 39 ans, ça doit être mieux écrit... anniversaire
+          de julie, elle fêtera ses 39 ans, adapter à chaque contexte" -- une
+          vraie phrase par occasion plutôt qu'un "Nom - info" brut. "qui
+          fêtera" (pas "il/elle fêtera") évite sciemment l'accord de genre :
+          le prénom seul ne dit rien sur le genre de la personne. */}
       {(event.birthday_person || event.housewarming_hosts?.length || event.bachelor_person) && (
         <Card>
           {event.birthday_person && (
-            <p className="text-base text-foreground">
-              {event.birthday_person}
-              {event.show_age && event.birthday_age ? ` - ${event.birthday_age} ans` : ""}
+            <p className="font-display text-lg font-bold text-foreground">
+              {event.show_age && event.birthday_age
+                ? t("birthdaySentenceWithAge", { person: event.birthday_person, age: event.birthday_age })
+                : t("birthdaySentence", { person: event.birthday_person })}
             </p>
           )}
           {!!event.housewarming_hosts?.length && (
-            <p className="text-base text-foreground">{event.housewarming_hosts.join(", ")}</p>
+            <p className="font-display text-lg font-bold text-foreground">
+              {t("housewarmingSentence", { hosts: joinNames(event.housewarming_hosts) })}
+            </p>
           )}
           {event.bachelor_person && (
-            <p className="text-base text-foreground">{event.bachelor_person}</p>
+            <p className="font-display text-lg font-bold text-foreground">
+              {t("bachelorSentence", { person: event.bachelor_person })}
+            </p>
           )}
         </Card>
       )}
 
+      {/* Retour Thomas : "il faudrait mettre la même chose [le gras] pour les
+          titres de toutes les cases de la page d'accueil" -- titre
+          font-display en gras ajouté à chaque carte qui n'en avait pas
+          encore, cohérent avec "Qui apporte quoi" (BringAccueilGauges). */}
       <Card className="flex flex-col gap-3">
+        <p className="font-display text-lg font-bold text-foreground">{t("dateLocationHeading")}</p>
         {event.date_mode === "fixed" && event.starts_at ? (
           <p className="text-base font-semibold text-foreground">
             {formatDateTime(event.starts_at)}
@@ -621,7 +679,8 @@ async function EventAccueil({
       </Card>
 
       {event.description && (
-        <Card>
+        <Card className="flex flex-col gap-2">
+          <p className="font-display text-lg font-bold text-foreground">{t("descriptionHeading")}</p>
           <p className="whitespace-pre-line text-base text-foreground">{event.description}</p>
         </Card>
       )}
@@ -633,6 +692,7 @@ async function EventAccueil({
         event.kids_allowed ||
         event.pets_allowed) && (
         <Card className="flex flex-col gap-2">
+          <p className="font-display text-lg font-bold text-foreground">{t("instructionsLabel")}</p>
           {event.instructions && (
             <p className="whitespace-pre-line text-base text-foreground">{event.instructions}</p>
           )}
@@ -666,7 +726,7 @@ async function EventAccueil({
 
       {event.pot_enabled && !(isBeneficiary && event.beneficiary_hidden_blocks.includes("pot")) && (
         <Card>
-          <p className="text-base text-foreground">
+          <p className="font-display text-lg font-bold text-foreground">
             {t("potLabel", { label: event.pot_label || "" })}
           </p>
           <p className="text-sm text-foreground/70">
@@ -694,6 +754,13 @@ async function EventAccueil({
           )}
         </Card>
       )}
+
+      {/* "Qui apporte quoi" (brief 4.4) : version compacte sur l'Accueil,
+          retour Thomas ("dès que quelqu'un a rajouté un produit, on a un
+          histogramme en barre à côté, la quantité reçue sur quantité
+          demandée") -- même composant `BringGauge` que l'onglet Participer,
+          BringAccueilGauges ne rend rien si aucun item n'existe. */}
+      {!isBringListHidden && <BringAccueilGauges eventId={event.id} />}
     </div>
   );
 }

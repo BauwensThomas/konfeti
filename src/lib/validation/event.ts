@@ -53,6 +53,23 @@ const eventFieldsSchema = z.object({
   potGoalCents: z.coerce.number().int().positive().optional(),
   potLabel: z.string().trim().max(200).optional(),
 
+  // "Qui apporte quoi" (brief 4.4, Phase 6) : `id` vaut `null` pour un item
+  // pas encore créé (nouvelle ligne ajoutée dans le wizard), sinon l'id réel
+  // en base -- utilisé par `eventRowFromInput`/`createEvent`/`updateEvent`
+  // pour synchroniser par diff plutôt que tout recréer (voir DECISIONS.md :
+  // un delete+reinsert détruirait les engagements déjà pris par les invités).
+  bringItems: z
+    .array(
+      z.object({
+        id: z.string().uuid().nullable(),
+        label: z.string().trim().min(1).max(200),
+        unit: z.enum(["piece", "liter", "gram", "kilogram"]).default("piece"),
+        quantityNeeded: z.coerce.number().positive(),
+      }),
+    )
+    .max(30)
+    .default([]),
+
   // Écran 5 : ce que voient les bénéficiaires (brief 1.4 + retour Thomas).
   // "backstage" masque le fil Coulisses, "chat" masque le chat GÉNÉRAL
   // (canal 'main') -- ajouté après coup (retour Thomas : un bénéficiaire
@@ -170,3 +187,4 @@ export function updateEventSchema(skipPastDateCheck: boolean) {
 }
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
+export type BringItemInput = CreateEventInput["bringItems"][number];

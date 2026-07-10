@@ -13,6 +13,7 @@ import { Modal } from "@/components/ui/Modal";
 import { AvatarPlaceholder } from "@/components/AvatarPlaceholder";
 import { toLocalDateTimeValue } from "@/lib/datetime";
 import { joinNames } from "@/lib/joinNames";
+import { UnitPickerButton, type BringUnit } from "@/components/bring/UnitPickerButton";
 
 type DateOption = { startsAt: string; label: string };
 
@@ -46,10 +47,28 @@ export type WizardData = {
   potMode: "goal" | "open";
   potGoalEuros: string;
   potLabel: string;
+  bringItems: BringItemRow[];
   beneficiaryHiddenBlocks: BeneficiaryBlock[];
 };
 
 export type BeneficiaryBlock = "pot" | "backstage" | "chat" | "bring" | "polls" | "playlist" | "participants";
+
+// "Qui apporte quoi" (brief 4.4) : `id` reste `null` pour une ligne ajoutée
+// dans cette session du wizard (pas encore en base) -- distingué en édition
+// des items déjà existants, pour que createEvent/updateEvent puisse
+// synchroniser par diff plutôt que tout recréer (voir DECISIONS.md).
+// `quantityNeeded` en texte comme `potGoalEuros` (état de champ contrôlé),
+// converti en nombre à la soumission. `unit` accepte aussi `""` (retour
+// Thomas : "avant qu'il s'ouvre ça doit être écrit choisir..." -- une
+// nouvelle ligne ne doit pas silencieusement défaulter sur "Pièce", le popup
+// doit d'abord afficher un placeholder tant que l'organisateur n'a rien
+// choisi lui-même). Filtré à la soumission comme un libellé vide.
+export type BringItemRow = {
+  id: string | null;
+  label: string;
+  unit: BringUnit | "";
+  quantityNeeded: string;
+};
 
 const INITIAL_DATA: WizardData = {
   title: "",
@@ -84,6 +103,7 @@ const INITIAL_DATA: WizardData = {
   potMode: "goal",
   potGoalEuros: "",
   potLabel: "",
+  bringItems: [],
   // Cagnotte + Coulisses masquées par défaut (préserve le comportement
   // historique de ces deux blocs, "toujours masqués", avant qu'ils ne
   // deviennent configurables ici) ; le chat GÉNÉRAL et le reste restent
@@ -115,6 +135,14 @@ export function CreateEventWizard({
   const t = useTranslations("CreateEvent");
   const tThemes = useTranslations("Themes");
   const tOccasions = useTranslations("Occasions");
+  // `UnitPickerButton` est volontairement indépendant de next-intl (voir ce
+  // fichier) : les libellés lui sont passés tout traduits.
+  const bringUnitLabels: Record<BringUnit, string> = {
+    piece: t("step4.bringUnit.piece"),
+    liter: t("step4.bringUnit.liter"),
+    gram: t("step4.bringUnit.gram"),
+    kilogram: t("step4.bringUnit.kilogram"),
+  };
   const [step, setStep] = useState(1);
   const [data, setData] = useState<WizardData>(initialData ?? INITIAL_DATA);
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +154,15 @@ export function CreateEventWizard({
   const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
   const [confirmingPhotoDelete, setConfirmingPhotoDelete] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  // Même demande de Thomas, étendue à "Enfants bienvenus"/"Animaux bienvenus"
+  // (retour Thomas : "il va falloir aussi mettre des popup pour enfants
+  // bienvenus et animaux bienvenus") -- même pattern popup que l'unité
+  // ci-dessus, plus besoin d'un `<select>` natif pour ces deux champs.
+  const [kidsPickerOpen, setKidsPickerOpen] = useState(false);
+  const [petsPickerOpen, setPetsPickerOpen] = useState(false);
+  // Retour Thomas, généralisé : "tout ceux où il y a un menu qu'on déroule
+  // doit être avec un popup" -- dernier `<select>` natif restant (occasion).
+  const [occasionPickerOpen, setOccasionPickerOpen] = useState(false);
 
   function update<K extends keyof WizardData>(key: K, value: WizardData[K]) {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -293,6 +330,14 @@ export function CreateEventWizard({
             ? Math.round(Number(data.potGoalEuros) * 100)
             : undefined,
         potLabel: data.potLabel || undefined,
+        bringItems: data.bringItems
+          .filter((item) => item.label.trim() && item.quantityNeeded && item.unit)
+          .map((item) => ({
+            id: item.id,
+            label: item.label.trim(),
+            unit: item.unit as BringUnit,
+            quantityNeeded: Number(item.quantityNeeded),
+          })),
         beneficiaryHiddenBlocks: data.beneficiaryHiddenBlocks,
       };
 
@@ -504,18 +549,32 @@ export function CreateEventWizard({
             <h2 className="font-display text-xl text-foreground">{t("step2.heading")}</h2>
 
             <Field label={t("step2.occasionLabel")}>
-              <select
-                value={data.occasion}
-                onChange={(e) => update("occasion", e.target.value as WizardData["occasion"])}
-                className={inputClass}
+              <button
+                type="button"
+                onClick={() => setOccasionPickerOpen(true)}
+                className={`${inputClass} text-left`}
               >
-                {OCCASIONS.map((occasion) => (
-                  <option key={occasion} value={occasion}>
-                    {tOccasions(occasion)}
-                  </option>
-                ))}
-              </select>
+                {tOccasions(data.occasion)}
+              </button>
             </Field>
+
+            <Modal open={occasionPickerOpen} onClose={() => setOccasionPickerOpen(false)}>
+              <div className="flex flex-col gap-1">
+                {OCCASIONS.map((occasion) => (
+                  <button
+                    key={occasion}
+                    type="button"
+                    onClick={() => {
+                      update("occasion", occasion);
+                      setOccasionPickerOpen(false);
+                    }}
+                    className="rounded-konfeti px-4 py-3 text-left text-base text-foreground hover:bg-primary/10"
+                  >
+                    {tOccasions(occasion)}
+                  </button>
+                ))}
+              </div>
+            </Modal>
 
             {data.occasion === "birthday" && (
               <>
@@ -672,35 +731,65 @@ export function CreateEventWizard({
               )}
             </Field>
 
+            {/* Retour Thomas : "il va falloir aussi mettre des popup pour
+                enfants bienvenus et animaux bienvenus" -- même pattern
+                popup que le choix d'unité "qui apporte quoi", `<select>`
+                natif retiré. */}
             <Field label={t("step3.kidsAllowedLabel")}>
-              <select
-                value={data.kidsAllowed}
-                onChange={(e) =>
-                  update("kidsAllowed", e.target.value as WizardData["kidsAllowed"])
-                }
-                className={inputClass}
+              <button
+                type="button"
+                onClick={() => setKidsPickerOpen(true)}
+                className={`${inputClass} text-left`}
               >
-                <option value=""></option>
-                <option value="yes">{t("step3.yes")}</option>
-                <option value="no">{t("step3.no")}</option>
-                <option value="details">{t("step3.details")}</option>
-              </select>
+                {data.kidsAllowed ? t(`step3.${data.kidsAllowed}`) : t("step3.choosePlaceholder")}
+              </button>
             </Field>
 
             <Field label={t("step3.petsAllowedLabel")}>
-              <select
-                value={data.petsAllowed}
-                onChange={(e) =>
-                  update("petsAllowed", e.target.value as WizardData["petsAllowed"])
-                }
-                className={inputClass}
+              <button
+                type="button"
+                onClick={() => setPetsPickerOpen(true)}
+                className={`${inputClass} text-left`}
               >
-                <option value=""></option>
-                <option value="yes">{t("step3.yes")}</option>
-                <option value="no">{t("step3.no")}</option>
-                <option value="details">{t("step3.details")}</option>
-              </select>
+                {data.petsAllowed ? t(`step3.${data.petsAllowed}`) : t("step3.choosePlaceholder")}
+              </button>
             </Field>
+
+            <Modal open={kidsPickerOpen} onClose={() => setKidsPickerOpen(false)}>
+              <div className="flex flex-col gap-1">
+                {(["yes", "no", "details"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      update("kidsAllowed", value);
+                      setKidsPickerOpen(false);
+                    }}
+                    className="rounded-konfeti px-4 py-3 text-left text-base text-foreground hover:bg-primary/10"
+                  >
+                    {t(`step3.${value}`)}
+                  </button>
+                ))}
+              </div>
+            </Modal>
+
+            <Modal open={petsPickerOpen} onClose={() => setPetsPickerOpen(false)}>
+              <div className="flex flex-col gap-1">
+                {(["yes", "no", "details"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      update("petsAllowed", value);
+                      setPetsPickerOpen(false);
+                    }}
+                    className="rounded-konfeti px-4 py-3 text-left text-base text-foreground hover:bg-primary/10"
+                  >
+                    {t(`step3.${value}`)}
+                  </button>
+                ))}
+              </div>
+            </Modal>
           </div>
         )}
 
@@ -802,6 +891,87 @@ export function CreateEventWizard({
                 </Field>
               </>
             )}
+
+            {/* "Qui apporte quoi" (brief 4.4, Phase 6) : retour Thomas,
+                "l'organisateur doit pouvoir mettre lui-même le nom (alcool,
+                dessert, soft, bonbon etc..) et pouvoir choisir litres,
+                gramme, kilo ou quantité" -- champ libre, pas de catégories
+                préremplies. Même pattern répétable que housewarmingHosts
+                ci-dessus, mais trois champs par ligne. */}
+            <Field label={t("step4.bringItemsLabel")}>
+              <div className="flex flex-col gap-3">
+                {data.bringItems.map((item, index) => (
+                  <div key={index} className="flex flex-col gap-2 rounded-konfeti border border-border p-3">
+                    <input
+                      type="text"
+                      value={item.label}
+                      onChange={(e) => {
+                        const next = [...data.bringItems];
+                        next[index] = { ...next[index], label: e.target.value };
+                        update("bringItems", next);
+                      }}
+                      placeholder={t("step4.bringItemLabelPlaceholder")}
+                      aria-label={t("step4.bringItemLabelAria", { index: index + 1 })}
+                      className={inputClass}
+                    />
+                    {/* Retour Thomas, en plusieurs passes : d'abord un menu
+                        (pas 4 boutons qui passaient à la ligne sur mobile),
+                        puis "le cadre avec le nombre doit être la moitié et
+                        l'autre moitié le bouton pour choisir le type... il
+                        faut que ça ouvre un popup" -- moitié/moitié
+                        (`flex-1` sur les deux), et un vrai `Modal fitContent`
+                        (même pattern que EmojiPicker) au lieu d'un `<select>`
+                        natif. */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={item.quantityNeeded}
+                        onChange={(e) => {
+                          const next = [...data.bringItems];
+                          next[index] = { ...next[index], quantityNeeded: e.target.value };
+                          update("bringItems", next);
+                        }}
+                        aria-label={t("step4.bringItemQuantityAria", { index: index + 1 })}
+                        className={`${inputClass} flex-1`}
+                      />
+                      <UnitPickerButton
+                        value={item.unit}
+                        onChange={(unit) => {
+                          const next = [...data.bringItems];
+                          next[index] = { ...next[index], unit };
+                          update("bringItems", next);
+                        }}
+                        unitLabels={bringUnitLabels}
+                        placeholder={t("step3.choosePlaceholder")}
+                        ariaLabel={t("step4.bringItemUnitAria", { index: index + 1 })}
+                        className={`${inputClass} flex-1 text-left`}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => update("bringItems", data.bringItems.filter((_, i) => i !== index))}
+                      className="self-start text-sm text-accent-coral"
+                    >
+                      {t("step4.removeBringItem")}
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    update("bringItems", [
+                      ...data.bringItems,
+                      { id: null, label: "", unit: "", quantityNeeded: "" },
+                    ])
+                  }
+                  className="text-sm font-semibold text-primary"
+                >
+                  + {t("step4.addBringItem")}
+                </button>
+              </div>
+            </Field>
           </div>
         )}
 

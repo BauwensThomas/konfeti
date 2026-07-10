@@ -49,6 +49,14 @@ export default async function EditEventPage({
     .eq("event_id", event.id)
     .order("starts_at");
 
+  // "Qui apporte quoi" (brief 4.4) : items déjà définis, avec leur vrai `id`
+  // -- nécessaire pour que createEvent/updateEvent puisse synchroniser par
+  // diff plutôt que tout recréer (voir DECISIONS.md, `syncBringItems`).
+  const { data: bringItemsRows } = await supabase
+    .from("bring_items")
+    .select("id, label, unit, quantity_needed")
+    .eq("event_id", event.id);
+
   // Étape 5 (visibilité bénéficiaires) : prénoms des bénéficiaires déjà
   // approuvés, pour que les phrases ("Julie a accès à...") soient réelles
   // plutôt que génériques. Vide à la création (pas de participants encore),
@@ -110,6 +118,12 @@ export default async function EditEventPage({
     potMode: event.pot_mode,
     potGoalEuros: event.pot_goal_cents ? (event.pot_goal_cents / 100).toString() : "",
     potLabel: event.pot_label ?? "",
+    bringItems: (bringItemsRows ?? []).map((item) => ({
+      id: item.id,
+      label: item.label,
+      unit: item.unit as "piece" | "liter" | "gram" | "kilogram",
+      quantityNeeded: item.quantity_needed.toString(),
+    })),
     beneficiaryHiddenBlocks: event.beneficiary_hidden_blocks ?? [],
   };
 
