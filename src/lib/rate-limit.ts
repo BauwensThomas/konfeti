@@ -27,6 +27,14 @@ function sweepExpired(now: number) {
  * lancement, aucun vrai trafic).
  */
 export function isRateLimited(key: string, limit: number, windowMs: number): boolean {
+  // Coupe-circuit pour le développement/les tests e2e (retour Thomas : les
+  // runs e2e répétés dans la même session/heure finissent par se bloquer
+  // mutuellement, "ce n'est pas possible de mettre dans le .env ON/OFF ?").
+  // Jamais actif par défaut (absent de `.env.example`, donc désactivé tant
+  // qu'on ne l'ajoute pas explicitement en local) : aucun risque d'oublier ça
+  // activé en production par erreur.
+  if (process.env.RATE_LIMIT_DISABLED === "true") return false;
+
   const now = Date.now();
   sweepExpired(now);
 

@@ -49,6 +49,20 @@ export default async function EditEventPage({
     .eq("event_id", event.id)
     .order("starts_at");
 
+  // Étape 5 (visibilité bénéficiaires) : prénoms des bénéficiaires déjà
+  // approuvés, pour que les phrases ("Julie a accès à...") soient réelles
+  // plutôt que génériques. Vide à la création (pas de participants encore),
+  // ce fichier ne gère que l'édition.
+  const { data: beneficiaryRows } = await supabase
+    .from("rsvps")
+    .select("first_name")
+    .eq("event_id", event.id)
+    .eq("role", "beneficiary")
+    .eq("status", "approved");
+  const beneficiaryNames = (beneficiaryRows ?? [])
+    .map((r) => r.first_name)
+    .filter((name): name is string => !!name);
+
   const photoUrl = event.cover_photo_path
     ? (
         await supabase.storage
@@ -96,6 +110,7 @@ export default async function EditEventPage({
     potMode: event.pot_mode,
     potGoalEuros: event.pot_goal_cents ? (event.pot_goal_cents / 100).toString() : "",
     potLabel: event.pot_label ?? "",
+    beneficiaryHiddenBlocks: event.beneficiary_hidden_blocks ?? [],
   };
 
   return (
@@ -105,6 +120,7 @@ export default async function EditEventPage({
         shortCode={event.short_code}
         initialData={initialData}
         initialPhotoUrl={photoUrl}
+        beneficiaryNames={beneficiaryNames}
       />
     </main>
   );

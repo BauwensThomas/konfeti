@@ -35,6 +35,7 @@ test("un admin promu en session anonyme peut modifier l'événement", async ({ p
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Créer l'événement" }).click();
     await expect(page).toHaveURL(/\/mes-evenements$/);
 
@@ -91,6 +92,7 @@ test("un admin promu en session anonyme peut modifier l'événement", async ({ p
     await guestPage.goto(`/e/${event.short_code}/modifier`);
     const newTitle = `${title} modifie par Marc`;
     await guestPage.getByPlaceholder("L'anniversaire de Julie").fill(newTitle);
+    await guestPage.getByRole("button", { name: "Suivant" }).click();
     await guestPage.getByRole("button", { name: "Suivant" }).click();
     await guestPage.getByRole("button", { name: "Suivant" }).click();
     await guestPage.getByRole("button", { name: "Suivant" }).click();

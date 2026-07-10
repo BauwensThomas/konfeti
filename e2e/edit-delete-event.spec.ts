@@ -29,6 +29,7 @@ test("un organisateur modifie puis supprime son evenement", async ({ page }) => 
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Créer l'événement" }).click();
     await expect(page).toHaveURL(/\/mes-evenements$/);
 
@@ -43,6 +44,7 @@ test("un organisateur modifie puis supprime son evenement", async ({ page }) => 
 
     const newTitle = `${title} modifie`;
     await page.getByPlaceholder("L'anniversaire de Julie").fill(newTitle);
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
@@ -113,6 +115,7 @@ test("la croix du wizard Modifier annule et revient à l'événement sans enregi
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Créer l'événement" }).click();
     await expect(page).toHaveURL(/\/mes-evenements$/);
 
@@ -174,6 +177,7 @@ test("impossible de faire reculer un événement à venir vers le passé, ou de 
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Créer l'événement" }).click();
     await expect(page).toHaveURL(/\/mes-evenements$/);
 
@@ -205,6 +209,78 @@ test("impossible de faire reculer un événement à venir vers le passé, ou de 
       .single();
     expect(new Date(eventUnchanged!.starts_at!).getUTCFullYear()).toBe(2026);
     expect(eventUnchanged?.rsvp_deadline).toBeNull();
+
+    await supabaseAdmin.from("events").delete().eq("id", event.id);
+  } finally {
+    await deleteTestUser(user.id);
+  }
+});
+
+// Bug réel signalé par Thomas : "si je créé un événement anniversaire, je
+// rentre les infos de l'anniversaire, l'âge etc.. mais après j'ai modifié en
+// nouvelle année, sur la page d'accueil on voit toujours Julie 39 ans." Le
+// wizard ne réinitialise jamais les champs propres à une occasion quand elle
+// change (juste masqués côté UI) -- corrigé à la source (`eventRowFromInput`).
+test("changer l'occasion d'un événement efface les infos de l'ancienne occasion", async ({ page }) => {
+  const email = `e2e-occasion-switch-${Date.now()}@example.com`;
+  const user = await loginAs(page, email);
+
+  try {
+    await page.goto("/profil/completer");
+    await page.getByPlaceholder("Julie").fill("Hôte");
+    await page.getByPlaceholder("Dean").fill("Test");
+    await page.getByLabel("Ton numéro de téléphone").fill("+32470000198");
+    await page.getByLabel("Une femme").check();
+    await page.getByRole("button", { name: "Avatar 1" }).click();
+    await page.getByRole("button", { name: "Continuer" }).click();
+    await expect(page).toHaveURL(/\/mes-evenements$/);
+
+    const title = `Fete occasion ${Date.now()}`;
+    await page.getByRole("link", { name: "Créer un événement" }).click();
+    await page.getByPlaceholder("L'anniversaire de Julie").fill(title);
+    await page.locator('input[type="datetime-local"]').first().fill("2026-12-24T20:00");
+    await page.getByPlaceholder("Adresse et ville").fill("Rue de Test 1, 1000 Bruxelles");
+    await page.getByRole("button", { name: "Suivant" }).click();
+
+    // Étape 2 : occasion "Anniversaire", nom rempli.
+    await page.getByRole("combobox").first().selectOption("birthday");
+    await page.locator("input[type='text']").first().fill("Julie");
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Créer l'événement" }).click();
+    await expect(page).toHaveURL(/\/mes-evenements$/);
+
+    const { data: event } = await supabaseAdmin
+      .from("events")
+      .select("id, short_code")
+      .eq("title", title)
+      .maybeSingle();
+    if (!event) throw new Error("evenement introuvable");
+
+    await page.goto(`/e/${event.short_code}`);
+    await expect(page.getByText("Julie", { exact: true })).toBeVisible();
+
+    // Modifie l'occasion vers "Nouvel An".
+    await page.goto(`/e/${event.short_code}/modifier`);
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("combobox").first().selectOption("new_year");
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Enregistrer les modifications" }).click();
+    await expect(page).toHaveURL(new RegExp(`/e/${event.short_code}$`));
+
+    // "Julie" ne doit plus apparaître nulle part sur l'Accueil.
+    await expect(page.getByText("Julie", { exact: true })).not.toBeVisible();
+
+    const { data: eventAfter } = await supabaseAdmin
+      .from("events")
+      .select("birthday_person, occasion")
+      .eq("id", event.id)
+      .single();
+    expect(eventAfter?.occasion).toBe("new_year");
+    expect(eventAfter?.birthday_person).toBeNull();
 
     await supabaseAdmin.from("events").delete().eq("id", event.id);
   } finally {

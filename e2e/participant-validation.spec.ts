@@ -15,6 +15,7 @@ async function createTestEvent(page: import("@playwright/test").Page, title: str
   await page.getByRole("button", { name: "Suivant" }).click();
   await page.getByRole("button", { name: "Suivant" }).click();
   await page.getByRole("button", { name: "Suivant" }).click();
+  await page.getByRole("button", { name: "Suivant" }).click();
   await page.getByRole("button", { name: "Créer l'événement" }).click();
   await expect(page).toHaveURL(/\/mes-evenements$/);
 

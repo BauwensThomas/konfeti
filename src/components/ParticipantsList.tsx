@@ -16,6 +16,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { AvatarPlaceholder } from "@/components/AvatarPlaceholder";
+import { joinNames } from "@/lib/joinNames";
 
 export type ParticipantRow = {
   id: string;
@@ -44,6 +45,9 @@ export function ParticipantsList({
   hostProfileId,
   potEnabled,
   rows,
+  isBeneficiary,
+  isParticipantsHidden,
+  beneficiaryNames,
 }: {
   eventId: string;
   shortCode: string;
@@ -53,6 +57,9 @@ export function ParticipantsList({
   isHost: boolean;
   potEnabled: boolean;
   rows: ParticipantRow[];
+  isBeneficiary: boolean;
+  isParticipantsHidden: boolean;
+  beneficiaryNames: string[];
 }) {
   const t = useTranslations("Participants");
   const router = useRouter();
@@ -182,6 +189,24 @@ export function ParticipantsList({
           {transferError}
         </p>
       )}
+      {/* Note "X a/n'a pas accès à la liste des participants" (retour Thomas :
+          "il faut rajouter dans personnes que Julie a accès ou pas"), même
+          principe partout où un bloc peut être masqué -- affichée dans LES
+          DEUX SENS, jamais silencieuse, jamais au(x) bénéficiaire(s)
+          concerné(s) eux-mêmes (qui voient de toute façon le placeholder
+          dédié à la place de tout ce composant, voir page.tsx). */}
+      {!isBeneficiary && beneficiaryNames.length > 0 && (
+        <p
+          className={`text-center text-xs font-semibold ${
+            isParticipantsHidden ? "text-accent-coral" : "text-accent-mint"
+          }`}
+        >
+          {t(isParticipantsHidden ? "beneficiaryNoAccessNote" : "beneficiaryAccessNote", {
+            count: beneficiaryNames.length,
+            names: joinNames(beneficiaryNames),
+          })}
+        </p>
+      )}
       {isAdmin && (
         <section className="flex flex-col gap-2">
           <h2 className="font-display text-lg font-bold text-foreground">
@@ -305,7 +330,7 @@ export function ParticipantsList({
 
       <section className="flex flex-col gap-2">
         <h2 className="font-display text-lg font-bold text-foreground">
-          {t("approvedSectionTitle")}
+          {t("approvedSectionTitle")} ({approvedYes.length})
         </h2>
         <ul className="flex flex-col gap-2">
           {approvedYes.map((row) => (
@@ -328,7 +353,9 @@ export function ParticipantsList({
 
       {approvedMaybe.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="font-display text-lg font-bold text-foreground">{t("maybeSectionTitle")}</h2>
+          <h2 className="font-display text-lg font-bold text-foreground">
+            {t("maybeSectionTitle")} ({approvedMaybe.length})
+          </h2>
           <ul className="flex flex-col gap-2">
             {approvedMaybe.map((row) => (
               <ApprovedParticipantRow

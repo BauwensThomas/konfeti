@@ -52,6 +52,16 @@ const eventFieldsSchema = z.object({
   potMode: z.enum(["goal", "open"]).default("goal"),
   potGoalCents: z.coerce.number().int().positive().optional(),
   potLabel: z.string().trim().max(200).optional(),
+
+  // Écran 5 : ce que voient les bénéficiaires (brief 1.4 + retour Thomas).
+  // "backstage" masque le fil Coulisses, "chat" masque le chat GÉNÉRAL
+  // (canal 'main') -- ajouté après coup (retour Thomas : un bénéficiaire
+  // masqué de la liste Personnes restait quand même visible comme auteur
+  // de messages dans le chat général, d'où le besoin de pouvoir aussi
+  // masquer ce canal-là si l'organisateur le souhaite).
+  beneficiaryHiddenBlocks: z
+    .array(z.enum(["pot", "backstage", "chat", "bring", "polls", "playlist", "participants"]))
+    .default([]),
 });
 
 type EventFields = z.infer<typeof eventFieldsSchema>;

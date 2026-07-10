@@ -24,12 +24,21 @@ function eventRowFromInput(data: CreateEventInput) {
     location_text: data.locationText,
     cover_photo_path: data.coverPhotoPath || null,
     occasion: data.occasion,
-    birthday_person: data.birthdayPerson || null,
-    birthday_date: data.birthdayDate || null,
-    birthday_age: data.birthdayAge ?? null,
+    // Bug réel signalé par Thomas : "j'ai modifié en nouvelle année, sur la
+    // page d'accueil on voit toujours Julie 39 ans" -- le wizard ne vide
+    // jamais les champs propres à une occasion quand on en choisit une
+    // autre (les champs restent juste masqués côté UI, pas réinitialisés),
+    // donc l'ancienne valeur repartait telle quelle vers la base. Corrigé
+    // ICI (source unique de vérité, même pattern déjà en place pour
+    // `pot_goal_cents` ci-dessous) plutôt que dans le wizard : protège aussi
+    // contre tout futur bug d'état côté client, jamais contourné.
+    birthday_person: data.occasion === "birthday" ? data.birthdayPerson || null : null,
+    birthday_date: data.occasion === "birthday" ? data.birthdayDate || null : null,
+    birthday_age: data.occasion === "birthday" ? (data.birthdayAge ?? null) : null,
     show_age: data.showAge,
-    housewarming_hosts: data.housewarmingHosts?.length ? data.housewarmingHosts : null,
-    bachelor_person: data.bachelorPerson || null,
+    housewarming_hosts:
+      data.occasion === "housewarming" && data.housewarmingHosts?.length ? data.housewarmingHosts : null,
+    bachelor_person: data.occasion === "bachelor" ? data.bachelorPerson || null : null,
     description: data.description || null,
     instructions: data.instructions || null,
     dress_code: data.dressCode || null,
@@ -45,6 +54,7 @@ function eventRowFromInput(data: CreateEventInput) {
     pot_mode: data.potMode,
     pot_goal_cents: data.potEnabled && data.potMode === "goal" ? data.potGoalCents : null,
     pot_label: data.potLabel || null,
+    beneficiary_hidden_blocks: data.beneficiaryHiddenBlocks,
   };
 }
 

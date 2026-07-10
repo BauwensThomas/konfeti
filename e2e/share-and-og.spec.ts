@@ -43,6 +43,7 @@ test("un evenement a des metadonnees Open Graph dynamiques et un bouton Partager
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Créer l'événement" }).click();
     await expect(page).toHaveURL(/\/mes-evenements$/);
 

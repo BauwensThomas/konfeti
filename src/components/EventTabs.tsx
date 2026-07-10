@@ -19,6 +19,7 @@ export function EventTabs({
   eventId,
   viewerRsvpId = null,
   initialUnreadCount = 0,
+  chatAllowedChannels = ["main"],
 }: {
   accueil: ReactNode;
   personnes?: ReactNode;
@@ -27,6 +28,12 @@ export function EventTabs({
   eventId?: string;
   viewerRsvpId?: string | null;
   initialUnreadCount?: number;
+  // Retour Thomas : "il faut faire attention que quand on parle dans les
+  // coulisses et que le bénéficiaire n'a pas accès, qu'il ne reçoive pas de
+  // bulle de notification sur Chat" -- un canal absent de cette liste ne
+  // contribue jamais à la pastille, ni au compte initial (page.tsx) ni au
+  // filtre Realtime ci-dessous.
+  chatAllowedChannels?: ("main" | "backstage")[];
 }) {
   const t = useTranslations("EventPage");
   const router = useRouter();
@@ -179,6 +186,15 @@ export function EventTabs({
     };
   }, [eventId, router]);
 
+  // Réf plutôt qu'une dépendance directe de l'effet Realtime ci-dessous (même
+  // pattern qu'`activeRef`) : `chatAllowedChannels` est un tableau littéral
+  // recréé à chaque rendu par l'appelant, l'ajouter aux dépendances
+  // resouscrirait le canal Realtime à chaque rendu pour rien.
+  const chatAllowedChannelsRef = useRef(chatAllowedChannels);
+  useEffect(() => {
+    chatAllowedChannelsRef.current = chatAllowedChannels;
+  }, [chatAllowedChannels]);
+
   // Abonnement léger dédié au badge (canal Realtime distinct de celui du
   // panneau Chat lui-même, voir src/lib/chat/realtime.ts) : toujours monté,
   // contrairement au panneau qui n'existe que sur l'onglet actif — même
@@ -196,7 +212,7 @@ export function EventTabs({
         eventId,
         {
           onMessageInsert: (message) => {
-            if (message.channel !== "main") return;
+            if (!chatAllowedChannelsRef.current.includes(message.channel)) return;
             if (activeRef.current === "chat") return;
             if (message.rsvp_id === viewerRsvpId) return;
             unreadMessageIdsRef.current.add(message.id);
@@ -301,10 +317,16 @@ export function EventTabs({
                 {pendingCount}
               </span>
             )}
+            {/* Simple pastille (pas de chiffre) sur l'onglet Chat au niveau
+                page -- retour Thomas : "mettre juste une boule rouge à côté
+                de chat", le détail (combien, où) n'apparaît qu'une fois le
+                panneau ouvert, sur les sous-onglets Général/Coulisses (voir
+                ChatRoom.tsx). */}
             {tab === "chat" && unreadCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-coral px-1 text-xs font-bold text-white">
-                {unreadCount}
-              </span>
+              <span
+                aria-hidden="true"
+                className="h-2.5 w-2.5 shrink-0 rounded-full bg-accent-coral"
+              />
             )}
           </button>
         ))}

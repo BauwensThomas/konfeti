@@ -16,6 +16,10 @@
   --color-secondary: #facc15; /* jaune soleil */
   --color-accent-coral: #fb7185;
   --color-accent-mint: #34d399;
+  /* Vert foncé, même famille que --color-accent-mint : sert d'état "inactif"
+     pour les onglets Général/Coulisses du chat (retour Thomas : "onglet
+     actif vert clair, onglet non actif vert foncé"), jamais utilisé ailleurs. */
+  --color-accent-mint-dark: #047857;
 
   --color-surface: #ffffff;
   --color-border: #ece1fb;

@@ -35,6 +35,7 @@ test("changer 'qui peut partager le lien' depuis Modifier se répercute en direc
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Créer l'événement" }).click();
     await expect(page).toHaveURL(/\/mes-evenements$/);
 
@@ -79,6 +80,7 @@ test("changer 'qui peut partager le lien' depuis Modifier se répercute en direc
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Les admins seulement" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Enregistrer les modifications" }).click();
     await expect(page).toHaveURL(new RegExp(`/e/${event.short_code}$`));
 

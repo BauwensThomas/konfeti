@@ -8,6 +8,7 @@ import { resolveAvatarUrl, resolveEventPhotoUrl } from "@/lib/avatars";
 import { subscribeToEventChat, type MessageRow, type ReactionRow } from "@/lib/chat/realtime";
 import { ensureMyChatRsvpId } from "@/app/[locale]/actions/chat";
 import { readSessionLastReadAt, writeSessionLastReadAt } from "@/lib/chat/lastRead";
+import { joinNames } from "@/lib/joinNames";
 import { ChatConfettiBackground } from "@/components/chat/ChatConfettiBackground";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageComposer } from "@/components/chat/MessageComposer";
@@ -17,20 +18,55 @@ export function ChatRoom({
   eventId,
   viewerRsvpId: initialViewerRsvpId,
   isAdmin,
-  isBeneficiary,
   hasBackstage,
+  hideBackstageForViewer,
+  isBackstageHiddenForBeneficiaries,
+  backstageBeneficiaryNames,
+  hideMainForViewer,
+  isChatHiddenForBeneficiaries,
+  chatBeneficiaryNames,
   initialMessages,
   initialReactions,
   initialLastReadAt,
+  initialBackstageLastReadAt,
 }: {
   eventId: string;
   viewerRsvpId: string | null;
   isAdmin: boolean;
-  isBeneficiary: boolean;
+  // L'onglet Coulisses reste TOUJOURS affiché (retour Thomas : "il faut
+  // toujours laisser coulisse et général, même pour le bénéficiaire") : ce
+  // booléen ne pilote plus la visibilité de l'onglet, seulement son contenu.
   hasBackstage: boolean;
+  // Étape 5 du wizard (retour Thomas : "s'il clique sur coulisses, il faut
+  // dire vous avez pas accès") : true si CE viewer est le bénéficiaire
+  // concerné par le masquage Coulisses -- remplace le contenu de CET onglet
+  // par un placeholder, jamais tout le panneau (Général reste normal).
+  hideBackstageForViewer: boolean;
+  // Réglage BRUT de l'événement (pas filtré par viewer), pour choisir le
+  // bon texte de bannière ("a accès" / "n'a pas accès" -- retour Thomas :
+  // "il faut le dire quand X a accès et aussi quand elle a pas accès",
+  // jamais silencieux dans un sens comme dans l'autre).
+  isBackstageHiddenForBeneficiaries: boolean;
+  // Prénoms des bénéficiaires approuvés, pour la bannière au-dessus de
+  // Coulisses -- vide seulement s'il n'y a aucun bénéficiaire, ou si CE
+  // viewer EST lui-même le bénéficiaire concerné (voir EventChat).
+  backstageBeneficiaryNames: string[];
+  // Symétrique de hideBackstageForViewer/isBackstageHiddenForBeneficiaries/
+  // backstageBeneficiaryNames, mais pour le canal Général (bloc 'chat',
+  // ajouté après coup -- retour Thomas : un bénéficiaire masqué de la liste
+  // Personnes restait quand même visible comme auteur de messages dans le
+  // chat général).
+  hideMainForViewer: boolean;
+  isChatHiddenForBeneficiaries: boolean;
+  chatBeneficiaryNames: string[];
   initialMessages: ChatMessageView[];
   initialReactions: Record<string, ChatReactionSummary[]>;
   initialLastReadAt: string | null;
+  // Symétrique de `initialLastReadAt`, mais pour Coulisses -- sert UNIQUEMENT
+  // au compteur non-lus par onglet (retour Thomas : "mettre le nombre de
+  // notif dans général et/ou coulisses"), jamais à la ligne "non lus" (qui
+  // reste volontairement limitée au canal Général, voir `firstUnreadId`).
+  initialBackstageLastReadAt: string | null;
 }) {
   const t = useTranslations("Chat");
   const [viewerRsvpId, setViewerRsvpId] = useState(initialViewerRsvpId);
@@ -38,6 +74,57 @@ export function ChatRoom({
   const [reactionsByMessage, setReactionsByMessage] =
     useState<Record<string, ChatReactionSummary[]>>(initialReactions);
   const [activeChannel, setActiveChannel] = useState<"main" | "backstage">("main");
+  // Compteurs non-lus PAR ONGLET (retour Thomas : "mettre le nombre de notif
+  // dans général et/ou coulisses") : dérivés de `messages` (déjà chargés pour
+  // les deux canaux, RLS filtre déjà ce qu'un viewer bloqué peut recevoir) +
+  // la dernière lecture connue de CHAQUE canal, jamais fusionnés avec
+  // `initialLastReadAt`/`firstUnreadId` (ligne "non lus", volontairement
+  // limitée à Général). `activeChannelRef` évite une closure périmée dans le
+  // handler Realtime plus bas (même piège que `messagesRef`).
+  const [lastReadAtByChannel, setLastReadAtByChannel] = useState<{ main: string | null; backstage: string | null }>({
+    main: initialLastReadAt,
+    backstage: initialBackstageLastReadAt,
+  });
+  const activeChannelRef = useRef(activeChannel);
+  useEffect(() => {
+    activeChannelRef.current = activeChannel;
+  }, [activeChannel]);
+
+  // Marque un canal comme lu MAINTENANT : état local (remet son compteur à
+  // zéro tout de suite) + `chat_reads` en base (survit à un démontage/
+  // remontage de ce panneau, voir mount-effect juste en dessous).
+  const markChannelRead = useCallback(
+    (channel: "main" | "backstage") => {
+      const now = new Date().toISOString();
+      setLastReadAtByChannel((prev) => ({ ...prev, [channel]: now }));
+      if (!viewerRsvpId) return;
+      createClient()
+        .from("chat_reads")
+        .upsert(
+          { event_id: eventId, rsvp_id: viewerRsvpId, channel, last_read_at: now },
+          { onConflict: "event_id,rsvp_id,channel" },
+        )
+        .then(() => {});
+    },
+    [eventId, viewerRsvpId],
+  );
+
+  // Bug réel signalé par Thomas : "j'ouvre Chat, j'arrive sur Général, ça
+  // affiche 1 message -- si je retourne sur Accueil et reviens sur Chat,
+  // Général revient à 1, je suis obligé de cliquer dessus pour que ça
+  // parte." Cause : ce panneau se démonte/remonte à chaque changement
+  // d'onglet (voir EventTabs) -- seul un clic EXPLICITE sur un onglet
+  // (`handleSwitchChannel` plus bas) marquait un canal comme lu, jamais
+  // l'onglet actif PAR DÉFAUT au montage (Général), même si l'utilisateur le
+  // regarde bel et bien. Corrigé : marque aussi Général comme lu dès le
+  // montage, sans attendre un clic sur un onglet déjà affiché.
+  useEffect(() => {
+    // Différé via microtask (pas un appel direct dans le corps synchrone de
+    // l'effet) : évite l'avertissement react-hooks/set-state-in-effect tout
+    // en restant imperceptible pour l'utilisateur (même tick de rendu).
+    void Promise.resolve().then(() => markChannelRead("main"));
+  }, [markChannelRead]);
+
   const [replyingTo, setReplyingTo] = useState<ChatMessageView | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const authorCacheRef = useRef(new Map<string, { name: string | null; avatarUrl: string | null }>());
@@ -81,7 +168,7 @@ export function ChatRoom({
   // (retour Thomas : "je ne vois plus la ligne rouge").
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
 
-  const showBackstageToggle = hasBackstage && !isBeneficiary;
+  const showBackstageToggle = hasBackstage;
 
   // L'hôte n'a pas forcément de ligne rsvps tant qu'il n'a jamais voté/écrit
   // (voir date-poll.ts) : on la crée/récupère paresseusement au premier
@@ -375,7 +462,8 @@ export function ChatRoom({
       // `chat_reads` jusqu'ici). Sans ça, un message arrivé APRÈS ce clic
       // mais PENDANT que le chat reste ouvert repassait pour non-lu au
       // prochain F5 (retour Thomas : "ça sert à rien de voir une notif d'un
-      // message déjà vu").
+      // message déjà vu"). Comportement HISTORIQUE conservé tel quel (ligne
+      // "non lus" + sessionStorage, canal Général uniquement).
       if (row.channel === "main" && row.rsvp_id !== viewerRsvpId && viewerRsvpId) {
         const now = new Date().toISOString();
         // Relais sessionStorage (voir lastRead.ts) : même raison que dans
@@ -386,6 +474,24 @@ export function ChatRoom({
           .from("chat_reads")
           .upsert(
             { event_id: eventId, rsvp_id: viewerRsvpId, channel: "main", last_read_at: now },
+            { onConflict: "event_id,rsvp_id,channel" },
+          );
+      }
+
+      // Compteur PAR ONGLET (retour Thomas, ajouté après coup) : un message
+      // qui arrive sur le canal ACTUELLEMENT CONSULTÉ est considéré vu tout
+      // de suite (garde son compteur à 0 pendant qu'on le regarde) --
+      // indépendant du bloc ci-dessus, qui ne concerne QUE Général et la
+      // ligne "non lus". `activeChannelRef` (pas `activeChannel`) : ce
+      // handler est posé une seule fois par cet effet, une closure directe
+      // serait périmée dès le premier changement d'onglet.
+      if (row.channel === activeChannelRef.current && row.rsvp_id !== viewerRsvpId && viewerRsvpId) {
+        const now = new Date().toISOString();
+        setLastReadAtByChannel((prev) => ({ ...prev, [row.channel]: now }));
+        await supabase
+          .from("chat_reads")
+          .upsert(
+            { event_id: eventId, rsvp_id: viewerRsvpId, channel: row.channel, last_read_at: now },
             { onConflict: "event_id,rsvp_id,channel" },
           );
       }
@@ -503,6 +609,29 @@ export function ChatRoom({
   const messagesById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
   const visibleMessages = messages.filter((m) => m.channel === activeChannel);
 
+  // Compteurs non-lus par onglet (voir déclaration de `lastReadAtByChannel`
+  // plus haut) : un canal jamais lu (`null`) compte TOUT ce qui est chargé
+  // comme non-lu, cohérent avec le comportement déjà établi ailleurs
+  // (`computeUnreadCount`/`initialLastReadAt`) pour un tout nouveau participant.
+  const mainUnreadCount = useMemo(
+    () =>
+      messages.filter(
+        (m) => m.channel === "main" && !m.isSystem && m.rsvpId !== viewerRsvpId && m.createdAt > (lastReadAtByChannel.main ?? ""),
+      ).length,
+    [messages, lastReadAtByChannel.main, viewerRsvpId],
+  );
+  const backstageUnreadCount = useMemo(
+    () =>
+      messages.filter(
+        (m) =>
+          m.channel === "backstage" &&
+          !m.isSystem &&
+          m.rsvpId !== viewerRsvpId &&
+          m.createdAt > (lastReadAtByChannel.backstage ?? ""),
+      ).length,
+    [messages, lastReadAtByChannel.backstage, viewerRsvpId],
+  );
+
   useEffect(() => {
     // Charger d'anciens messages (scroll infini) fait aussi grandir
     // `visibleMessages.length`, mais PAR LE HAUT : sans ce garde-fou, cet
@@ -583,6 +712,33 @@ export function ChatRoom({
     };
   }, []);
 
+  // Retour Thomas : "s'il clique sur coulisses, il faut dire vous avez pas
+  // accès" -- seul l'onglet consulté est concerné, jamais tout le panneau ;
+  // symétrique pour Général depuis l'ajout du bloc 'chat' (retour Thomas : un
+  // bénéficiaire masqué de la liste Personnes restait quand même visible
+  // comme auteur de messages dans le chat général).
+  const backstageBlockedForViewer = activeChannel === "backstage" && hideBackstageForViewer;
+  const mainBlockedForViewer = activeChannel === "main" && hideMainForViewer;
+  const activeChannelBlockedForViewer = backstageBlockedForViewer || mainBlockedForViewer;
+
+  // Bannière "X a/n'a pas accès" (retour Thomas : jamais silencieuse dans un
+  // sens comme dans l'autre) : les deux onglets partagent désormais le même
+  // mécanisme, seuls le texte et les prénoms diffèrent selon l'onglet actif.
+  const activeChannelBanner =
+    activeChannel === "backstage"
+      ? { names: backstageBeneficiaryNames, hidden: isBackstageHiddenForBeneficiaries, accessKey: "backstageAccessNote" as const, noAccessKey: "backstageNoAccessNote" as const }
+      : { names: chatBeneficiaryNames, hidden: isChatHiddenForBeneficiaries, accessKey: "chatAccessNote" as const, noAccessKey: "chatNoAccessNote" as const };
+
+  // Changer d'onglet marque IMMÉDIATEMENT ce canal comme lu (retour Thomas :
+  // compteur par onglet) -- remet son compteur à zéro tout de suite plutôt
+  // que d'attendre un message qui le ferait via `handleInsert` plus bas.
+  // Même mécanique que le mount-effect plus haut (Général au premier
+  // affichage), factorisée dans `markChannelRead`.
+  function handleSwitchChannel(channel: "main" | "backstage") {
+    setActiveChannel(channel);
+    markChannelRead(channel);
+  }
+
   return (
     // Pas le composant `Card` partagé ici (contrairement au reste de l'app) :
     // son `p-6` intégré est impossible à annuler proprement en surchargeant
@@ -594,22 +750,70 @@ export function ChatRoom({
     // (retour Thomas : "il faut remplir tout le box du chat") -- chaque
     // enfant (bandeau Coulisses, liste, composer) gère son propre padding.
     <div className="flex h-[70vh] flex-col overflow-hidden rounded-konfeti border border-border bg-canvas shadow-konfeti">
+      {/* Onglets Général/Coulisses (retour Thomas : "l'arrière doit être la
+          même couleur que le chat, comme si ça ne faisait qu'un avec le
+          chat" -- `bg-canvas`, pas `bg-surface`, pour fusionner visuellement
+          avec le corps du chat juste en dessous, plus de bandeau blanc qui
+          tranche. "Onglet actif vert clair, onglet non actif vert foncé" :
+          les deux onglets portent désormais leur propre fond vert en
+          permanence, seule la nuance change selon lequel est actif -- plus
+          de pilule violette). Retour Thomas ensuite : le fond vert foncé de
+          l'onglet inactif rendait le texte blanc à peine lisible -- remplacé
+          par une bulle au contour vert (fond transparent) et un texte foncé,
+          cohérent avec le reste de la palette. */}
       {showBackstageToggle && (
-        <div className="flex shrink-0 gap-1 bg-surface p-3 pb-0">
-          <div className="flex flex-1 rounded-full bg-canvas p-1">
-            {(["main", "backstage"] as const).map((ch) => (
-              <button
-                key={ch}
-                type="button"
-                onClick={() => setActiveChannel(ch)}
-                className={`flex-1 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  activeChannel === ch ? "bg-primary text-white" : "text-foreground/70"
-                }`}
-              >
-                {t(ch === "main" ? "tabs.main" : "tabs.backstage")}
-              </button>
-            ))}
+        <div className="flex shrink-0 gap-1 bg-canvas p-3 pb-0">
+          <div className="flex flex-1 gap-1 rounded-full p-1">
+            {(["main", "backstage"] as const).map((ch) => {
+              const unreadForTab = ch === "main" ? mainUnreadCount : backstageUnreadCount;
+              return (
+                <button
+                  key={ch}
+                  type="button"
+                  onClick={() => handleSwitchChannel(ch)}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    activeChannel === ch
+                      ? "border-accent-mint bg-accent-mint text-foreground"
+                      : "border-accent-mint bg-transparent text-foreground"
+                  }`}
+                >
+                  <span>{t(ch === "main" ? "tabs.main" : "tabs.backstage")}</span>
+                  {/* Compteur PAR ONGLET (retour Thomas : "mettre le nombre de
+                      notif dans général et/ou coulisses") -- jamais affiché
+                      sur l'onglet déjà actif (son compteur reste à 0, voir
+                      `handleSwitchChannel`), ni sur un canal bloqué pour ce
+                      viewer (RLS ne lui livre alors jamais ces messages, donc
+                      `unreadForTab` y vaut structurellement 0). */}
+                  {unreadForTab > 0 && (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-coral px-1 text-xs font-bold text-white">
+                      {unreadForTab}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
+        </div>
+      )}
+
+      {/* Bannière "X a accès" / "X n'a pas accès" (retour Thomas : "il faut
+          le dire quand X a accès et aussi quand elle a pas accès" -- jamais
+          silencieuse dans un sens comme dans l'autre), affichée aux AUTRES
+          participants pendant qu'ils consultent l'onglet concerné -- jamais
+          au(x) bénéficiaire(s) concerné(s) eux-mêmes (qui voient le chat
+          normal ou le placeholder à la place, voir plus bas). Placée SOUS
+          les onglets (retour Thomas : positionnement corrigé, elle était
+          au-dessus). */}
+      {activeChannelBanner.names.length > 0 && (
+        <div
+          className={`shrink-0 px-4 py-2 text-center text-xs font-semibold ${
+            activeChannelBanner.hidden ? "bg-accent-coral/10 text-accent-coral" : "bg-accent-mint/10 text-accent-mint"
+          }`}
+        >
+          {t(activeChannelBanner.hidden ? activeChannelBanner.noAccessKey : activeChannelBanner.accessKey, {
+            count: activeChannelBanner.names.length,
+            names: joinNames(activeChannelBanner.names),
+          })}
         </div>
       )}
 
@@ -638,7 +842,25 @@ export function ChatRoom({
           ancêtre plus large -- rendu alors DERRIÈRE le `bg-canvas` (opaque)
           au lieu de devant, un piège déjà rencontré une fois. */}
       <div ref={listRef} className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
-        <div className="relative z-0 flex flex-col gap-0">
+        {/* Retour Thomas : "s'il clique sur coulisses, il faut dire vous
+            avez pas accès" -- seul le CONTENU de l'onglet consulté est
+            remplacé, jamais tout le panneau (les onglets au-dessus restent
+            cliquables pour changer de canal) ; symétrique pour Général
+            depuis l'ajout du bloc 'chat'. */}
+        {activeChannelBlockedForViewer ? (
+          <p className="py-8 text-center text-sm font-semibold text-foreground">{t("noAccess")}</p>
+        ) : (
+        <div className="relative z-0 flex min-h-full flex-col gap-0">
+          {/* `min-h-full` (retour Thomas : "je veux qu'il fasse tout le chat
+              même si le chat est vide") : sans ça, ce wrapper ne mesure que
+              la hauteur de son contenu réel ("Aucun message...", quelques
+              px), et le confetti (`absolute inset-0` DEDANS) ne couvrait
+              donc qu'un tout petit bandeau en haut d'une zone vide, jamais
+              toute la boîte visible. `min-h-full` le force à couvrir AU
+              MOINS toute la hauteur visible du parent défilant, tout en le
+              laissant grandir naturellement au-delà une fois assez de
+              messages empilés (jamais de hauteur fixe qui couperait une
+              longue conversation). */}
           <ChatConfettiBackground />
           {loadingOlder && (
             <p className="py-2 text-center text-xs text-foreground/50">{t("loadingOlder")}</p>
@@ -710,9 +932,10 @@ export function ChatRoom({
           )}
           <div ref={bottomRef} />
         </div>
+        )}
       </div>
 
-      {viewerRsvpId && (
+      {viewerRsvpId && !activeChannelBlockedForViewer && (
         <div className="shrink-0 bg-surface px-4 pb-4">
           <MessageComposer
             key={activeChannel}

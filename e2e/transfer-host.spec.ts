@@ -35,6 +35,7 @@ test("l'hôte transfère l'organisation à un admin promu, puis peut quitter l'�
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Créer l'événement" }).click();
     await expect(page).toHaveURL(/\/mes-evenements$/);
 
@@ -167,6 +168,7 @@ test("le transfert d'organisation est impossible vers un admin en session anonym
     await page.getByPlaceholder("L'anniversaire de Julie").fill(title);
     await page.locator('input[type="datetime-local"]').first().fill("2026-12-24T20:00");
     await page.getByPlaceholder("Adresse et ville").fill("Rue de Test 14, 1000 Bruxelles");
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();

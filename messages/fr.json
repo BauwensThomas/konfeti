@@ -187,6 +187,56 @@
       "potGoalLabel": "Objectif (en euros)",
       "potLabelLabel": "Nom de la cagnotte",
       "potLabelPlaceholder": "Cadeau collectif pour Julie"
+    },
+    "step5": {
+      "heading": "Ce que voient les bénéficiaires",
+      "intro": "Le ou les bénéficiaires (par exemple la personne dont c'est l'anniversaire) peuvent être exclus de certains blocs pour garder la surprise. Décoche une case pour la rendre visible.",
+      "hideLabel": "Masquer {block} aux bénéficiaires",
+      "visibilitySummary": "{count, plural, =0 {Aucun bénéficiaire n'a accès {block}.} =1 {{names} a accès {block}.} other {{names} ont accès {block}.}}",
+      "blocks": {
+        "pot": {
+          "label": "la cagnotte",
+          "withAccess": "à la cagnotte",
+          "hintPro": "Avantage : garde la surprise sur le montant ou l'objectif de la collecte.",
+          "hintCon": "Inconvénient : le bénéficiaire ne peut pas suivre ni participer à sa propre cagnotte."
+        },
+        "backstage": {
+          "label": "le fil Coulisses",
+          "withAccess": "au fil Coulisses",
+          "hintPro": "Avantage : les autres peuvent organiser la surprise sans risque de fuite.",
+          "hintCon": "Inconvénient : aucun en pratique, ce fil sert justement à ça (organiser une surprise sans que le bénéficiaire la voie)."
+        },
+        "chat": {
+          "label": "le chat général",
+          "withAccess": "au chat général",
+          "hintPro": "Avantage : aucune fuite possible via les messages échangés entre les autres invités.",
+          "hintCon": "Inconvénient : le bénéficiaire perd le fil de la discussion et le contact avec le groupe."
+        },
+        "bring": {
+          "label": "\"qui apporte quoi\"",
+          "withAccess": "à \"qui apporte quoi\"",
+          "hintPro": "Avantage : cache un plat ou un cadeau surprise prévu par les autres.",
+          "hintCon": "Inconvénient : le bénéficiaire ne peut pas s'organiser lui-même sur ce point."
+        },
+        "polls": {
+          "label": "les sondages",
+          "withAccess": "aux sondages",
+          "hintPro": "Avantage : cache un sondage lié à la surprise (ex. choix du gâteau).",
+          "hintCon": "Inconvénient : le bénéficiaire ne peut pas voter comme les autres invités."
+        },
+        "playlist": {
+          "label": "la playlist",
+          "withAccess": "à la playlist",
+          "hintPro": "Avantage : garde une surprise musicale.",
+          "hintCon": "Inconvénient : le bénéficiaire ne peut pas proposer ses propres titres."
+        },
+        "participants": {
+          "label": "la liste des participants",
+          "withAccess": "à la liste des participants",
+          "hintPro": "Avantage : cache qui est invité et combien de monde vient.",
+          "hintCon": "Inconvénient : le bénéficiaire ne sait pas qui sera présent avant le jour J."
+        }
+      }
     }
   },
   "EventPage": {
@@ -197,6 +247,7 @@
       "participer": "Participer"
     },
     "comingSoon": "Bientôt disponible.",
+    "participantsListHidden": "L'organisateur a masqué la liste des participants pour toi.",
     "editEvent": "Modifier",
     "shareButton": "Partager",
     "shareCopied": "Lien copié !",
@@ -238,6 +289,8 @@
     "potLabel": "Cagnotte : {label}",
     "potGoal": "Objectif : {amount} €",
     "potOpen": "Montant libre",
+    "beneficiaryAccessNote": "{count, plural, =1 {{names} a accès à la cagnotte.} other {{names} ont accès à la cagnotte.}}",
+    "beneficiaryNoAccessNote": "{count, plural, =1 {{names} n'a pas accès à la cagnotte.} other {{names} n'ont pas accès à la cagnotte.}}",
     "notFoundTitle": "Cet événement n'existe pas, ou plus.",
     "yes": "Oui",
     "no": "Non",
@@ -330,6 +383,8 @@
     "potAccessGranted": "Accès cagnotte autorisé",
     "revokePotAccess": "Révoquer l'accès",
     "companionsCount": "{count, plural, =0 {} one {+1} other {+#}}",
+    "beneficiaryAccessNote": "{count, plural, =1 {{names} a accès à la liste des participants.} other {{names} ont accès à la liste des participants.}}",
+    "beneficiaryNoAccessNote": "{count, plural, =1 {{names} n'a pas accès à la liste des participants.} other {{names} n'ont pas accès à la liste des participants.}}",
     "errorRateLimited": "Trop de tentatives, réessaie dans un instant.",
     "errorUnauthorized": "Tu n'as pas les droits pour faire ça.",
     "errorLastAdmin": "Il doit toujours rester au moins un administrateur pour cet événement.",
@@ -343,6 +398,11 @@
       "backstage": "Coulisses"
     },
     "emptyState": "Aucun message pour l'instant. Lance la conversation !",
+    "noAccess": "Tu n'as pas accès à cette discussion.",
+    "backstageAccessNote": "{count, plural, =1 {{names} a accès au fil Coulisses.} other {{names} ont accès au fil Coulisses.}}",
+    "backstageNoAccessNote": "{count, plural, =1 {{names} n'a pas accès au fil Coulisses.} other {{names} n'ont pas accès au fil Coulisses.}}",
+    "chatAccessNote": "{count, plural, =1 {{names} a accès au chat général.} other {{names} ont accès au chat général.}}",
+    "chatNoAccessNote": "{count, plural, =1 {{names} n'a pas accès au chat général.} other {{names} n'ont pas accès au chat général.}}",
     "loadingOlder": "Chargement des messages précédents...",
     "unreadDivider": "Messages non lus",
     "anonymousAuthor": "Anonyme",

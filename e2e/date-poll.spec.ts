@@ -35,6 +35,7 @@ test("un organisateur vote pour plusieurs dates puis valide celle qui est retenu
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Créer l'événement" }).click();
     await expect(page).toHaveURL(/\/mes-evenements$/);
 
@@ -123,6 +124,7 @@ test("un admin promu (pas l'hôte) peut aussi valider la date retenue", async ({
     await dateInputs.nth(0).fill("2026-12-24T20:00");
     await dateInputs.nth(1).fill("2026-12-31T20:00");
     await page.getByPlaceholder("Adresse et ville").fill("Rue de Test 2, 1000 Bruxelles");
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();

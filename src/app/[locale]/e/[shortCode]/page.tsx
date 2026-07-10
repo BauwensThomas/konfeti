@@ -20,6 +20,7 @@ import { ShareEventButton } from "@/components/ShareEventButton";
 import { LinkAccountBanner } from "@/components/LinkAccountBanner";
 import { Card } from "@/components/ui/Card";
 import { buttonClassName } from "@/components/ui/Button";
+import { joinNames } from "@/lib/joinNames";
 
 // Open Graph dynamique (brief 5.7/Phase 3) : le titre/aperçu de partage
 // reflète l'événement (titre réel), mais ne se base QUE sur `events_public_data`
@@ -114,6 +115,56 @@ export default async function EventPage({
     const isAdmin = isHost || myRsvpRow?.role === "admin";
     const isBeneficiary = myRsvpRow?.role === "beneficiary";
 
+    // Étape 5 du wizard (visibilité bénéficiaires, retour Thomas) : la
+    // cagnotte et les deux canaux de chat (Général/Coulisses) sont désormais
+    // configurables (plus jamais "toujours masqués"/"toujours accessible"
+    // codés en dur) via ce même tableau que bring/polls/playlist. Le chat
+    // GÉNÉRAL a été ajouté après coup (retour Thomas : un bénéficiaire masqué
+    // de la liste Personnes restait quand même visible comme auteur de
+    // messages dans le chat général). La liste Personnes, elle, n'a pas de
+    // policy RLS dédiée (rsvps_public_data sert aussi à résoudre les noms
+    // d'auteur dans le chat, la restreindre casserait ça pour tout le
+    // monde) : masquage purement applicatif ici, protection plus légère que
+    // les autres blocs, assumé (voir migration 20260710002200).
+    const hiddenBlocks = event.beneficiary_hidden_blocks ?? [];
+    // Réglage de l'ÉVÉNEMENT (pas encore filtré par le viewer courant) :
+    // EventChat a besoin de cette valeur BRUTE pour tout le monde (y compris
+    // un admin non-bénéficiaire), afin de savoir s'il doit afficher la
+    // bannière "X n'a pas accès" -- c'est EventChat lui-même qui combine
+    // ensuite avec SA PROPRE notion de `isBeneficiary` pour déterminer si LE
+    // VIEWER COURANT est celui qui est bloqué. Un bug réel est passé par ici
+    // : calculer `isBeneficiary && hiddenBlocks.includes(...)` À CET ENDROIT
+    // renvoyait toujours `false` pour un non-bénéficiaire (l'admin, censé
+    // voir la bannière), quel que soit le réglage réel de l'événement.
+    const isBackstageHiddenForBeneficiaries = hiddenBlocks.includes("backstage");
+    const isChatHiddenForBeneficiaries = hiddenBlocks.includes("chat");
+    const isParticipantsHiddenForBeneficiaries = hiddenBlocks.includes("participants");
+    const isParticipantsListHidden = isBeneficiary && isParticipantsHiddenForBeneficiaries;
+
+    // Canaux de chat réellement accessibles à CE viewer (retour Thomas :
+    // pastille non-lus par canal, sans jamais notifier un bénéficiaire
+    // bloqué d'une activité qu'il ne peut pas voir) -- même formule que
+    // `EventChat.tsx` (isBeneficiary && le bloc concerné est masqué), utilisée
+    // ici pour le compteur initial ET le filtre Realtime de `EventTabs`.
+    const chatAllowedChannels: ("main" | "backstage")[] = [
+      ...(isBeneficiary && isChatHiddenForBeneficiaries ? [] : (["main"] as const)),
+      ...(isBeneficiary && isBackstageHiddenForBeneficiaries ? [] : (["backstage"] as const)),
+    ];
+
+    // Prénoms des bénéficiaires approuvés (retour Thomas : "X a accès ou X
+    // n'a pas accès, ça sera plus simple" -- même principe partout où un
+    // bloc peut être masqué). Public via `rsvps_public_data`, pas besoin
+    // d'être admin pour voir le prénom d'un bénéficiaire.
+    const { data: beneficiaryRows } = await supabase
+      .from("rsvps_public_data")
+      .select("first_name")
+      .eq("event_id", event.id)
+      .eq("role", "beneficiary")
+      .eq("status", "approved");
+    const beneficiaryNames = (beneficiaryRows ?? [])
+      .map((r) => r.first_name)
+      .filter((name): name is string => !!name);
+
     // La pastille "Personnes" compte tout ce qui requiert une vraie décision
     // de l'admin (retour Thomas) : les demandes "pending" classiques, PLUS
     // les participants restreints ("je ne peux pas") ayant explicitement
@@ -131,7 +182,7 @@ export default async function EventPage({
       pendingCount = count ?? 0;
     }
 
-    const initialUnreadCount = await getInitialUnreadCount(event.id, myRsvpRow?.id ?? null);
+    const initialUnreadCount = await getInitialUnreadCount(event.id, myRsvpRow?.id ?? null, chatAllowedChannels);
 
     let dateOptions: {
       id: string;
@@ -229,6 +280,7 @@ export default async function EventPage({
               isAnonymous={!!user?.is_anonymous}
               dateOptions={dateOptions}
               coverPhotoUrl={coverPhotoUrl}
+              beneficiaryNames={beneficiaryNames}
               myRsvp={
                 !isHost && myRsvpRow
                   ? { id: myRsvpRow.id, answer: myRsvpRow.answer as "yes" | "maybe" | "no" }
@@ -237,15 +289,24 @@ export default async function EventPage({
             />
           }
           personnes={
-            <EventPersonnes
-              eventId={event.id}
-              shortCode={event.short_code}
-              viewerRsvpId={myRsvpRow?.id ?? null}
-              isAdmin={isAdmin}
-              isHost={isHost}
-              hostProfileId={event.host_id}
-              potEnabled={event.pot_enabled}
-            />
+            isParticipantsListHidden ? (
+              <Card className="text-center text-sm text-foreground/60">
+                {t("participantsListHidden")}
+              </Card>
+            ) : (
+              <EventPersonnes
+                eventId={event.id}
+                shortCode={event.short_code}
+                viewerRsvpId={myRsvpRow?.id ?? null}
+                isAdmin={isAdmin}
+                isHost={isHost}
+                hostProfileId={event.host_id}
+                potEnabled={event.pot_enabled}
+                isBeneficiary={isBeneficiary}
+                isParticipantsHidden={isParticipantsHiddenForBeneficiaries}
+                beneficiaryNames={beneficiaryNames}
+              />
+            )
           }
           pendingCount={pendingCount}
           chat={
@@ -254,11 +315,14 @@ export default async function EventPage({
               viewerRsvpId={myRsvpRow?.id ?? null}
               isAdmin={isAdmin}
               isBeneficiary={isBeneficiary}
+              isBackstageHidden={isBackstageHiddenForBeneficiaries}
+              isChatHidden={isChatHiddenForBeneficiaries}
             />
           }
           eventId={event.id}
           viewerRsvpId={myRsvpRow?.id ?? null}
           initialUnreadCount={initialUnreadCount}
+          chatAllowedChannels={chatAllowedChannels}
         />
       </main>
     );
@@ -408,6 +472,7 @@ type EventRow = {
   pot_label: string | null;
   host_id: string;
   share_policy: "all" | "admins";
+  beneficiary_hidden_blocks: string[];
 };
 
 async function EventAccueil({
@@ -418,6 +483,7 @@ async function EventAccueil({
   isAnonymous,
   dateOptions,
   coverPhotoUrl,
+  beneficiaryNames,
   myRsvp,
 }: {
   event: EventRow;
@@ -433,6 +499,12 @@ async function EventAccueil({
     votedByMe: boolean;
   }[];
   coverPhotoUrl: string | null;
+  // Étape 5 du wizard (retour Thomas : "X a accès ou X n'a pas accès, ça
+  // sera plus simple") : prénoms des bénéficiaires approuvés, pour la note
+  // dans la carte cagnotte (visible par tout le monde SAUF le bénéficiaire
+  // concerné, qui ne voit de toute façon jamais cette carte -- voir la garde
+  // juste au-dessus).
+  beneficiaryNames: string[];
   myRsvp: { id: string; answer: "yes" | "maybe" | "no" } | null;
 }) {
   const t = await getTranslations("EventPage");
@@ -592,7 +664,7 @@ async function EventAccueil({
         </Card>
       )}
 
-      {event.pot_enabled && !isBeneficiary && (
+      {event.pot_enabled && !(isBeneficiary && event.beneficiary_hidden_blocks.includes("pot")) && (
         <Card>
           <p className="text-base text-foreground">
             {t("potLabel", { label: event.pot_label || "" })}
@@ -602,6 +674,24 @@ async function EventAccueil({
               ? t("potGoal", { amount: (event.pot_goal_cents / 100).toFixed(0) })
               : t("potOpen")}
           </p>
+          {/* Étape 5 du wizard (retour Thomas : "il faut le dire quand X a
+              accès et aussi quand elle a pas accès" -- jamais silencieuse
+              dans un sens comme dans l'autre). Jamais montrée au
+              bénéficiaire lui-même à propos de lui-même (juste redondant,
+              même logique que la bannière Coulisses) -- seuls les AUTRES la
+              voient, qu'il ait accès ou non. */}
+          {!isBeneficiary && beneficiaryNames.length > 0 && (
+            <p
+              className={`text-xs font-semibold ${
+                event.beneficiary_hidden_blocks.includes("pot") ? "text-accent-coral" : "text-accent-mint"
+              }`}
+            >
+              {t(event.beneficiary_hidden_blocks.includes("pot") ? "beneficiaryNoAccessNote" : "beneficiaryAccessNote", {
+                count: beneficiaryNames.length,
+                names: joinNames(beneficiaryNames),
+              })}
+            </p>
+          )}
         </Card>
       )}
     </div>

@@ -39,6 +39,9 @@ export async function EventPersonnes({
   isHost,
   hostProfileId,
   potEnabled,
+  isBeneficiary,
+  isParticipantsHidden,
+  beneficiaryNames,
 }: {
   eventId: string;
   shortCode: string;
@@ -47,6 +50,14 @@ export async function EventPersonnes({
   isHost: boolean;
   hostProfileId: string;
   potEnabled: boolean;
+  // Étape 5 du wizard (retour Thomas : "il faut rajouter dans personnes que
+  // Julie a accès ou pas") : même pattern que la cagnotte/le chat -- une note
+  // "X a/n'a pas accès" affichée aux AUTRES participants, jamais au(x)
+  // bénéficiaire(s) concerné(s) eux-mêmes (qui voient de toute façon le
+  // placeholder dédié à la place de ce composant, voir page.tsx).
+  isBeneficiary: boolean;
+  isParticipantsHidden: boolean;
+  beneficiaryNames: string[];
 }) {
   const supabase = await createClient();
 
@@ -148,6 +159,9 @@ export async function EventPersonnes({
       hostProfileId={hostProfileId}
       potEnabled={potEnabled}
       rows={rows}
+      isBeneficiary={isBeneficiary}
+      isParticipantsHidden={isParticipantsHidden}
+      beneficiaryNames={beneficiaryNames}
     />
   );
 }

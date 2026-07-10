@@ -25,13 +25,27 @@ export async function EventChat({
   viewerRsvpId,
   isAdmin,
   isBeneficiary,
+  isBackstageHidden,
+  isChatHidden,
 }: {
   eventId: string;
   viewerRsvpId: string | null;
   isAdmin: boolean;
   isBeneficiary: boolean;
+  // Étape 5 du wizard (visibilité bénéficiaires) : les deux canaux (Général
+  // ET Coulisses) étaient jusqu'ici gérés différemment ("toujours masqué"
+  // pour Coulisses, "toujours accessible" pour Général, tous les deux codés
+  // en dur) -- désormais configurables séparément
+  // (`events.beneficiary_hidden_blocks`, blocs 'backstage'/'chat'), calculés
+  // par l'appelant (page.tsx). Le chat général a été ajouté après coup
+  // (retour Thomas : un bénéficiaire masqué de la liste Personnes restait
+  // quand même visible comme auteur de messages dans le chat général).
+  isBackstageHidden: boolean;
+  isChatHidden: boolean;
 }) {
   const supabase = await createClient();
+  const backstageBlockedForMe = isBeneficiary && isBackstageHidden;
+  const mainBlockedForMe = isBeneficiary && isChatHidden;
 
   const { data: beneficiaryRow } = await supabase
     .from("rsvps_public_data")
@@ -40,10 +54,46 @@ export async function EventChat({
     .eq("role", "beneficiary")
     .eq("status", "approved")
     .maybeSingle();
+  // Les onglets Général ET Coulisses restent TOUJOURS affichés, même au
+  // bénéficiaire bloqué de l'un ou l'autre (retour Thomas : "il faut
+  // toujours laisser coulisse et général, même pour le bénéficiaire mais
+  // s'il clique sur coulisses, il faut dire vous avez pas accès") --
+  // `hasBackstage` ne dépend donc que de l'existence d'un bénéficiaire dans
+  // l'événement, jamais des restrictions elles-mêmes.
   const hasBackstage = !!beneficiaryRow;
 
-  const visibleChannels: ("main" | "backstage")[] =
-    hasBackstage && !isBeneficiary ? ["main", "backstage"] : ["main"];
+  // Bannière "X a accès" / "X n'a pas accès au fil Coulisses" (ou au chat
+  // général), affichée aux AUTRES participants quand ils consultent l'onglet
+  // concerné -- dans LES DEUX CAS, pas seulement quand masqué (retour
+  // Thomas : "il faut le dire quand X a accès et aussi quand elle a pas
+  // accès"). Jamais au(x) bénéficiaire(s) concerné(s) eux-mêmes (ils voient
+  // soit le chat normal, soit le placeholder "pas d'accès", voir ChatRoom --
+  // une bannière à leur propre sujet serait redondante). Prénoms via
+  // `rsvps_public_data` (déjà public pour tout participant approuvé, pas
+  // besoin d'être admin). Les deux canaux partagent la même liste de
+  // bénéficiaires (un seul rôle 'beneficiary' par événement dans les faits),
+  // une seule requête suffit pour les deux bannières.
+  let beneficiaryNamesForBanners: string[] = [];
+  if (hasBackstage && !isBeneficiary) {
+    const { data: rows } = await supabase
+      .from("rsvps_public_data")
+      .select("first_name")
+      .eq("event_id", eventId)
+      .eq("role", "beneficiary")
+      .eq("status", "approved");
+    beneficiaryNamesForBanners = (rows ?? []).map((r) => r.first_name).filter((name): name is string => !!name);
+  }
+  const backstageBeneficiaryNames = beneficiaryNamesForBanners;
+  const chatBeneficiaryNames = beneficiaryNamesForBanners;
+
+  // Pas la peine de charger les messages d'un canal bloqué pour LE VIEWER
+  // COURANT (RLS les rejetterait de toute façon, voir migration
+  // 20260710002200) : l'onglet reste affiché (ci-dessus), mais son contenu
+  // n'a rien à charger, ChatRoom y affiche directement le placeholder.
+  const visibleChannels: ("main" | "backstage")[] = [
+    ...(mainBlockedForMe ? [] : (["main"] as const)),
+    ...(hasBackstage && !backstageBlockedForMe ? (["backstage"] as const) : []),
+  ];
 
   // Position de lecture au dernier passage (brief : reprendre au premier
   // message non lu, avec une ligne de séparation) : lue ici, AVANT que
@@ -61,6 +111,23 @@ export async function EventChat({
         .maybeSingle()
     : { data: null };
   const initialLastReadAt = readRow?.last_read_at ?? null;
+
+  // Symétrique, pour le compteur non-lus PROPRE à l'onglet Coulisses (retour
+  // Thomas : "il faut mettre le nombre de notif dans général et/ou
+  // coulisses") -- indépendant de `initialLastReadAt` ci-dessus (qui ne sert
+  // qu'à la ligne "non lus" du canal Général, jamais renommé/étendu pour ne
+  // pas perturber ce mécanisme déjà réglé).
+  const { data: backstageReadRow } =
+    viewerRsvpId && hasBackstage
+      ? await supabase
+          .from("chat_reads")
+          .select("last_read_at")
+          .eq("event_id", eventId)
+          .eq("rsvp_id", viewerRsvpId)
+          .eq("channel", "backstage")
+          .maybeSingle()
+      : { data: null };
+  const initialBackstageLastReadAt = backstageReadRow?.last_read_at ?? null;
 
   const { data: messageRows } = await supabase
     .from("messages")
@@ -147,35 +214,54 @@ export async function EventChat({
       eventId={eventId}
       viewerRsvpId={viewerRsvpId}
       isAdmin={isAdmin}
-      isBeneficiary={isBeneficiary}
       hasBackstage={hasBackstage}
+      hideBackstageForViewer={backstageBlockedForMe}
+      isBackstageHiddenForBeneficiaries={isBackstageHidden}
+      backstageBeneficiaryNames={backstageBeneficiaryNames}
+      hideMainForViewer={mainBlockedForMe}
+      isChatHiddenForBeneficiaries={isChatHidden}
+      chatBeneficiaryNames={chatBeneficiaryNames}
       initialMessages={initialMessages}
       initialReactions={initialReactions}
       initialLastReadAt={initialLastReadAt}
+      initialBackstageLastReadAt={initialBackstageLastReadAt}
     />
   );
 }
 
-// Compteur non-lus initial (canal principal uniquement, brief 4.3) : calculé
-// séparément de EventChat (utilisé aussi bien depuis page.tsx, avant que le
-// panneau Chat lui-même soit monté, pour la pastille sur l'onglet).
-export async function getInitialUnreadCount(eventId: string, viewerRsvpId: string | null): Promise<number> {
-  if (!viewerRsvpId) return 0;
+// Compteur non-lus initial, pour la pastille de l'onglet Chat au niveau
+// page (brief 4.3, étendu -- retour Thomas : "mettre une bulle rouge à côté
+// de Chat" + "faire attention que le bénéficiaire bloqué de Coulisses ne
+// reçoive pas de notif dessus"). Calculé séparément de EventChat (utilisé
+// depuis page.tsx, avant que le panneau Chat lui-même soit monté). Ne compte
+// QUE les canaux réellement accessibles à CE viewer -- un canal bloqué pour
+// lui ne contribue jamais, ni à ce total, ni (voir EventTabs) au filtre
+// Realtime qui l'incrémenterait en direct.
+export async function getInitialUnreadCount(
+  eventId: string,
+  viewerRsvpId: string | null,
+  allowedChannels: ("main" | "backstage")[],
+): Promise<number> {
+  if (!viewerRsvpId || allowedChannels.length === 0) return 0;
 
   const supabase = await createClient();
-  const { data: readRow } = await supabase
-    .from("chat_reads")
-    .select("last_read_at")
-    .eq("event_id", eventId)
-    .eq("rsvp_id", viewerRsvpId)
-    .eq("channel", "main")
-    .maybeSingle();
+  let total = 0;
+  for (const channel of allowedChannels) {
+    const { data: readRow } = await supabase
+      .from("chat_reads")
+      .select("last_read_at")
+      .eq("event_id", eventId)
+      .eq("rsvp_id", viewerRsvpId)
+      .eq("channel", channel)
+      .maybeSingle();
 
-  let query = supabase.from("messages").select("rsvp_id").eq("event_id", eventId).eq("channel", "main");
-  if (readRow?.last_read_at) {
-    query = query.gt("created_at", readRow.last_read_at);
+    let query = supabase.from("messages").select("rsvp_id").eq("event_id", eventId).eq("channel", channel);
+    if (readRow?.last_read_at) {
+      query = query.gt("created_at", readRow.last_read_at);
+    }
+    const { data } = await query;
+    total += computeUnreadCount((data ?? []).map((r) => ({ rsvpId: r.rsvp_id })), viewerRsvpId);
   }
-  const { data } = await query;
 
-  return computeUnreadCount((data ?? []).map((r) => ({ rsvpId: r.rsvp_id })), viewerRsvpId);
+  return total;
 }

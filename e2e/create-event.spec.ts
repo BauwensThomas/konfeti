@@ -42,6 +42,7 @@ test("un organisateur complete son profil et cree un evenement", async ({ page }
 
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Créer l'événement" }).click();
 
     await expect(page).toHaveURL(/\/mes-evenements$/);

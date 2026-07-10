@@ -1,20 +1,29 @@
-import { randomConfettiPieces, confettiBorderRadius, confettiClipPath } from "@/lib/confetti";
+import { buildConfettiTileDataUri } from "@/lib/confetti";
 
-// Généré une seule fois au chargement du module, comme `ConfettiBackground`
-// (fond de page) -- mais ce panneau se démonte/remonte à chaque changement
-// d'onglet (voir ChatRoom/EventTabs) : une disposition différente à chaque
-// réouverture du Chat est un choix assumé, sans lien avec le "ça saute
-// pendant la lecture" que Thomas voulait éviter pour la page (là, on ne lit
-// rien pendant que l'onglet se démonte).
-const PIECES = randomConfettiPieces(26);
+// Taille du motif répété (px) et nombre de pièces par motif -- densité
+// choisie pour rester proche de l'ancien rendu (26 pièces sur un panneau
+// d'environ 600-700px de large/haut).
+const TILE_SIZE = 320;
+const TILE_DATA_URI = buildConfettiTileDataUri(TILE_SIZE, 7);
 
 /**
  * Confettis discrets en fond de la zone de chat -- retour Thomas : "il
  * faudrait un peu animer le fond gris, avec petites formes de confetti
  * aléatoires très légères de différentes couleurs qui resteront toujours
  * derrière le texte", puis "je vois que les confettis bougent, ce n'est
- * pas nécessaire, ils peuvent rester fixe" (l'animation de dérive a donc été
- * retirée -- pièces statiques, comme `ConfettiBackground`).
+ * pas nécessaire, ils peuvent rester fixe" (pièces statiques, comme
+ * `ConfettiBackground`).
+ *
+ * Bug réel corrigé (retour Thomas : "au plus on écrit, au plus ils
+ * s'écartent les uns des autres") : contrairement à `ConfettiBackground`
+ * (page, hauteur fixe), la hauteur de ce fond grandit avec les messages --
+ * un ensemble fixe de pièces positionnées en pourcentage s'écartait donc
+ * mécaniquement au lieu d'en révéler de nouvelles. Remplacé par un MOTIF
+ * RÉPÉTÉ (image CSS `background-repeat`, voir `buildConfettiTileDataUri`) :
+ * densité constante quelle que soit la hauteur réelle, "tout le chat" rempli
+ * même vide (une image de fond couvre toujours 100% de son conteneur), et de
+ * nouvelles répétitions apparaissent naturellement à mesure que la
+ * conversation grandit -- sans JS, sans mesure de hauteur.
  *
  * Posé DANS le flux normal du contenu qui défile (voir ChatRoom : ce
  * composant est un enfant `absolute inset-0` d'un wrapper `relative` dont la
@@ -34,23 +43,11 @@ export function ChatConfettiBackground() {
     <div
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 -z-10 overflow-hidden opacity-25"
-    >
-      {PIECES.map((piece) => (
-        <span
-          key={piece.id}
-          style={{
-            position: "absolute",
-            top: `${piece.top}%`,
-            left: `${piece.left}%`,
-            width: piece.size,
-            height: piece.size,
-            backgroundColor: piece.color,
-            borderRadius: confettiBorderRadius(piece.shape),
-            clipPath: confettiClipPath(piece.shape),
-            transform: `rotate(${piece.rotate}deg)`,
-          }}
-        />
-      ))}
-    </div>
+      style={{
+        backgroundImage: `url("${TILE_DATA_URI}")`,
+        backgroundRepeat: "repeat",
+        backgroundSize: `${TILE_SIZE}px ${TILE_SIZE}px`,
+      }}
+    />
   );
 }

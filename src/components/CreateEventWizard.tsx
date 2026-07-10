@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { AvatarPlaceholder } from "@/components/AvatarPlaceholder";
 import { toLocalDateTimeValue } from "@/lib/datetime";
+import { joinNames } from "@/lib/joinNames";
 
 type DateOption = { startsAt: string; label: string };
 
@@ -45,7 +46,10 @@ export type WizardData = {
   potMode: "goal" | "open";
   potGoalEuros: string;
   potLabel: string;
+  beneficiaryHiddenBlocks: BeneficiaryBlock[];
 };
+
+export type BeneficiaryBlock = "pot" | "backstage" | "chat" | "bring" | "polls" | "playlist" | "participants";
 
 const INITIAL_DATA: WizardData = {
   title: "",
@@ -80,15 +84,24 @@ const INITIAL_DATA: WizardData = {
   potMode: "goal",
   potGoalEuros: "",
   potLabel: "",
+  // Cagnotte + Coulisses masquées par défaut (préserve le comportement
+  // historique de ces deux blocs, "toujours masqués", avant qu'ils ne
+  // deviennent configurables ici) ; le chat GÉNÉRAL et le reste restent
+  // visibles par défaut, comme aujourd'hui.
+  beneficiaryHiddenBlocks: ["pot", "backstage"],
 };
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 type CreateEventWizardProps = {
   eventId?: string;
   shortCode?: string;
   initialData?: WizardData;
   initialPhotoUrl?: string | null;
+  // Prénoms des bénéficiaires déjà approuvés (édition seulement — à la
+  // création, l'événement n'a encore aucun participant, ce tableau reste
+  // vide et les phrases de l'étape 5 restent génériques).
+  beneficiaryNames?: string[];
 };
 
 export function CreateEventWizard({
@@ -96,6 +109,7 @@ export function CreateEventWizard({
   shortCode,
   initialData,
   initialPhotoUrl,
+  beneficiaryNames = [],
 }: CreateEventWizardProps) {
   const isEditMode = !!eventId;
   const t = useTranslations("CreateEvent");
@@ -115,6 +129,17 @@ export function CreateEventWizard({
 
   function update<K extends keyof WizardData>(key: K, value: WizardData[K]) {
     setData((prev) => ({ ...prev, [key]: value }));
+  }
+
+  // Étape 5 : bascule un bloc dans/hors de `beneficiaryHiddenBlocks` (coché
+  // = masqué aux bénéficiaires).
+  function toggleBeneficiaryBlock(block: BeneficiaryBlock) {
+    setData((prev) => ({
+      ...prev,
+      beneficiaryHiddenBlocks: prev.beneficiaryHiddenBlocks.includes(block)
+        ? prev.beneficiaryHiddenBlocks.filter((b) => b !== block)
+        : [...prev.beneficiaryHiddenBlocks, block],
+    }));
   }
 
   // Une photo déjà présente ouvre un petit menu (changer/supprimer) au clic ;
@@ -268,6 +293,7 @@ export function CreateEventWizard({
             ? Math.round(Number(data.potGoalEuros) * 100)
             : undefined,
         potLabel: data.potLabel || undefined,
+        beneficiaryHiddenBlocks: data.beneficiaryHiddenBlocks,
       };
 
       const result =
@@ -778,6 +804,69 @@ export function CreateEventWizard({
             )}
           </div>
         )}
+
+        {/* Étape 5 : ce que voient les bénéficiaires (retour Thomas : "il
+            faut une étape 5... avec le ou les bénéficiaires peuvent voir la
+            cagnotte, le chat, les personnes, qui apporte quoi etc."). La
+            cagnotte et les deux canaux de chat (Général/Coulisses) étaient
+            jusqu'ici codés en dur -- ils deviennent des cases à cocher comme
+            le reste. Les deux onglets Général/Coulisses restent TOUJOURS
+            visibles pour tous, y compris le bénéficiaire bloqué, qui voit
+            juste "vous n'avez pas accès" en ouvrant l'onglet concerné (retour
+            Thomas : "il faut toujours laisser coulisse et général... mais
+            s'il clique dessus, il faut dire vous avez pas accès") -- voir
+            ChatRoom.tsx pour ce placeholder + la bannière montrée aux
+            autres. Le chat GÉNÉRAL a été ajouté à cette liste après coup
+            (retour Thomas, en repensant au masquage de la liste Personnes :
+            "rajouter une possibilité de masquer le chat général pour les
+            bénéficiaires" -- sinon un bénéficiaire masqué de Personnes reste
+            quand même visible comme auteur de messages dans le chat
+            général). Un court texte d'aide (avantage/inconvénient) accompagne
+            chaque case, pour que l'organisateur choisisse en connaissance de
+            cause. `beneficiaryNames` est vide à la création (aucun
+            participant n'existe encore) : la phrase reste alors générique
+            ("Aucun bénéficiaire n'a accès..."), ce qui reste factuellement
+            correct dans ce cas aussi. */}
+        {step === 5 && (
+          <div className="flex flex-col gap-4">
+            <h2 className="font-display text-xl text-foreground">{t("step5.heading")}</h2>
+            <p className="text-sm text-foreground/70">{t("step5.intro")}</p>
+
+            {BENEFICIARY_BLOCKS.map((block) => {
+              const hidden = data.beneficiaryHiddenBlocks.includes(block);
+              // Masqué => personne n'y a accès, quel que soit le nombre de
+              // bénéficiaires déjà approuvés (le toggle prime toujours).
+              const namesWithAccess = hidden ? [] : beneficiaryNames;
+              return (
+                <div
+                  key={block}
+                  className="flex flex-col gap-1.5 rounded-konfeti border border-border p-3"
+                >
+                  <label className="flex items-center gap-2 text-base text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={hidden}
+                      onChange={() => toggleBeneficiaryBlock(block)}
+                    />
+                    {t("step5.hideLabel", { block: t(`step5.blocks.${block}.label`) })}
+                  </label>
+                  <p className={`text-xs font-semibold ${hidden ? "text-accent-coral" : "text-accent-mint"}`}>
+                    {t("step5.visibilitySummary", {
+                      count: namesWithAccess.length,
+                      names: joinNames(namesWithAccess),
+                      block: t(`step5.blocks.${block}.withAccess`),
+                    })}
+                  </p>
+                  <p className="text-xs leading-snug text-foreground/70">
+                    {t(`step5.blocks.${block}.hintPro`)}
+                    <br />
+                    {t(`step5.blocks.${block}.hintCon`)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
       {error && (
@@ -839,6 +928,18 @@ export function CreateEventWizard({
     </div>
   );
 }
+
+// Ordre d'affichage de l'étape 5 (checkbox "Masquer X aux bénéficiaires" +
+// phrase dynamique).
+const BENEFICIARY_BLOCKS: BeneficiaryBlock[] = [
+  "pot",
+  "backstage",
+  "chat",
+  "bring",
+  "polls",
+  "playlist",
+  "participants",
+];
 
 // referenceDate = date de la fête si elle est connue, sinon l'année en cours
 // (cas fréquent : la fête a lieu avant ou après la date exacte de naissance).
