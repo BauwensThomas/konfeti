@@ -140,3 +140,74 @@ test("la croix du wizard Modifier annule et revient à l'événement sans enregi
     await deleteTestUser(user.id);
   }
 });
+
+// Retour Thomas : "j'ai réussi à créer un événement à une date inférieure à
+// aujourd'hui, et à mettre la date limite aussi avant la date actuelle...
+// ça ne doit pas être possible". Deux bugs réels distincts trouvés :
+// 1. `updateEventSchema` sautait la contrainte "pas de date passée" pour
+//    TOUTE édition (pensée pour corriger un événement déjà terminé), ce qui
+//    permettait aussi de faire reculer un événement encore à venir.
+// 2. La date limite de réponse n'était comparée qu'à la date de l'événement
+//    (jamais après), jamais à "maintenant" -- une date limite passée
+//    passait donc si elle restait avant l'événement (même passé).
+test("impossible de faire reculer un événement à venir vers le passé, ou de mettre une date limite passée", async ({
+  page,
+}) => {
+  const email = `e2e-past-date-${Date.now()}@example.com`;
+  const user = await loginAs(page, email);
+
+  try {
+    await page.goto("/profil/completer");
+    await page.getByPlaceholder("Julie").fill("Hôte");
+    await page.getByPlaceholder("Dean").fill("Test");
+    await page.getByLabel("Ton numéro de téléphone").fill("+32470000099");
+    await page.getByLabel("Une femme").check();
+    await page.getByRole("button", { name: "Avatar 1" }).click();
+    await page.getByRole("button", { name: "Continuer" }).click();
+    await expect(page).toHaveURL(/\/mes-evenements$/);
+
+    const title = `Fete date passee ${Date.now()}`;
+    await page.getByRole("link", { name: "Créer un événement" }).click();
+    await page.getByPlaceholder("L'anniversaire de Julie").fill(title);
+    await page.locator('input[type="datetime-local"]').first().fill("2026-12-24T20:00");
+    await page.getByPlaceholder("Adresse et ville").fill("Rue de Test 6, 1000 Bruxelles");
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Créer l'événement" }).click();
+    await expect(page).toHaveURL(/\/mes-evenements$/);
+
+    const { data: event } = await supabaseAdmin
+      .from("events")
+      .select("id, short_code")
+      .eq("title", title)
+      .maybeSingle();
+    if (!event) throw new Error("evenement introuvable");
+
+    // Tentative de reculer la date (encore à venir) vers le passé : bloqué.
+    await page.goto(`/e/${event.short_code}/modifier`);
+    await page.locator('input[type="datetime-local"]').first().fill("2020-01-01T20:00");
+    await expect(page.getByText("Cette date ne peut pas être dans le passé.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Suivant" })).toBeDisabled();
+
+    // Remet une date future valide, avance jusqu'à la date limite de réponse.
+    await page.locator('input[type="datetime-local"]').first().fill("2026-12-24T20:00");
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.locator('input[type="date"]').fill("2020-01-01");
+    await expect(page.getByText("Cette date ne peut pas être dans le passé.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Suivant" })).toBeDisabled();
+
+    const { data: eventUnchanged } = await supabaseAdmin
+      .from("events")
+      .select("starts_at, rsvp_deadline")
+      .eq("id", event.id)
+      .single();
+    expect(new Date(eventUnchanged!.starts_at!).getUTCFullYear()).toBe(2026);
+    expect(eventUnchanged?.rsvp_deadline).toBeNull();
+
+    await supabaseAdmin.from("events").delete().eq("id", event.id);
+  } finally {
+    await deleteTestUser(user.id);
+  }
+});

@@ -164,6 +164,7 @@
       "bringGeneralLabel": "À prévoir",
       "bringGeneralPlaceholder": "Maillot, pull pour le soir...",
       "rsvpDeadlineLabel": "Date limite de réponse",
+      "rsvpDeadlineInPast": "Cette date ne peut pas être dans le passé.",
       "rsvpDeadlineTooLate": "La date limite de réponse ne peut pas être après l'événement.",
       "kidsAllowedLabel": "Enfants bienvenus ?",
       "petsAllowedLabel": "Animaux bienvenus ?",
@@ -282,6 +283,7 @@
     "errorPhoto": "L'envoi de la photo a échoué, réessaie.",
     "errorUnknown": "Une erreur est survenue, réessaie.",
     "errorRateLimited": "Trop de tentatives, réessaie dans un instant.",
+    "errorOrganizerProtected": "L'organisateur ne peut pas être retiré ni changer de rôle. Utilise le transfert d'organisation.",
     "pendingTitle": "Ta demande est chez l'organisateur !",
     "pendingBody": "Dès qu'il ou elle t'aura validé, tu découvriras tous les détails de l'événement.",
     "restrictedTitle": "Pas de souci !",
@@ -332,6 +334,7 @@
     "errorUnauthorized": "Tu n'as pas les droits pour faire ça.",
     "errorLastAdmin": "Il doit toujours rester au moins un administrateur pour cet événement.",
     "errorTransferAnonymous": "Cette personne doit avoir un vrai compte (email ou Google) pour devenir organisateur.",
+    "errorOrganizerProtected": "L'organisateur ne peut pas être retiré ni changer de rôle. Utilise le transfert d'organisation.",
     "errorUnknown": "Une erreur est survenue, réessaie."
   },
   "Chat": {

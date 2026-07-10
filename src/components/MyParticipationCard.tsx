@@ -52,7 +52,15 @@ export function MyParticipationCard({
         setConfirmingLeave(false);
         router.refresh();
       } else {
-        setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
+        // "organizer_protected" : filet de sécurité, ce bouton n'est de
+        // toute façon jamais affiché à l'organisateur (voir page.tsx).
+        setError(
+          result.error === "rate_limited"
+            ? t("errorRateLimited")
+            : result.error === "organizer_protected"
+              ? t("errorOrganizerProtected")
+              : t("errorUnknown"),
+        );
       }
     });
   }

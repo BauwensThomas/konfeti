@@ -96,9 +96,18 @@ export function ParticipantsList({
   }
 
   function handleRemove(rsvpId: string) {
+    setRoleError(null);
     startTransition(async () => {
-      await removeParticipant(rsvpId, shortCode);
+      const result = await removeParticipant(rsvpId, shortCode);
       setConfirmingRemoveId(null);
+      // Filet de sécurité : ce cas ne devrait plus arriver via l'UI (le
+      // bouton "Retirer" est déjà masqué sur la ligne de l'organisateur),
+      // mais autant afficher l'erreur plutôt que l'ignorer en silence si un
+      // état affiché était périmé.
+      if (!result.ok) {
+        setRoleError(result.error === "organizer_protected" ? t("errorOrganizerProtected") : t("errorUnknown"));
+        return;
+      }
       router.refresh();
     });
   }
@@ -108,7 +117,13 @@ export function ParticipantsList({
     startTransition(async () => {
       const result = await setParticipantRole(rsvpId, shortCode, role);
       if (!result.ok) {
-        setRoleError(result.error === "last_admin" ? t("errorLastAdmin") : t("errorUnknown"));
+        setRoleError(
+          result.error === "last_admin"
+            ? t("errorLastAdmin")
+            : result.error === "organizer_protected"
+              ? t("errorOrganizerProtected")
+              : t("errorUnknown"),
+        );
         return;
       }
       router.refresh();
@@ -412,23 +427,37 @@ function ApprovedParticipantRow({
       />
       {isAdmin && !isSelf && (
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={row.role}
-            disabled={isPending}
-            onChange={(e) => onRoleChange(row.id, e.target.value as "guest" | "admin" | "beneficiary")}
-            className="rounded-konfeti border border-border bg-surface px-2 py-1 text-sm text-foreground"
-          >
-            <option value="guest">{t("roleGuest")}</option>
-            <option value="admin">{t("roleAdmin")}</option>
-            <option value="beneficiary">{t("roleBeneficiary")}</option>
-          </select>
-          <button
-            type="button"
-            onClick={() => onRemove(row.id)}
-            className="text-sm font-semibold text-accent-coral"
-          >
-            {t("remove")}
-          </button>
+          {/* L'organisateur est intouchable, même pour un autre admin (retour
+              Thomas : "je sais supprimer ou changer le rôle de
+              l'organisateur, ce n'est pas logique") -- ni le sélecteur de
+              rôle ni "Retirer" ne s'affichent sur sa ligne. La seule façon
+              d'arrêter d'être organisateur reste le transfert explicite
+              ci-dessous. Entre admins ordinaires (aucun des deux
+              organisateur) : égalité, n'importe quel admin gère n'importe
+              quel autre (même bloc, aucune restriction supplémentaire). */}
+          {!isRowHost && (
+            <>
+              <select
+                value={row.role}
+                disabled={isPending}
+                onChange={(e) =>
+                  onRoleChange(row.id, e.target.value as "guest" | "admin" | "beneficiary")
+                }
+                className="rounded-konfeti border border-border bg-surface px-2 py-1 text-sm text-foreground"
+              >
+                <option value="guest">{t("roleGuest")}</option>
+                <option value="admin">{t("roleAdmin")}</option>
+                <option value="beneficiary">{t("roleBeneficiary")}</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => onRemove(row.id)}
+                className="text-sm font-semibold text-accent-coral"
+              >
+                {t("remove")}
+              </button>
+            </>
+          )}
           {/* Seul l'hôte ACTUEL (jamais un simple admin promu) peut transférer
               l'organisation, et uniquement vers un autre admin déjà approuvé
               (retour Thomas : possibilité de quitter son propre événement une

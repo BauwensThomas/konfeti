@@ -56,9 +56,14 @@ const eventFieldsSchema = z.object({
 
 type EventFields = z.infer<typeof eventFieldsSchema>;
 
-// `skipPastDateCheck` : en modification, un événement déjà passé doit rester
-// modifiable (corriger une coquille sur un événement terminé), donc on
-// n'applique la contrainte "pas de date passée" qu'à la création.
+// `skipPastDateCheck` : un événement DÉJÀ passé doit rester modifiable
+// (corriger une coquille sur un événement terminé), donc cette contrainte ne
+// s'applique jamais à la création, et seulement à l'édition d'un événement
+// dont la date ACTUELLEMENT enregistrée est déjà passée (calculé par
+// l'appelant, voir `updateEvent` dans actions/events.ts). Bug réel corrigé
+// (retour Thomas) : ce drapeau était auparavant `true` pour TOUTE édition,
+// ce qui permettait aussi de faire reculer un événement encore à venir vers
+// le passé, pas seulement de corriger un événement déjà terminé.
 function refineEventFields(
   data: EventFields,
   ctx: z.RefinementCtx,
@@ -101,6 +106,26 @@ function refineEventFields(
       }
     });
   }
+  // Bug réel signalé par Thomas ("j'ai réussi... à mettre la date limite
+  // aussi avant la date actuelle") : cette contrainte ne comparait jusqu'ici
+  // la date limite qu'à `startsAt` (jamais après), jamais à "maintenant" —
+  // une date limite dans le passé passait donc sans problème tant qu'elle
+  // restait avant l'événement (les deux pouvant être dans le passé à la fois).
+  // Comparaison en dates civiles (comme `isEventFinished`), pas en horodatage
+  // exact : `rsvpDeadline` est un champ `<input type="date">` (pas d'heure),
+  // qui se parse à minuit — le comparer à l'heure exacte actuelle aurait
+  // rejeté à tort la journée du jour même dès qu'il n'est plus minuit pile.
+  if (!skipPastDateCheck && data.rsvpDeadline) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (new Date(data.rsvpDeadline) < today) {
+      ctx.addIssue({
+        code: "custom",
+        message: "rsvpDeadline ne peut pas être dans le passé",
+        path: ["rsvpDeadline"],
+      });
+    }
+  }
   if (data.potEnabled && data.potMode === "goal" && !data.potGoalCents) {
     ctx.addIssue({
       code: "custom",
@@ -126,8 +151,12 @@ export const createEventSchema = eventFieldsSchema.superRefine((data, ctx) =>
   refineEventFields(data, ctx),
 );
 
-export const updateEventSchema = eventFieldsSchema.superRefine((data, ctx) =>
-  refineEventFields(data, ctx, { skipPastDateCheck: true }),
-);
+// `skipPastDateCheck` calculé dynamiquement par l'appelant (voir plus haut) :
+// vrai seulement si l'événement est DÉJÀ passé avant cette modification.
+export function updateEventSchema(skipPastDateCheck: boolean) {
+  return eventFieldsSchema.superRefine((data, ctx) =>
+    refineEventFields(data, ctx, { skipPastDateCheck }),
+  );
+}
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;

@@ -23,6 +23,7 @@ export type ParticipantActionResult =
         | "last_admin"
         | "invalid_new_host"
         | "target_anonymous"
+        | "organizer_protected"
         | "unknown";
     };
 
@@ -208,7 +209,14 @@ export async function removeParticipant(
   });
 
   if (error) {
-    return { ok: false, error: error.message.includes("not authorized") ? "unauthorized" : "unknown" };
+    return {
+      ok: false,
+      error: error.message.includes("not authorized")
+        ? "unauthorized"
+        : error.message.includes("organizer cannot")
+          ? "organizer_protected"
+          : "unknown",
+    };
   }
 
   revalidatePath(`/e/${shortCode}`);
@@ -245,7 +253,14 @@ export async function leaveEvent(
   });
 
   if (error) {
-    return { ok: false, error: error.message.includes("not authorized") ? "unauthorized" : "unknown" };
+    return {
+      ok: false,
+      error: error.message.includes("not authorized")
+        ? "unauthorized"
+        : error.message.includes("organizer cannot")
+          ? "organizer_protected"
+          : "unknown",
+    };
   }
 
   revalidatePath(`/e/${shortCode}`);
@@ -289,7 +304,9 @@ export async function setParticipantRole(
         ? "unauthorized"
         : error.message.includes("last admin")
           ? "last_admin"
-          : "unknown",
+          : error.message.includes("cannot change the organizer role")
+            ? "organizer_protected"
+            : "unknown",
     };
   }
 

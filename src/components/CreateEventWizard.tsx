@@ -160,19 +160,30 @@ export function CreateEventWizard({
     }
   }
 
-  // Valeur minimale des champs datetime-local : on ne peut pas créer un
-  // événement dans le passé (demande de Thomas, évite les événements
-  // "fantômes" créés par erreur). Pas applicable en modification : un
-  // événement déjà passé doit rester modifiable (corriger une coquille).
-  const minDateTimeLocal = isEditMode ? undefined : toLocalDateTimeValue(new Date());
+  // Un événement DÉJÀ passé doit rester modifiable (corriger une coquille),
+  // mais faire reculer un événement encore à venir vers le passé ne doit pas
+  // être possible (bug réel corrigé, retour Thomas — voir validation/event.ts
+  // pour le détail et la même règle appliquée côté serveur). `initialData`
+  // capture la date telle qu'enregistrée AVANT cette session d'édition ; elle
+  // ne change jamais pendant que `data.startsAt` est modifié en direct.
+  const originalAlreadyPast =
+    isEditMode &&
+    initialData?.dateMode === "fixed" &&
+    !!initialData?.startsAt &&
+    new Date(initialData.startsAt) < new Date();
+
+  // Valeur minimale des champs datetime-local : on ne peut pas créer/déplacer
+  // un événement dans le passé (demande de Thomas, évite les événements
+  // "fantômes" créés par erreur).
+  const minDateTimeLocal = originalAlreadyPast ? undefined : toLocalDateTimeValue(new Date());
 
   const startsAtInPast =
-    !isEditMode &&
+    !originalAlreadyPast &&
     data.dateMode === "fixed" &&
     !!data.startsAt &&
     new Date(data.startsAt) < new Date();
   const dateOptionsInPast =
-    !isEditMode &&
+    !originalAlreadyPast &&
     data.dateMode === "poll" &&
     data.dateOptions.some((option) => option.startsAt && new Date(option.startsAt) < new Date());
 
@@ -181,6 +192,16 @@ export function CreateEventWizard({
     !!data.startsAt &&
     !!data.rsvpDeadline &&
     new Date(data.rsvpDeadline) > new Date(data.startsAt);
+  // Comparaison en dates civiles, pas en horodatage exact : ce champ est un
+  // `<input type="date">` (pas d'heure), qui se parse à minuit -- le comparer
+  // à l'heure exacte actuelle rejetterait à tort la journée du jour même dès
+  // qu'il n'est plus minuit pile (même raison que côté serveur).
+  const rsvpDeadlineInPast = (() => {
+    if (originalAlreadyPast || !data.rsvpDeadline) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return new Date(data.rsvpDeadline) < today;
+  })();
 
   function canAdvance() {
     if (step === 1) {
@@ -190,7 +211,7 @@ export function CreateEventWizard({
       return data.dateOptions.filter((o) => o.startsAt).length >= 2;
     }
     if (step === 3) {
-      return !rsvpDeadlineTooLate;
+      return !rsvpDeadlineTooLate && !rsvpDeadlineInPast;
     }
     return true;
   }
@@ -612,8 +633,12 @@ export function CreateEventWizard({
                 type="date"
                 value={data.rsvpDeadline}
                 onChange={(e) => update("rsvpDeadline", e.target.value)}
+                min={originalAlreadyPast ? undefined : new Date().toISOString().slice(0, 10)}
                 className={inputClass}
               />
+              {rsvpDeadlineInPast && (
+                <p className="text-sm text-accent-coral">{t("step3.rsvpDeadlineInPast")}</p>
+              )}
               {rsvpDeadlineTooLate && (
                 <p className="text-sm text-accent-coral">
                   {t("step3.rsvpDeadlineTooLate")}

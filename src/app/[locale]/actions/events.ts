@@ -125,16 +125,31 @@ export async function updateEvent(
   shortCode: string,
   input: CreateEventInput,
 ): Promise<CreateEventResult> {
-  const parsed = updateEventSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: "invalid" };
-  }
-  const data = parsed.data;
-
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // La contrainte "pas de date passée" ne saute que si l'événement est DÉJÀ
+  // passé avant cette modification (corriger une coquille) — jamais pour
+  // faire reculer un événement encore à venir (bug réel corrigé, voir
+  // validation/event.ts). Lu avant la validation : il faut la date
+  // ACTUELLEMENT enregistrée, pas celle du formulaire en cours de saisie.
+  const { data: currentEvent } = await supabase
+    .from("events")
+    .select("date_mode, starts_at")
+    .eq("id", eventId)
+    .maybeSingle();
+  const alreadyPast =
+    currentEvent?.date_mode === "fixed" &&
+    !!currentEvent.starts_at &&
+    new Date(currentEvent.starts_at) < new Date();
+
+  const parsed = updateEventSchema(alreadyPast).safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "invalid" };
+  }
+  const data = parsed.data;
 
   // Contrairement à createEvent (qui exige un vrai compte, l'hôte doit être
   // identifiable durablement), modifier un événement est une action d'ADMIN
