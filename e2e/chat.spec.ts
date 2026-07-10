@@ -261,10 +261,30 @@ test("message systeme, moderation admin, Coulisses masque au beneficiaire, anony
     await guest1Page.getByRole("button", { name: "Envoyer" }).click();
     await expect(page.getByText("Coucou")).toBeVisible({ timeout: 10_000 });
 
+    const { data: coucouMessage } = await supabaseAdmin
+      .from("messages")
+      .select("id")
+      .eq("event_id", event.id)
+      .eq("body", "Coucou")
+      .maybeSingle();
+
     // Les actions (Répondre/Supprimer) ne s'affichent qu'au tap sur le
     // message (retour Thomas : trop d'espace sinon sous chaque message).
-    await page.locator("li, div", { hasText: "Coucou" }).getByRole("button", { name: "Plus d'actions" }).first().click();
-    await page.locator("li, div", { hasText: "Coucou" }).getByRole("button", { name: "Supprimer" }).first().click();
+    // Ciblé via `data-message-id` (comme le test précédent) plutôt qu'un
+    // `"li, div", { hasText: "Coucou" }` générique : ce dernier matche TOUS
+    // les ancêtres div contenant ce texte jusqu'à un div très haut dans la
+    // page, et `.first()` peut alors résoudre un bouton totalement étranger
+    // partageant un sous-texte ("Supprimer" matchait "Supprimer l'événement"
+    // du bandeau de la page, en substring) — bug de test latent révélé par
+    // un changement de structure DOM du chat, pas une régression fonctionnelle.
+    await page
+      .locator(`[data-message-id="${coucouMessage!.id}"]`)
+      .getByRole("button", { name: "Plus d'actions" })
+      .click();
+    await page
+      .locator(`[data-message-id="${coucouMessage!.id}"]`)
+      .getByRole("button", { name: "Supprimer", exact: true })
+      .click();
     await page.getByRole("button", { name: "Oui, supprimer" }).click();
 
     await expect
@@ -333,6 +353,288 @@ test("message systeme, moderation admin, Coulisses masque au beneficiaire, anony
     for (const id of guestIds) {
       await deleteTestUser(id);
     }
+    await deleteTestUser(host.id);
+  }
+});
+
+// Retour de "Claude" transmis par Thomas : l'envoi d'un message faisait un
+// aller-retour complet (Postgres + Realtime) avant de s'afficher, même pour
+// son PROPRE expéditeur -- délai perçu ~200-500ms. Optimistic UI ajoutée
+// (ChatRoom.handleOptimisticSend/handleSendSettled, même principe déjà en
+// place pour les réactions) : la bulle doit apparaître avant même que le
+// serveur ne réponde. Vérifié en ralentissant artificiellement la Server
+// Action (route interceptée) : si la bulle apparaît alors que la réponse
+// réseau est encore volontairement bloquée, l'affichage est bien local, pas
+// piloté par la confirmation serveur ni par l'écho Realtime.
+test("l'envoi d'un message affiche la bulle immédiatement, avant la réponse du serveur", async ({
+  page,
+}) => {
+  const hostEmail = `e2e-chat-optimistic-${Date.now()}@example.com`;
+  const host = await loginAs(page, hostEmail);
+  let eventId: string | null = null;
+
+  try {
+    const title = `Fete chat optimistic ${Date.now()}`;
+    const event = await createTestEvent(page, title);
+    eventId = event.id;
+
+    await page.goto(`/e/${event.short_code}`);
+    await page.getByRole("button", { name: "Chat" }).click();
+    // Le composer n'apparaît qu'une fois `ensureMyChatRsvpId` résolu (l'hôte
+    // n'a pas de ligne rsvps automatique, voir ChatRoom) : attendre qu'il
+    // soit prêt AVANT d'installer le ralentissement réseau ci-dessous, sinon
+    // ce tout premier appel serait lui aussi retardé pour rien.
+    await expect(page.getByPlaceholder("Écris un message...")).toBeVisible({ timeout: 10_000 });
+
+    // Ralentit uniquement les Server Actions (identifiables par l'en-tête
+    // `next-action`), pas les autres requêtes (assets, RSC de navigation) :
+    // un délai global aurait aussi retardé le montage du panneau lui-même.
+    await page.route("**/*", async (route) => {
+      const isServerAction = route.request().headers()["next-action"] !== undefined;
+      if (isServerAction) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+      await route.continue();
+    });
+
+    await page.getByPlaceholder("Écris un message...").fill("Message optimiste");
+    await page.getByRole("button", { name: "Envoyer" }).click();
+
+    // La bulle et son statut "Envoi..." doivent être visibles bien avant les
+    // 2500ms de délai réseau artificiel imposé ci-dessus.
+    await expect(page.getByText("Message optimiste")).toBeVisible({ timeout: 500 });
+    await expect(page.getByText("Envoi...")).toBeVisible({ timeout: 500 });
+
+    // Une fois la Server Action confirmée (après le délai), le statut
+    // "Envoi..." disparaît (réconciliation avec l'id réel, voir
+    // ChatRoom.handleSendSettled) et le message est bien persisté en base.
+    await expect(page.getByText("Envoi...")).not.toBeVisible({ timeout: 5_000 });
+    await expect
+      .poll(async () => {
+        const { data } = await supabaseAdmin
+          .from("messages")
+          .select("id")
+          .eq("event_id", event.id)
+          .eq("body", "Message optimiste")
+          .maybeSingle();
+        return data?.id ?? null;
+      })
+      .not.toBeNull();
+  } finally {
+    if (eventId) {
+      await supabaseAdmin.from("events").delete().eq("id", eventId);
+    }
+    await deleteTestUser(host.id);
+  }
+});
+
+// Retour Thomas : "quand on clic sur le message où quelqu'un a mis répondre,
+// on est envoyé directement à la hauteur du message et il clignote avec un
+// contour orange pendant 5 secondes" -- ChatRoom.scrollToAndHighlight.
+test("cliquer sur une citation scrolle vers le message original et le met en surbrillance orange 5s", async ({
+  page,
+}) => {
+  const hostEmail = `e2e-chat-jump-${Date.now()}@example.com`;
+  const host = await loginAs(page, hostEmail);
+  let eventId: string | null = null;
+
+  try {
+    const title = `Fete chat jump ${Date.now()}`;
+    const event = await createTestEvent(page, title);
+    eventId = event.id;
+
+    await page.goto(`/e/${event.short_code}`);
+    await page.getByRole("button", { name: "Chat" }).click();
+    await expect(page.getByPlaceholder("Écris un message...")).toBeVisible({ timeout: 10_000 });
+
+    await page.getByPlaceholder("Écris un message...").fill("Message original");
+    await page.getByRole("button", { name: "Envoyer" }).click();
+    await expect(page.getByText("Message original")).toBeVisible({ timeout: 10_000 });
+
+    // L'affichage est désormais optimiste (bulle visible avant la réponse du
+    // serveur, voir "envoi d'un message affiche la bulle immédiatement"
+    // ci-dessus) : la ligne peut ne pas encore exister en base au moment où
+    // le texte est déjà visible à l'écran, `expect.poll` plutôt qu'une seule
+    // lecture directe.
+    let originalMessage: { id: string } | null = null;
+    await expect
+      .poll(async () => {
+        const { data } = await supabaseAdmin
+          .from("messages")
+          .select("id")
+          .eq("event_id", event.id)
+          .eq("body", "Message original")
+          .maybeSingle();
+        originalMessage = data;
+        return data?.id ?? null;
+      })
+      .not.toBeNull();
+
+    await page
+      .locator(`[data-message-id="${originalMessage!.id}"]`)
+      .getByRole("button", { name: "Plus d'actions" })
+      .click();
+    await page
+      .locator(`[data-message-id="${originalMessage!.id}"]`)
+      .getByRole("button", { name: "Répondre" })
+      .click();
+    await page.getByPlaceholder("Écris un message...").fill("Réponse au message original");
+    await page.getByRole("button", { name: "Envoyer" }).click();
+    await expect(page.getByText("Réponse au message original")).toBeVisible({ timeout: 10_000 });
+
+    // Clic sur la citation affichée au-dessus de la réponse : doit ramener
+    // à la hauteur du message original et le mettre en surbrillance.
+    await page.getByRole("button", { name: /Message original/ }).click();
+    const highlighted = page.locator(`[data-message-id="${originalMessage!.id}"] .chat-highlight`);
+    await expect(highlighted).toBeVisible();
+    // Disparaît d'elle-même après 5 secondes (setTimeout, voir ChatRoom).
+    await expect(highlighted).toBeHidden({ timeout: 6_000 });
+  } finally {
+    if (eventId) {
+      await supabaseAdmin.from("events").delete().eq("id", eventId);
+    }
+    await deleteTestUser(host.id);
+  }
+});
+
+// Retour Thomas : "je veux avoir tout les messages de la conversation",
+// confirmé : "quand j'arrive en haut, ça charge les 50 précédents, et
+// ensuite les 50 etc etc" -- scroll infini vers le haut (ChatRoom.
+// loadOlderMessages), 50 messages par page jusqu'à épuisement de l'historique.
+test("scroller vers le haut charge les messages plus anciens, 50 par 50", async ({ page }) => {
+  const hostEmail = `e2e-chat-pagination-${Date.now()}@example.com`;
+  const host = await loginAs(page, hostEmail);
+  let eventId: string | null = null;
+
+  try {
+    const title = `Fete chat pagination ${Date.now()}`;
+    const event = await createTestEvent(page, title);
+    eventId = event.id;
+
+    // Ouvre le chat une première fois pour que l'hôte ait sa ligne rsvps
+    // (ensure_own_rsvp, paresseux) avant d'insérer les messages directement.
+    await page.goto(`/e/${event.short_code}`);
+    await page.getByRole("button", { name: "Chat" }).click();
+    await expect(page.getByPlaceholder("Écris un message...")).toBeVisible({ timeout: 10_000 });
+
+    const { data: hostRsvp } = await supabaseAdmin
+      .from("rsvps")
+      .select("id")
+      .eq("event_id", event.id)
+      .eq("profile_id", host.id)
+      .single();
+
+    // 120 messages insérés directement en base (bien plus rapide que 120
+    // envois via l'UI), horodatés en ordre croissant.
+    const now = Date.now();
+    const rows = Array.from({ length: 120 }, (_, i) => ({
+      event_id: event.id,
+      rsvp_id: hostRsvp!.id,
+      channel: "main" as const,
+      body: `Message historique ${i + 1}`,
+      created_at: new Date(now - (120 - i) * 60_000).toISOString(),
+    }));
+    await supabaseAdmin.from("messages").insert(rows);
+
+    // Recharge la page pour que le Server Component EventChat charge les 50
+    // derniers messages fraîchement insérés.
+    await page.goto(`/e/${event.short_code}`);
+    await page.getByRole("button", { name: "Chat" }).click();
+    await expect(page.getByText("Message historique 120")).toBeVisible({ timeout: 10_000 });
+
+    const countLoaded = () => page.locator("[data-message-id]").count();
+    expect(await countLoaded()).toBe(50);
+
+    async function scrollToTop() {
+      await page.evaluate(() => {
+        const list = document.querySelector("[data-message-id]")?.closest(".overflow-y-auto");
+        if (list) list.scrollTop = 0;
+      });
+    }
+
+    await scrollToTop();
+    await expect.poll(countLoaded, { timeout: 10_000 }).toBe(100);
+
+    await scrollToTop();
+    await expect.poll(countLoaded, { timeout: 10_000 }).toBe(120);
+
+    // Plus rien à charger au-delà (seulement 120 messages au total) : un
+    // dernier scroll ne doit rien changer.
+    await scrollToTop();
+    await page.waitForTimeout(1000);
+    expect(await countLoaded()).toBe(120);
+
+    await expect(page.getByText("Message historique 1", { exact: true })).toBeVisible();
+  } finally {
+    if (eventId) {
+      await supabaseAdmin.from("events").delete().eq("id", eventId);
+    }
+    await deleteTestUser(host.id);
+  }
+});
+
+// Retour Thomas : "je vois message non lu, j'ai vu les messages mais si je
+// reviens sur accueil ou personnes ou participer et que je reviens dans le
+// chat, message non lu reste toujours affiché au même endroit" -- la ligne
+// ne doit apparaître qu'une fois, jamais se réafficher après un aller-retour
+// vers un autre onglet dans la même session (voir lastRead.ts).
+test("la ligne 'messages non lus' ne réapparaît pas après un aller-retour vers un autre onglet", async ({
+  page,
+  browser,
+}) => {
+  const hostEmail = `e2e-chat-unread-persist-${Date.now()}@example.com`;
+  const host = await loginAs(page, hostEmail);
+  let eventId: string | null = null;
+  let guestId: string | null = null;
+
+  try {
+    const title = `Fete chat unread persist ${Date.now()}`;
+    const event = await createTestEvent(page, title);
+    eventId = event.id;
+
+    const guestContext = await browser.newContext();
+    const guestPage = await guestContext.newPage();
+    await submitGuestIdentity(guestPage, event.short_code, "Marc");
+
+    const { data: rsvp } = await supabaseAdmin
+      .from("rsvps")
+      .select("id, profile_id")
+      .eq("event_id", event.id)
+      .eq("first_name", "Marc")
+      .maybeSingle();
+    guestId = rsvp!.profile_id;
+
+    await approveAsRole(page, event.short_code, "Marc", "invité");
+
+    await guestPage.goto(`/e/${event.short_code}`);
+    await guestPage.getByRole("button", { name: "Chat" }).click();
+    await guestPage.getByPlaceholder("Écris un message...").fill("Un message non lu pour l'hote");
+    await guestPage.getByRole("button", { name: "Envoyer" }).click();
+    await expect(guestPage.getByText("Un message non lu pour l'hote")).toBeVisible({ timeout: 10_000 });
+
+    // L'hôte ouvre le chat pour la première fois : doit voir la ligne "non lus".
+    await page.goto(`/e/${event.short_code}`);
+    await page.getByRole("button", { name: "Chat" }).click();
+    await expect(page.getByText("Un message non lu pour l'hote")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Messages non lus")).toBeVisible();
+
+    // Accueil, puis retour sur Chat : la ligne ne doit plus s'afficher.
+    await page.getByRole("button", { name: "Accueil" }).click();
+    await page.getByRole("button", { name: "Chat" }).click();
+    await expect(page.getByText("Un message non lu pour l'hote")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Messages non lus")).not.toBeVisible();
+
+    // Personnes, puis retour : toujours pas de ligne (pas un coup de chance).
+    await page.getByRole("button", { name: "Personnes" }).click();
+    await page.getByRole("button", { name: "Chat" }).click();
+    await expect(page.getByText("Messages non lus")).not.toBeVisible();
+
+    await guestContext.close();
+  } finally {
+    if (eventId) {
+      await supabaseAdmin.from("events").delete().eq("id", eventId);
+    }
+    if (guestId) await deleteTestUser(guestId);
     await deleteTestUser(host.id);
   }
 });

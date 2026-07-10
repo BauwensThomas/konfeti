@@ -259,11 +259,19 @@ export function EventTabs({
     if (tab === "chat" && eventId && viewerRsvpId) {
       setUnreadCount(0);
       unreadMessageIdsRef.current.clear();
+      // Pas d'écriture sessionStorage ici (voir lastRead.ts) : ce clic
+      // s'exécute AVANT que `ChatRoom` ne monte et ne calcule sa ligne
+      // "non lus" à partir de la dernière lecture connue -- écrire "now" ici
+      // effacerait la fenêtre de non-lus avant même qu'elle ait pu être
+      // calculée (bug réel rencontré : la ligne ne s'affichait plus du
+      // tout, y compris au tout premier passage). C'est `ChatRoom` lui-même
+      // qui écrit cette valeur, une fois la ligne "non lus" déjà déterminée.
+      const now = new Date().toISOString();
       const supabase = createClient();
       supabase
         .from("chat_reads")
         .upsert(
-          { event_id: eventId, rsvp_id: viewerRsvpId, channel: "main", last_read_at: new Date().toISOString() },
+          { event_id: eventId, rsvp_id: viewerRsvpId, channel: "main", last_read_at: now },
           { onConflict: "event_id,rsvp_id,channel" },
         )
         .then(() => {});

@@ -65,12 +65,16 @@ export function MessageComposer({
   channel,
   replyingTo,
   onCancelReply,
+  onOptimisticSend,
+  onSendSettled,
 }: {
   eventId: string;
   rsvpId: string;
   channel: "main" | "backstage";
   replyingTo: ChatMessageView | null;
   onCancelReply: () => void;
+  onOptimisticSend: (message: ChatMessageView) => void;
+  onSendSettled: (tempId: string, result: { ok: true; id: string } | { ok: false }) => void;
 }) {
   const t = useTranslations("Chat");
   // Initialiseur paresseux (pas un effet) : ChatRoom remonte ce composant
@@ -98,16 +102,39 @@ export function MessageComposer({
     if (!trimmed || isPending) return;
     updateBody("");
     setError(null);
+    const replyTo = replyingTo?.id;
+    onCancelReply();
+
+    // Optimistic UI (retour de "Claude" transmis par Thomas, confirmé) : la
+    // bulle apparaît immédiatement, avant même la réponse du serveur — voir
+    // le commentaire détaillé dans ChatRoom.handleOptimisticSend.
+    const tempId = `temp:${crypto.randomUUID()}`;
+    onOptimisticSend({
+      id: tempId,
+      channel,
+      body: trimmed,
+      photoUrl: null,
+      replyTo: replyTo ?? null,
+      isSystem: false,
+      deletedByAdmin: false,
+      createdAt: new Date().toISOString(),
+      rsvpId,
+      authorName: null,
+      authorAvatarUrl: null,
+      status: "sending",
+    });
+
     startTransition(async () => {
-      const result = await sendMessage({
-        eventId,
-        rsvpId,
-        channel,
-        body: trimmed,
-        replyTo: replyingTo?.id,
-      });
-      if (!result.ok) setError(t("sendError"));
-      onCancelReply();
+      const result = await sendMessage({ eventId, rsvpId, channel, body: trimmed, replyTo });
+      if (result.ok) {
+        onSendSettled(tempId, { ok: true, id: result.messageId });
+      } else {
+        // Bulle optimiste retirée (voir ChatRoom.handleSendSettled), texte
+        // remis dans le champ pour pouvoir renvoyer sans tout retaper.
+        setError(t("sendError"));
+        updateBody(trimmed);
+        onSendSettled(tempId, { ok: false });
+      }
     });
   }
 
@@ -128,16 +155,23 @@ export function MessageComposer({
       return;
     }
 
+    const replyTo = replyingTo?.id;
+    onCancelReply();
+
+    // Pas de bulle optimiste pour la photo (contrairement au texte) : l'
+    // upload lui-même (au-dessus) est déjà le vrai goulot de latence ici, pas
+    // l'aller-retour Realtime — l'optimistic UI n'apporterait donc pas le
+    // même gain perçu, pour un aperçu local à construire (`URL.createObjectURL`)
+    // en plus. Laissé pour une itération future si le besoin se confirme.
     startTransition(async () => {
       const result = await sendMessage({
         eventId,
         rsvpId,
         channel,
         photoUrl: uploadResult.path,
-        replyTo: replyingTo?.id,
+        replyTo,
       });
       if (!result.ok) setError(t("sendError"));
-      onCancelReply();
     });
   }
 
@@ -189,6 +223,14 @@ export function MessageComposer({
           onChange={handlePhotoChange}
         />
         <input
+          // Id stable ciblé directement par MessageBubble au clic sur
+          // "Répondre" (retour Thomas : "on arrive directement dans écrire
+          // message et sur mobile ça ouvre le clavier") -- le focus doit
+          // rester synchrone dans le MÊME gestionnaire de clic natif pour
+          // que le clavier virtuel s'ouvre sur mobile (Safari iOS ignore un
+          // `.focus()` déclenché depuis un effet React après coup, une fois
+          // sorti de la pile d'appel du geste utilisateur d'origine).
+          id="chat-message-input"
           type="text"
           value={body}
           onChange={(e) => updateBody(e.target.value)}

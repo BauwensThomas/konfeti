@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { editOwnMessage, moderateDeleteMessage, setReaction } from "@/app/[locale]/actions/chat";
 import { AvatarPlaceholder } from "@/components/AvatarPlaceholder";
@@ -19,20 +19,24 @@ export function MessageBubble({
   isAdmin,
   viewerRsvpId,
   showHeader,
+  isHighlighted,
   reactions,
   replyToPreview,
   onReply,
   onOptimisticSetReaction,
+  onJumpToMessage,
 }: {
   message: ChatMessageView;
   isOwnMessage: boolean;
   isAdmin: boolean;
   viewerRsvpId: string;
   showHeader: boolean;
+  isHighlighted: boolean;
   reactions: ChatReactionSummary[];
   replyToPreview: ChatMessageView | null;
   onReply: (message: ChatMessageView) => void;
   onOptimisticSetReaction: (messageId: string, oldEmoji: string | null, newEmoji: string | null) => void;
+  onJumpToMessage: (messageId: string) => void;
 }) {
   const t = useTranslations("Chat");
   const [isPending, startTransition] = useTransition();
@@ -66,28 +70,6 @@ export function MessageBubble({
     const timer = setTimeout(() => setWithinEditWindow(false), remaining);
     return () => clearTimeout(timer);
   }, [message.createdAt, withinEditWindow]);
-
-  // Position verticale de la réaction, mesurée plutôt que devinée en CSS pur
-  // (retour Thomas : "si le message fait plusieurs lignes, l'émoji se
-  // retrouve en bas et pas aligné avec les 3 petits points"). Le smiley/3-
-  // points sont centrés (`items-center`) DANS la ligne d'icônes, qui grandit
-  // avec le texte s'il fait plusieurs lignes — leur centre visuel n'est donc
-  // ni en haut ni en bas de cette ligne, mais à sa moitié exacte, à une
-  // hauteur qui dépend en plus de la présence ou non d'un nom/citation
-  // au-dessus (variable). `offsetTop`/`offsetHeight` de la ligne d'icônes
-  // (via `iconRowRef`) donnent cette position exacte par rapport au
-  // conteneur `relative` racine, quel que soit ce qui se trouve au-dessus.
-  const iconRowRef = useRef<HTMLDivElement>(null);
-  const [reactionCenterY, setReactionCenterY] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    const el = iconRowRef.current;
-    if (!el) return;
-    const measure = () => setReactionCenterY(el.offsetTop + el.offsetHeight / 2);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [message.body, showHeader, replyToPreview]);
 
   if (message.isSystem) {
     // Pas de marge ici : l'espacement (un peu d'air à l'ENTRÉE/SORTIE d'un
@@ -131,163 +113,168 @@ export function MessageBubble({
     });
   }
 
-  return (
-    <div className={`relative flex w-full gap-2 ${isOwnMessage ? "flex-row-reverse" : ""}`}>
-      {showHeader ? (
-        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full">
-          {message.authorAvatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- avatar déjà résolu (preset local ou photo signée)
-            <img src={message.authorAvatarUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <AvatarPlaceholder className="h-full w-full rounded-full" compact />
-          )}
-        </div>
-      ) : (
-        // Simple réservation de LARGEUR (alignement avec la colonne avatar),
-        // sans hauteur fixe : un vrai avatar (h-8 = 32px) forçait la ligne
-        // entière à 32px même une fois masqué (`invisible` garde ses
-        // dimensions), gonflant chaque message d'un groupe déjà compact
-        // (retour Thomas : "encore plus collé").
-        <div className="w-8 shrink-0" />
-      )}
+  // Date + heure (retour Thomas : "il faut aussi la date à côté de l'heure")
+  // -- format numérique compact (`10/07`), pas le format long ("10 juillet")
+  // déjà utilisé ailleurs sur la page événement : une bulle de chat est
+  // beaucoup plus étroite qu'un en-tête de page, la compacité prime ici.
+  const createdAtDate = new Date(message.createdAt);
+  const time = `${createdAtDate.toLocaleDateString("fr-BE", { day: "2-digit", month: "2-digit" })} ${createdAtDate.toLocaleTimeString(
+    "fr-BE",
+    { hour: "2-digit", minute: "2-digit" },
+  )}`;
+  const isSending = message.status === "sending";
 
-      <div className={`flex min-w-0 max-w-[75%] flex-col ${isOwnMessage ? "items-end" : "items-start"}`}>
+  return (
+    <div className={`flex w-full gap-2 ${isOwnMessage ? "justify-end" : ""}`}>
+      {!isOwnMessage &&
+        (showHeader ? (
+          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full">
+            {message.authorAvatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- avatar déjà résolu (preset local ou photo signée)
+              <img src={message.authorAvatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <AvatarPlaceholder className="h-full w-full rounded-full" compact />
+            )}
+          </div>
+        ) : (
+          // Simple réservation de LARGEUR (alignement avec la colonne avatar),
+          // sans hauteur fixe : un vrai avatar (h-8 = 32px) forçait la ligne
+          // entière à 32px même une fois masqué (`invisible` garde ses
+          // dimensions), gonflant chaque message d'un groupe déjà compact
+          // (retour Thomas : "encore plus collé").
+          <div className="w-8 shrink-0" />
+        ))}
+
+      <div className={`flex min-w-0 max-w-[75%] flex-col gap-1 ${isOwnMessage ? "items-end" : "items-start"}`}>
         {showHeader && (
-          <span className="mb-0.5 text-xs font-semibold text-foreground/60">{displayName}</span>
+          <span className="text-xs font-semibold text-foreground/60">{displayName}</span>
         )}
 
         {replyToPreview && (
-          <div className="mb-0.5 max-w-full rounded-r-konfeti border-l-2 border-primary bg-surface py-1 pl-2 pr-3 text-xs text-foreground/60">
+          // Cliquable : ramène directement à la hauteur du message cité,
+          // avec un contour orange clignotant 5 secondes pour le repérer
+          // (retour Thomas) -- voir ChatRoom.scrollToAndHighlight.
+          <button
+            type="button"
+            onClick={() => onJumpToMessage(replyToPreview.id)}
+            className="max-w-full rounded-r-konfeti border-l-2 border-primary bg-surface py-1 pl-2 pr-3 text-left text-xs text-foreground/60 hover:bg-primary/10"
+          >
             <span className="font-semibold">{replyToPreview.authorName ?? t("anonymousAuthor")}</span>
             {" : "}
             <span className="line-clamp-1">{replyToPreview.body ?? "📷"}</span>
+          </button>
+        )}
+
+        {editing ? (
+          <div className="flex w-full flex-col gap-1">
+            <textarea
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              rows={2}
+              className="w-full rounded-konfeti border border-border bg-surface px-3 py-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            />
+            {editError && <p className="text-xs text-accent-coral">{editError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={isPending || !editValue.trim()}
+                className="text-xs font-semibold text-primary disabled:opacity-50"
+              >
+                {t("editSave")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(false);
+                  setEditValue(message.body ?? "");
+                }}
+                className="text-xs font-semibold text-foreground/60"
+              >
+                {t("editCancel")}
+              </button>
+            </div>
+          </div>
+        ) : message.deletedByAdmin ? (
+          <div
+            className={`rounded-konfeti bg-surface px-3 py-2 text-sm text-foreground ${
+              isHighlighted ? "chat-highlight" : ""
+            }`}
+          >
+            <span className="italic opacity-70">{t("deletedByAdmin")}</span>
+          </div>
+        ) : message.photoUrl ? (
+          // Pas de bulle colorée autour d'une photo (comme avant) : juste
+          // l'image, coins arrondis, cliquable pour l'agrandir.
+          <button
+            type="button"
+            onClick={() => setPhotoEnlarged(true)}
+            className={isHighlighted ? "chat-highlight rounded-konfeti" : ""}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- photo utilisateur signée */}
+            <img src={message.photoUrl} alt="" className="max-h-60 rounded-konfeti object-contain" />
+          </button>
+        ) : (
+          // Vraies bulles pleines des deux côtés (retour Thomas : "je trouve
+          // le design du chat horrible... j'aimerais qu'il ressemble à un
+          // chat professionnel"). Avant, la bulle reçue utilisait `bg-surface`
+          // -- exactement la même couleur que le `Card` qui la contenait --
+          // donc invisible à l'œil ; et les messages envoyés n'avaient aucune
+          // bulle du tout, juste du texte vert (un choix fait plus tôt dans
+          // le projet, explicitement inversé ici par Thomas). Violet plein
+          // (`bg-primary`, déjà la couleur de toute action dans l'app) pour
+          // ses propres messages, blanc (`bg-surface`) pour les autres --
+          // redevient visible car le fond de la zone de chat est maintenant
+          // gris clair (`bg-canvas`, voir ChatRoom), pas blanc. L'heure est
+          // intégrée dans la bulle (comme WhatsApp), jamais une ligne séparée
+          // qui alourdirait chaque message.
+          <div
+            className={`flex max-w-full flex-col gap-0.5 rounded-konfeti px-3 py-2 text-sm ${
+              isOwnMessage ? "bg-primary text-white" : "bg-surface text-foreground"
+            } ${isSending ? "opacity-60" : ""} ${isHighlighted ? "chat-highlight" : ""}`}
+          >
+            <span className="whitespace-pre-line wrap-break-word">{message.body}</span>
+            <span
+              className={`self-end text-[10px] leading-none ${
+                isOwnMessage ? "text-white/70" : "text-foreground/45"
+              }`}
+            >
+              {isSending ? t("sending") : time}
+            </span>
           </div>
         )}
 
-        <div
-          ref={iconRowRef}
-          // Réserve un vrai espace vide (pas de recouvrement possible, contrairement
-          // à un positionnement purement décoratif) du côté où flotte le cluster
-          // émoji/3-points/réaction : sans ça, un texte assez long pour approcher
-          // le bord opposé se retrouvait SOUS ce cluster (retour Thomas : "quand
-          // on rajoute un smiley, ça passe au-dessus du texte"). Ce padding réduit
-          // la largeur de renvoi à la ligne du texte lui-même (pas juste un
-          // habillage visuel), donc aucun chevauchement possible quel que soit le
-          // nombre de lignes. TOUJOURS la même taille, réaction ou pas (retour
-          // Thomas : "le texte doit être identique avec émoji et sans émoji") —
-          // une taille qui varie selon la présence d'une réaction faisait
-          // reformater le texte (renvois à la ligne différents) au moment même
-          // où on ajoute/retire une réaction, ce qui n'est pas voulu. Dimensionnée
-          // au plus juste pour le pire cas avec réaction (retour Thomas : "il
-          // doit se rapprocher du smiley" — resserré une première fois après
-          // avoir vu le texte inutilement étroit). Inutile pendant l'édition
-          // ET pour un message supprimé par un admin (retour Thomas : "peut
-          // être sur une ligne car on ne sait plus mettre d'émoji") : le
-          // cluster n'est de toute façon jamais affiché sur ces deux états
-          // (voir plus bas, `!editing && !message.deletedByAdmin`), réserver
-          // quand même l'espace forçait "Message supprimé..." à repasser à la
-          // ligne pour rien.
-          className={`flex w-full min-w-0 items-center ${
-            editing || message.deletedByAdmin ? "" : isOwnMessage ? "pl-20" : "pr-20"
-          }`}
-        >
-              {editing ? (
-                <div className="flex w-full flex-col gap-1">
-                  <textarea
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    rows={2}
-                    className="w-full rounded-konfeti border border-border bg-surface px-3 py-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                  />
-                  {editError && <p className="text-xs text-accent-coral">{editError}</p>}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSaveEdit}
-                      disabled={isPending || !editValue.trim()}
-                      className="text-xs font-semibold text-primary disabled:opacity-50"
-                    >
-                      {t("editSave")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditing(false);
-                        setEditValue(message.body ?? "");
-                      }}
-                      className="text-xs font-semibold text-foreground/60"
-                    >
-                      {t("editCancel")}
-                    </button>
-                  </div>
-                </div>
-              ) : message.deletedByAdmin ? (
-                // Même padding que la bulle reçue normale (retour Thomas :
-                // "il faut resserrer ça aussi comme si c'était un message") —
-                // cette bulle avait gardé l'ancien `py-2` d'avant les
-                // resserrements successifs du chat, jamais mise à jour.
-                <div className="rounded-konfeti bg-surface px-3 py-0.5 text-sm text-foreground">
-                  <span className="italic opacity-70">{t("deletedByAdmin")}</span>
-                </div>
-              ) : message.photoUrl ? (
-                // Pas de bulle colorée autour d'une photo (retour Thomas) :
-                // juste l'image, coins arrondis, cliquable pour l'agrandir.
-                <button type="button" onClick={() => setPhotoEnlarged(true)}>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- photo utilisateur signée */}
-                  <img src={message.photoUrl} alt="" className="max-h-60 rounded-konfeti object-contain" />
-                </button>
-              ) : isOwnMessage ? (
-                // Retour Thomas : ses propres messages ne doivent plus avoir de
-                // bulle mauve, juste le texte en vert (couleur de marque
-                // existante `accent-mint`, jamais utilisée dans le chat jusqu'ici).
-                <div className="min-w-0 px-1 py-0 text-sm text-accent-mint">
-                  <span className="whitespace-pre-line wrap-break-word">{message.body}</span>
-                </div>
-              ) : (
-                <div className="min-w-0 rounded-konfeti bg-surface px-3 py-0.5 text-sm text-foreground">
-                  <span className="whitespace-pre-line wrap-break-word">{message.body}</span>
-                </div>
-              )}
-        </div>
+        {/* Réactions + smiley + 3-points : une simple ligne sous la bulle,
+            plus de positionnement absolu mesuré en JS (`ResizeObserver`) --
+            ça ne peut structurellement plus chevaucher le texte, donc plus
+            besoin non plus du padding de réserve qui existait pour ça.
+            Masqué pendant l'envoi optimiste : l'id temporaire de cette bulle
+            n'est pas encore un vrai id de message, réagir/répondre dessus
+            n'aurait pas de sens tant que le serveur n'a pas confirmé. */}
+        {!editing && !message.deletedByAdmin && !isSending && (
+          <div className={`flex items-center gap-1 ${isOwnMessage ? "flex-row-reverse" : ""}`}>
+            {reactions.length > 0 && (
+              <ReactionPills reactions={reactions} onToggle={handleReactionPick} disabled={isPending} />
+            )}
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              aria-label={t("addReaction")}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-foreground/40 hover:bg-primary/10 hover:text-foreground/70"
+            >
+              <SmileyIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              aria-label={t("moreActions")}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-foreground/40 hover:bg-primary/10 hover:text-foreground/70"
+            >
+              <MoreIcon className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
-
-      {/* Émoji, 3-points ET réaction déjà posée : tous les trois complètement
-          détachés du texte, ancrés au bord opposé (retour Thomas : "je ne
-          les trouve pas alignés si j'écris un mot de 2 lettres puis un de 5
-          lettres à la suite, les points ne se retrouvent pas au même
-          endroit" — quand ces boutons suivaient directement le texte, leur
-          position horizontale dépendait de la longueur de CHAQUE message,
-          donc sautait d'une ligne à l'autre). Alignés pile sur la hauteur du
-          texte (`reactionCenterY`, mesuré via `iconRowRef` sur la bulle
-          elle-même, recalculé à chaque changement de texte/en-tête/citation)
-          y compris pour un message multi-lignes. Position pas encore mesurée
-          (premier rendu) → invisible plutôt que mal placée un instant. */}
-      {!editing && !message.deletedByAdmin && (
-        <div
-          className={`absolute flex items-center gap-1 ${isOwnMessage ? "left-0 flex-row-reverse" : "right-0"} ${reactionCenterY === null ? "invisible" : ""}`}
-          style={{ top: reactionCenterY ?? 0, transform: "translateY(-50%)" }}
-        >
-          {reactions.length > 0 && (
-            <ReactionPills reactions={reactions} onToggle={handleReactionPick} disabled={isPending} />
-          )}
-          <button
-            type="button"
-            onClick={() => setPickerOpen(true)}
-            aria-label={t("addReaction")}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-foreground/40 hover:bg-primary/10 hover:text-foreground/70"
-          >
-            <SmileyIcon className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            aria-label={t("moreActions")}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-foreground/40 hover:bg-primary/10 hover:text-foreground/70"
-          >
-            <MoreIcon className="h-4 w-4" />
-          </button>
-        </div>
-      )}
 
       <Modal open={menuOpen} onClose={() => setMenuOpen(false)} fitContent>
         <div className="flex min-w-32 flex-col">
@@ -296,6 +283,11 @@ export function MessageBubble({
             onClick={() => {
               setMenuOpen(false);
               onReply(message);
+              // Synchrone, dans ce même clic (voir le commentaire sur l'id
+              // dans MessageComposer.tsx) : passer par un `useEffect` déclenché
+              // par le changement de `replyingTo` marcherait pour le focus
+              // "logique", mais pas pour ouvrir le clavier virtuel sur mobile.
+              document.getElementById("chat-message-input")?.focus();
             }}
             className="rounded-konfeti px-3 py-2 text-left text-sm font-semibold text-foreground hover:bg-primary/10"
           >

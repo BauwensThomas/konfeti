@@ -10,6 +10,14 @@ export type ChatMessageView = {
   rsvpId: string | null;
   authorName: string | null;
   authorAvatarUrl: string | null;
+  // Absent (`undefined`) pour un message déjà confirmé par le serveur (le cas
+  // normal, chargé depuis la base ou reçu par Realtime). "sending" ne
+  // concerne que la bulle optimiste ajoutée localement avant la réponse du
+  // serveur (voir ChatRoom.handleOptimisticSend) — jamais persisté. En cas
+  // d'échec, la bulle optimiste est retirée (pas de statut "failed" séparé :
+  // le texte revient dans le composer et le bandeau d'erreur existant
+  // explique déjà quoi faire, voir MessageComposer).
+  status?: "sending";
 };
 
 export type ChatReactionSummary = {

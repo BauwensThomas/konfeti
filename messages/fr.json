@@ -343,6 +343,7 @@
       "backstage": "Coulisses"
     },
     "emptyState": "Aucun message pour l'instant. Lance la conversation !",
+    "loadingOlder": "Chargement des messages précédents...",
     "unreadDivider": "Messages non lus",
     "anonymousAuthor": "Anonyme",
     "deletedByAdmin": "Message supprimé par un·e admin",
@@ -362,6 +363,7 @@
       "cancelReply": "Annuler"
     },
     "sendError": "L'envoi a échoué, réessaie.",
+    "sending": "Envoi...",
     "addReaction": "Ajouter une réaction",
     "moreActions": "Plus d'actions",
     "systemMessages": {

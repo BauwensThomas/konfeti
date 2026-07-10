@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { ensureRealtimeAuth } from "@/lib/supabase/realtime-auth";
 import { resolveAvatarUrl, resolveEventPhotoUrl } from "@/lib/avatars";
 import { subscribeToEventChat, type MessageRow, type ReactionRow } from "@/lib/chat/realtime";
 import { ensureMyChatRsvpId } from "@/app/[locale]/actions/chat";
-import { Card } from "@/components/ui/Card";
+import { readSessionLastReadAt, writeSessionLastReadAt } from "@/lib/chat/lastRead";
+import { ChatConfettiBackground } from "@/components/chat/ChatConfettiBackground";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageComposer } from "@/components/chat/MessageComposer";
 import type { ChatMessageView, ChatReactionSummary } from "@/components/chat/types";
@@ -38,10 +39,35 @@ export function ChatRoom({
     useState<Record<string, ChatReactionSummary[]>>(initialReactions);
   const [activeChannel, setActiveChannel] = useState<"main" | "backstage">("main");
   const [replyingTo, setReplyingTo] = useState<ChatMessageView | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const authorCacheRef = useRef(new Map<string, { name: string | null; avatarUrl: string | null }>());
   const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const scrolledToUnreadRef = useRef(false);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
+
+  // Pagination "charger plus ancien" (retour Thomas : "je veux avoir tout
+  // les messages de la conversation", confirmé : "quand j'arrive en haut, ça
+  // charge les 50 précédents, et ensuite les 50 etc etc"). `messagesRef`
+  // évite une closure périmée dans le handler de scroll (voir plus bas, posé
+  // une seule fois via un effet à dépendances vides) ; `loadingOlderRef`/
+  // `hasMoreOlderRef` (lus/écrits de façon synchrone dans ce même handler)
+  // servent de garde-fous contre les appels en double, `loadingOlder` (state)
+  // ne sert qu'à afficher le petit indicateur de chargement.
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const loadingOlderRef = useRef(false);
+  const hasMoreOlderRef = useRef(true);
+  // Hauteur/scroll juste avant de préfixer d'anciens messages : sans ça, le
+  // navigateur garde le même `scrollTop` alors que du contenu vient d'être
+  // inséré AU-DESSUS, ce qui fait visuellement "sauter" la conversation vers
+  // le bas au moment du chargement. Réappliqué dans un `useLayoutEffect`
+  // (avant peinture) une fois la nouvelle hauteur connue.
+  const pendingOlderScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
 
   // Position de lecture au premier message non lu (brief), figée une seule
   // fois : ne dépend jamais des messages arrivant ensuite en temps réel, ni
@@ -94,6 +120,117 @@ export function ChatRoom({
     },
     [isAdmin],
   );
+
+  // Charge les 50 messages précédant le plus ancien déjà en mémoire (voir
+  // commentaire sur `pendingOlderScrollRef` plus haut). Même logique de
+  // résolution auteur/photo/réactions que le rattrapage ci-dessous, appliquée
+  // à une fenêtre plus ancienne au lieu de la plus récente.
+  const loadOlderMessages = useCallback(async () => {
+    if (loadingOlderRef.current || !hasMoreOlderRef.current) return;
+    const oldest = messagesRef.current[0];
+    if (!oldest) return;
+
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const supabase = createClient();
+
+    const { data: rows } = await supabase
+      .from("messages")
+      .select("id, rsvp_id, channel, body, photo_url, reply_to, is_system, deleted_by_admin, created_at")
+      .eq("event_id", eventId)
+      .lt("created_at", oldest.createdAt)
+      .order("created_at", { ascending: false })
+      .limit(50)
+      .returns<MessageRow[]>();
+
+    if (!rows || rows.length === 0) {
+      hasMoreOlderRef.current = false;
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+      return;
+    }
+
+    const resolved = await Promise.all(
+      rows
+        .slice()
+        .reverse()
+        .map(async (row) => {
+          const [author, photoUrl] = await Promise.all([
+            row.rsvp_id ? resolveAuthor(supabase, row.rsvp_id) : Promise.resolve({ name: null, avatarUrl: null }),
+            resolveEventPhotoUrl(supabase, row.photo_url),
+          ]);
+          return rowToView(row, author, photoUrl);
+        }),
+    );
+
+    const messageIds = resolved.map((m) => m.id);
+    const { data: reactionRows } = await supabase
+      .from("message_reactions")
+      .select("message_id, rsvp_id, sticker_id")
+      .in("message_id", messageIds);
+    const byMessage = new Map<string, ChatReactionSummary[]>();
+    for (const r of reactionRows ?? []) {
+      const list = byMessage.get(r.message_id) ?? [];
+      const existing = list.find((e) => e.stickerId === r.sticker_id);
+      if (existing) {
+        existing.count += 1;
+        existing.reactedByMe = existing.reactedByMe || r.rsvp_id === viewerRsvpId;
+      } else {
+        list.push({ stickerId: r.sticker_id, count: 1, reactedByMe: r.rsvp_id === viewerRsvpId });
+      }
+      byMessage.set(r.message_id, list);
+    }
+    setReactionsByMessage((prev) => {
+      const next = { ...prev };
+      for (const id of messageIds) next[id] = byMessage.get(id) ?? [];
+      return next;
+    });
+
+    if (listRef.current) {
+      pendingOlderScrollRef.current = {
+        scrollHeight: listRef.current.scrollHeight,
+        scrollTop: listRef.current.scrollTop,
+      };
+    }
+
+    setMessages((prev) => {
+      const byId = new Map(resolved.map((m) => [m.id, m]));
+      for (const m of prev) byId.set(m.id, m);
+      return Array.from(byId.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    });
+
+    if (rows.length < 50) {
+      hasMoreOlderRef.current = false;
+    }
+    loadingOlderRef.current = false;
+    setLoadingOlder(false);
+  }, [eventId, resolveAuthor, viewerRsvpId]);
+
+  // Déclenche le chargement des plus anciens en approchant du haut de la
+  // liste (scroll infini) : posé une seule fois (dépendances quasi figées,
+  // `loadOlderMessages` ne change que si `eventId`/`viewerRsvpId` changent)
+  // plutôt que d'être re-attaché à chaque nouveau message.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    function handleScroll() {
+      if (el && el.scrollTop < 100) loadOlderMessages();
+    }
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [loadOlderMessages]);
+
+  // Restaure la position de lecture juste après l'insertion de messages plus
+  // anciens (voir `pendingOlderScrollRef` plus haut) : `useLayoutEffect`,
+  // avant peinture, pour ne jamais voir le "saut" vers le bas d'un seul
+  // frame.
+  useLayoutEffect(() => {
+    const pending = pendingOlderScrollRef.current;
+    if (!pending || !listRef.current) return;
+    const newScrollHeight = listRef.current.scrollHeight;
+    listRef.current.scrollTop = pending.scrollTop + (newScrollHeight - pending.scrollHeight);
+    pendingOlderScrollRef.current = null;
+  }, [messages]);
 
   // Rattrapage au montage : ce panneau se démonte/remonte à chaque
   // changement d'onglet (voir EventTabs), donc un message envoyé pendant
@@ -179,14 +316,39 @@ export function ChatRoom({
       // (nouveau compte). Traité comme "rien lu du tout" (chaîne vide, plus
       // petite que n'importe quelle date ISO réelle) plutôt que d'annuler la
       // fonctionnalité, sinon la ligne ne s'affichait quasiment jamais.
+      //
+      // `initialLastReadAt` vient du Server Component `EventChat`, qui ne se
+      // reconstruit qu'au prochain VRAI chargement de page -- il reste donc
+      // figé à la valeur d'avant cette session si on revient sur l'onglet
+      // Chat après être passé par Accueil/Personnes/Participer (ce panneau
+      // se démonte/remonte, mais la page elle-même n'est jamais rechargée).
+      // `readSessionLastReadAt` (sessionStorage, voir lastRead.ts) retient
+      // la lecture la plus récente DE CETTE SESSION navigateur, mise à jour
+      // par `EventTabs.handleTabClick` à chaque clic sur l'onglet Chat et
+      // par le handler Realtime plus bas : on prend la plus récente des deux
+      // (retour Thomas : "message non lu reste toujours affiché au même
+      // endroit" après un aller-retour vers un autre onglet).
+      const sessionLastReadAt = readSessionLastReadAt(eventId);
+      const effectiveLastReadAt =
+        sessionLastReadAt && sessionLastReadAt > (initialLastReadAt ?? "")
+          ? sessionLastReadAt
+          : initialLastReadAt;
       const unread = resolved.find(
         (m) =>
           m.channel === "main" &&
           !m.isSystem &&
           m.rsvpId !== initialViewerRsvpId &&
-          m.createdAt > (initialLastReadAt ?? ""),
+          m.createdAt > (effectiveLastReadAt ?? ""),
       );
       setFirstUnreadId(unread?.id ?? null);
+
+      // Écrit la position de lecture APRÈS l'avoir utilisée ci-dessus (pas
+      // avant, voir EventTabs.handleTabClick) : au prochain démontage/
+      // remontage de ce panneau dans la même session navigateur (retour sur
+      // Chat après Accueil/Personnes/Participer), la ligne "non lus" ne
+      // réapparaîtra plus pour des messages déjà affichés lors de CE
+      // passage.
+      writeSessionLastReadAt(eventId, new Date().toISOString());
     })();
 
     return () => {
@@ -215,10 +377,15 @@ export function ChatRoom({
       // prochain F5 (retour Thomas : "ça sert à rien de voir une notif d'un
       // message déjà vu").
       if (row.channel === "main" && row.rsvp_id !== viewerRsvpId && viewerRsvpId) {
+        const now = new Date().toISOString();
+        // Relais sessionStorage (voir lastRead.ts) : même raison que dans
+        // EventTabs.handleTabClick, ce panneau se démonte/remonte à chaque
+        // changement d'onglet sans que la page ne recharge.
+        writeSessionLastReadAt(eventId, now);
         await supabase
           .from("chat_reads")
           .upsert(
-            { event_id: eventId, rsvp_id: viewerRsvpId, channel: "main", last_read_at: new Date().toISOString() },
+            { event_id: eventId, rsvp_id: viewerRsvpId, channel: "main", last_read_at: now },
             { onConflict: "event_id,rsvp_id,channel" },
           );
       }
@@ -337,6 +504,18 @@ export function ChatRoom({
   const visibleMessages = messages.filter((m) => m.channel === activeChannel);
 
   useEffect(() => {
+    // Charger d'anciens messages (scroll infini) fait aussi grandir
+    // `visibleMessages.length`, mais PAR LE HAUT : sans ce garde-fou, cet
+    // effet forcerait un saut vers le bas à chaque page chargée, annulant la
+    // restauration de position faite par ailleurs (`pendingOlderScrollRef`).
+    // Seul un changement du DERNIER message (nouveau message réel, ou
+    // changement d'onglet) doit déclencher un scroll — jamais un ajout en
+    // tête de liste.
+    const lastId = visibleMessages[visibleMessages.length - 1]?.id ?? null;
+    const isChangeAtBottom = lastId !== lastMessageIdRef.current;
+    lastMessageIdRef.current = lastId;
+    if (!isChangeAtBottom) return;
+
     if (!scrolledToUnreadRef.current && firstUnreadId && activeChannel === "main") {
       const unreadEl = listRef.current?.querySelector(`[data-message-id="${firstUnreadId}"]`);
       if (unreadEl) {
@@ -346,6 +525,10 @@ export function ChatRoom({
       }
     }
     bottomRef.current?.scrollIntoView({ block: "end" });
+    // `visibleMessages` volontairement absent : c'est un nouveau tableau à
+    // chaque rendu (`.filter()`), l'ajouter ferait tourner cet effet à
+    // chaque rendu au lieu de seulement quand la longueur change réellement.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleMessages.length, activeChannel, firstUnreadId]);
 
   function handleOptimisticSetReaction(messageId: string, oldEmoji: string | null, newEmoji: string | null) {
@@ -355,107 +538,195 @@ export function ChatRoom({
     );
   }
 
+  // Optimistic UI à l'envoi (même principe que les réactions ci-dessus,
+  // déjà en place) : la bulle apparaît immédiatement au clic, avant même la
+  // réponse du serveur — le délai perçu passe de ~200-500ms (aller-retour
+  // complet Postgres + Realtime avant que son PROPRE message ne revienne) à
+  // zéro. `handleOptimisticSend` ajoute la bulle temporaire (id `temp:...`),
+  // `handleSendSettled` la réconcilie une fois la réponse connue.
+  function handleOptimisticSend(message: ChatMessageView) {
+    setMessages((prev) => [...prev, message]);
+  }
+
+  function handleSendSettled(tempId: string, result: { ok: true; id: string } | { ok: false }) {
+    setMessages((prev) => {
+      if (!result.ok) return prev.filter((m) => m.id !== tempId);
+      // Course rare mais possible : l'écho Realtime du même envoi (voir
+      // handleInsert) est arrivé avant que cette réconciliation ne s'exécute
+      // — la ligne réelle est alors déjà présente, on retire simplement la
+      // bulle temporaire plutôt que de risquer un doublon.
+      if (prev.some((m) => m.id === result.id)) return prev.filter((m) => m.id !== tempId);
+      return prev.map((m) => (m.id === tempId ? { ...m, id: result.id, status: undefined } : m));
+    });
+  }
+
+  // Retour Thomas : cliquer sur la citation d'un message ("répondu à X")
+  // doit ramener directement à la hauteur du message original, avec un
+  // contour orange clignotant 5 secondes pour le repérer (voir la classe
+  // `.chat-highlight`/`highlight-blink` dans globals.css). Si le message
+  // cité n'est plus chargé (au-delà de la fenêtre des 50 derniers messages,
+  // pas de pagination "charger plus ancien" pour l'instant), `querySelector`
+  // ne trouve rien : no-op silencieux plutôt qu'une erreur, cas limite
+  // assumé pour l'instant.
+  function scrollToAndHighlight(messageId: string) {
+    const el = listRef.current?.querySelector(`[data-message-id="${messageId}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    setHighlightedMessageId(messageId);
+    highlightTimeoutRef.current = setTimeout(() => setHighlightedMessageId(null), 5000);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    };
+  }, []);
+
   return (
-    <Card className="flex h-[70vh] flex-col gap-3">
+    // Pas le composant `Card` partagé ici (contrairement au reste de l'app) :
+    // son `p-6` intégré est impossible à annuler proprement en surchargeant
+    // juste `className` (deux classes Tailwind sur la même propriété, l'ordre
+    // de priorité réelle dépend de l'ordre de génération de la feuille de
+    // style, pas de l'ordre dans le JSX -- piège connu). Un `div` autonome
+    // avec le même habillage visuel (bordure/coins/ombre) mais SANS padding
+    // permet au fond gris de remplir vraiment toute la boîte, bords compris
+    // (retour Thomas : "il faut remplir tout le box du chat") -- chaque
+    // enfant (bandeau Coulisses, liste, composer) gère son propre padding.
+    <div className="flex h-[70vh] flex-col overflow-hidden rounded-konfeti border border-border bg-canvas shadow-konfeti">
       {showBackstageToggle && (
-        <div className="flex rounded-full bg-surface p-1 shadow-konfeti">
-          {(["main", "backstage"] as const).map((ch) => (
-            <button
-              key={ch}
-              type="button"
-              onClick={() => setActiveChannel(ch)}
-              className={`flex-1 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
-                activeChannel === ch ? "bg-primary text-white" : "text-foreground/70"
-              }`}
-            >
-              {t(ch === "main" ? "tabs.main" : "tabs.backstage")}
-            </button>
-          ))}
+        <div className="flex shrink-0 gap-1 bg-surface p-3 pb-0">
+          <div className="flex flex-1 rounded-full bg-canvas p-1">
+            {(["main", "backstage"] as const).map((ch) => (
+              <button
+                key={ch}
+                type="button"
+                onClick={() => setActiveChannel(ch)}
+                className={`flex-1 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  activeChannel === ch ? "bg-primary text-white" : "text-foreground/70"
+                }`}
+              >
+                {t(ch === "main" ? "tabs.main" : "tabs.backstage")}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* `-mx-6` annule le padding horizontal hérité de `Card` (p-6) pour que
-          cette liste s'étende jusqu'aux bords réels du cadre blanc : la
-          barre de défilement native (rendue à l'extrémité droite de la boîte
-          scrollable) se retrouve alors collée au bord (retour Thomas), et un
-          `px-2` plus modeste ramène les avatars/bulles "presque collés" aux
-          bords plutôt que collés à 24px comme avant, sans les faire chevaucher
-          les coins arrondis de la carte. */}
-      <div
-        ref={listRef}
-        className="-mx-6 flex flex-1 flex-col gap-0 overflow-y-auto overflow-x-hidden px-2"
-      >
-        {visibleMessages.length === 0 ? (
-          <p className="py-8 text-center text-sm text-foreground/60">{t("emptyState")}</p>
-        ) : (
-          visibleMessages.map((message, index) => {
-            if (!viewerRsvpId) return null;
-            const previous = visibleMessages[index - 1];
-            const isUnreadStart = message.id === firstUnreadId;
-            // Regroupe les messages consécutifs du même auteur (comme
-            // WhatsApp/Messenger) : nom + avatar ne se répètent pas à chaque
-            // ligne, seulement au premier message d'une série — gain d'espace
-            // vertical direct (retour Thomas : "il y a trop d'espace").
-            // Toujours réaffiché juste après la ligne "non lus", pour ne pas
-            // perdre le repère de qui parle à la reprise de lecture.
-            const previousIsSystem = previous?.isSystem ?? false;
-            const showHeader =
-              !message.isSystem &&
-              (isUnreadStart || !previous || previousIsSystem || previous.rsvpId !== message.rsvpId);
-            // Séparation visible seulement entre deux groupes différents :
-            // deux expéditeurs différents, OU une transition message normal
-            // ↔ message système. Des messages système consécutifs (retour
-            // Thomas : plusieurs "X a rejoint la fête" d'affilée, typique des
-            // tests répétés de quitter/revenir) restent collés entre eux —
-            // seule l'ENTRÉE dans un bloc système (ou la sortie) mérite un
-            // peu d'air, jamais l'intérieur d'un bloc déjà homogène.
-            const isNewGroup =
-              index > 0 &&
-              (isUnreadStart ||
-                message.isSystem !== previousIsSystem ||
-                (!message.isSystem && previous.rsvpId !== message.rsvpId));
-            return (
-              <div
-                key={message.id}
-                data-message-id={message.id}
-                className={`flex flex-col gap-1.5 ${isNewGroup ? "mt-2.5" : ""}`}
-              >
-                {isUnreadStart && (
-                  <div className="flex items-center gap-2 py-1 text-xs font-semibold text-accent-coral">
-                    <span className="h-px flex-1 bg-accent-coral/40" />
-                    {t("unreadDivider")}
-                    <span className="h-px flex-1 bg-accent-coral/40" />
-                  </div>
-                )}
-                <MessageBubble
-                  message={message}
-                  isOwnMessage={message.rsvpId === viewerRsvpId}
-                  isAdmin={isAdmin}
-                  viewerRsvpId={viewerRsvpId}
-                  showHeader={showHeader}
-                  reactions={reactionsByMessage[message.id] ?? []}
-                  replyToPreview={message.replyTo ? (messagesById.get(message.replyTo) ?? null) : null}
-                  onReply={setReplyingTo}
-                  onOptimisticSetReaction={handleOptimisticSetReaction}
-                />
-              </div>
-            );
-          })
-        )}
-        <div ref={bottomRef} />
+      {/* `bg-canvas` (gris clair neutre, retour Thomas : "le fond d'écran du
+          chat doit être gris clair") donne enfin un vrai contraste bulle/fond
+          -- les bulles reçues (blanches) et le fond partageaient exactement
+          la même couleur jusqu'ici (l'ancien `Card` blanc), les rendant
+          invisibles à l'œil.
+
+          `ChatConfettiBackground` doit être ANCRÉ DANS le contenu qui défile,
+          pas épinglé au cadre visible (retour Thomas, après un premier essai
+          en sens inverse : "les confettis doivent être ancrés dans le chat,
+          quand je défile vers le bas ça doit être des autres" -- des pièces
+          DIFFÉRENTES doivent apparaître plus bas dans une longue conversation,
+          pas toujours les 26 mêmes figées en haut). Le confetti est donc
+          posé en `absolute inset-0` DANS ce wrapper interne `relative z-0`
+          (pas dans le `div` scrollable lui-même) : ce wrapper est en flux
+          normal à l'intérieur de la zone défilante, sa hauteur "auto" grandit
+          avec le nombre de messages empilés (les enfants en position absolue
+          ne comptent pas dans ce calcul de hauteur, seuls les messages en
+          flux normal le font) -- le confetti, en `inset-0` dedans, s'étire
+          donc sur TOUTE la hauteur de la conversation, pas seulement la
+          fenêtre visible initiale, et défile avec elle comme un vrai élément
+          de contenu. `z-0` (pas juste `relative`) : sans z-index explicite,
+          un enfant à `-z-10` "s'échappe" vers le contexte d'empilement d'un
+          ancêtre plus large -- rendu alors DERRIÈRE le `bg-canvas` (opaque)
+          au lieu de devant, un piège déjà rencontré une fois. */}
+      <div ref={listRef} className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
+        <div className="relative z-0 flex flex-col gap-0">
+          <ChatConfettiBackground />
+          {loadingOlder && (
+            <p className="py-2 text-center text-xs text-foreground/50">{t("loadingOlder")}</p>
+          )}
+          {visibleMessages.length === 0 ? (
+            <p className="py-8 text-center text-sm text-foreground/60">{t("emptyState")}</p>
+          ) : (
+            visibleMessages.map((message, index) => {
+              if (!viewerRsvpId) return null;
+              const previous = visibleMessages[index - 1];
+              const isUnreadStart = message.id === firstUnreadId;
+              const isOwnMessage = message.rsvpId === viewerRsvpId;
+              // Regroupe les messages consécutifs du même auteur (comme
+              // WhatsApp/Messenger) : nom + avatar ne se répètent pas à chaque
+              // ligne, seulement au premier message d'une série — gain d'espace
+              // vertical direct (retour Thomas : "il y a trop d'espace").
+              // Toujours réaffiché juste après la ligne "non lus", pour ne pas
+              // perdre le repère de qui parle à la reprise de lecture. Jamais
+              // affiché sur ses PROPRES messages (bulle colorée + alignement à
+              // droite suffisent à s'identifier, comme dans tout chat pro) —
+              // accessoirement, ça évite d'avoir besoin de connaître son propre
+              // nom pour la bulle optimiste ajoutée avant confirmation serveur.
+              const previousIsSystem = previous?.isSystem ?? false;
+              const showHeader =
+                !message.isSystem &&
+                !isOwnMessage &&
+                (isUnreadStart || !previous || previousIsSystem || previous.rsvpId !== message.rsvpId);
+              // Séparation visible seulement entre deux groupes différents :
+              // deux expéditeurs différents, OU une transition message normal
+              // ↔ message système. Des messages système consécutifs (retour
+              // Thomas : plusieurs "X a rejoint la fête" d'affilée, typique des
+              // tests répétés de quitter/revenir) restent collés entre eux —
+              // seule l'ENTRÉE dans un bloc système (ou la sortie) mérite un
+              // peu d'air, jamais l'intérieur d'un bloc déjà homogène.
+              const isNewGroup =
+                index > 0 &&
+                (isUnreadStart ||
+                  message.isSystem !== previousIsSystem ||
+                  (!message.isSystem && previous.rsvpId !== message.rsvpId));
+              return (
+                <div
+                  key={message.id}
+                  data-message-id={message.id}
+                  className={`flex flex-col gap-1.5 ${isNewGroup ? "mt-2.5" : ""}`}
+                >
+                  {isUnreadStart && (
+                    <div className="flex items-center gap-2 py-1 text-xs font-semibold text-accent-coral">
+                      <span className="h-px flex-1 bg-accent-coral/40" />
+                      {t("unreadDivider")}
+                      <span className="h-px flex-1 bg-accent-coral/40" />
+                    </div>
+                  )}
+                  <MessageBubble
+                    message={message}
+                    isOwnMessage={isOwnMessage}
+                    isAdmin={isAdmin}
+                    viewerRsvpId={viewerRsvpId}
+                    showHeader={showHeader}
+                    isHighlighted={message.id === highlightedMessageId}
+                    reactions={reactionsByMessage[message.id] ?? []}
+                    replyToPreview={message.replyTo ? (messagesById.get(message.replyTo) ?? null) : null}
+                    onReply={setReplyingTo}
+                    onJumpToMessage={scrollToAndHighlight}
+                    onOptimisticSetReaction={handleOptimisticSetReaction}
+                  />
+                </div>
+              );
+            })
+          )}
+          <div ref={bottomRef} />
+        </div>
       </div>
 
       {viewerRsvpId && (
-        <MessageComposer
-          key={activeChannel}
-          eventId={eventId}
-          rsvpId={viewerRsvpId}
-          channel={activeChannel}
-          replyingTo={replyingTo}
-          onCancelReply={() => setReplyingTo(null)}
-        />
+        <div className="shrink-0 bg-surface px-4 pb-4">
+          <MessageComposer
+            key={activeChannel}
+            eventId={eventId}
+            rsvpId={viewerRsvpId}
+            channel={activeChannel}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyingTo(null)}
+            onOptimisticSend={handleOptimisticSend}
+            onSendSettled={handleSendSettled}
+          />
+        </div>
       )}
-    </Card>
+    </div>
   );
 }
 

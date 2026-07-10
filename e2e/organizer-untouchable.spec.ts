@@ -7,11 +7,6 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-const supabaseAnon = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
-
 async function authedClientFor(email: string) {
   const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
     type: "magiclink",

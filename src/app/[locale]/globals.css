@@ -19,6 +19,17 @@
 
   --color-surface: #ffffff;
   --color-border: #ece1fb;
+  /* Gris clair neutre (pas violet/crème comme le reste de la palette) : sert
+     de "canevas" pour une zone de contenu dense où d'autres éléments doivent
+     se détacher par contraste (ex. les bulles du chat) -- retour Thomas :
+     "le fond d'écran du chat doit être gris clair". */
+  --color-canvas: #f2f1f4;
+  /* Orange dédié à l'attention ponctuelle ("va voir ici"), distinct des 4
+     couleurs de marque déjà toutes prises par un autre sens (violet =
+     action, jaune = accent secondaire, corail = danger, menthe = succès) --
+     retour Thomas : contour orange clignotant quand on saute à un message
+     cité (voir Chat, "Répondre"). */
+  --color-highlight: #f97316;
 }
 
 @theme inline {
@@ -32,9 +43,30 @@
   --color-accent-mint: var(--color-accent-mint);
   --color-surface: var(--color-surface);
   --color-border: var(--color-border);
+  --color-canvas: var(--color-canvas);
+  --color-highlight: var(--color-highlight);
   --font-display: var(--font-display);
   --font-body: var(--font-body);
   --radius-konfeti: 1.25rem;
+}
+
+/* Saut vers un message cité (Chat, clic sur "Répondre à X") : contour
+   orange qui clignote 5 fois sur 5 secondes, puis disparaît (piloté par un
+   `setTimeout` côté React qui retire la classe, voir ChatRoom.tsx). */
+@keyframes highlight-blink {
+  0%,
+  100% {
+    outline-color: transparent;
+  }
+  50% {
+    outline-color: var(--color-highlight);
+  }
+}
+
+.chat-highlight {
+  outline: 3px solid transparent;
+  outline-offset: 2px;
+  animation: highlight-blink 1s ease-in-out 5;
 }
 
 body {
