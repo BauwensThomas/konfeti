@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveAvatarUrl } from "@/lib/avatars";
 import { ProfileCompletionForm } from "@/components/ProfileCompletionForm";
+import { LoginForm } from "@/components/LoginForm";
 
 // Édition du profil, accessible à tout moment (bouton "Modifier mon profil"
 // du footer), y compris à une session anonyme "code d'accès" (retour
@@ -69,6 +70,28 @@ export default async function ProfilePage() {
           avatarPreviewUrl,
         }}
       />
+
+      {/* Retour Thomas : proposer de passer à un vrai compte directement
+          depuis le profil, sans perdre les infos déjà remplies -- possible
+          seulement parce que sendMagicLink/signInWithGoogle détectent déjà
+          une session anonyme et la MET À NIVEAU (updateUser/linkIdentity,
+          même auth.uid()) au lieu de créer un compte séparé (voir
+          actions/auth.ts) : rien à faire ici d'autre que réutiliser
+          LoginForm tel quel. */}
+      {user.is_anonymous && (
+        // `id` : cible du lien "Se connecter pour ne rien perdre" affiché
+        // sur la page événement et "Mes événements" (voir LinkAccountBanner),
+        // pour arriver directement sur cette section plutôt qu'en haut de page.
+        <div id="lien-compte" className="flex w-full max-w-sm scroll-mt-20 flex-col gap-4 border-t border-border pt-8">
+          <div className="flex flex-col gap-2">
+            <h2 className="font-display text-xl font-bold text-primary">
+              {t("linkAccountHeading")}
+            </h2>
+            <p className="text-sm text-foreground/80">{t("linkAccountSubheading")}</p>
+          </div>
+          <LoginForm />
+        </div>
+      )}
     </main>
   );
 }

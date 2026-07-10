@@ -111,6 +111,65 @@ export function EventTabs({
           { event: "UPDATE", schema: "public", table: "rsvps_public_data" },
           () => router.refresh(),
         )
+        // Toute modification via le wizard "Modifier" (titre, date, adresse,
+        // thème, qui peut partager le lien, cagnotte...) doit aussi se
+        // refléter automatiquement (retour Thomas : "toutes les
+        // modifications apportées doivent s'actualiser automatiquement chez
+        // tout le monde"), pas seulement les changements de participants.
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "events" },
+          () => router.refresh(),
+        )
+        .subscribe();
+    });
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [eventId, router]);
+
+  // Un vote sur le sondage de date (ajout OU retrait, chacun coche/décoche
+  // librement) doit aussi apparaître en direct chez les autres participants
+  // sur l'onglet Accueil (retour Thomas, même exigence que les rsvps/events
+  // ci-dessus étendue au vote). `date_options` n'a pas besoin de son propre
+  // abonnement : elle n'est modifiée que par `updateEvent`, toujours
+  // accompagnée d'une mise à jour de `events` (canal ci-dessus).
+  //
+  // Sur un CANAL À PART, jamais fusionné avec celui au-dessus : un bug réel
+  // rencontré en le construisant l'a confirmé -- une seule table demandée
+  // dans un `.on(...)` qui n'est pas (encore) activée côté Realtime fait
+  // échouer l'abonnement de TOUT le canal ("Unable to subscribe... Please
+  // check Realtime is enabled", visible dans les frames WebSocket brutes),
+  // y compris les tables qui, elles, fonctionnaient très bien. Isoler chaque
+  // groupe de tables sur son propre canal limite la casse à lui seul si l'une
+  // d'elles n'est pas (encore) prête côté base.
+  useEffect(() => {
+    if (!eventId) return;
+    let cancelled = false;
+    const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    ensureRealtimeAuth(supabase).then(() => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`event-${eventId}-date-votes`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "date_votes" },
+          () => router.refresh(),
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "date_votes" },
+          () => router.refresh(),
+        )
+        .on(
+          "postgres_changes",
+          { event: "DELETE", schema: "public", table: "date_votes" },
+          () => router.refresh(),
+        )
         .subscribe();
     });
 

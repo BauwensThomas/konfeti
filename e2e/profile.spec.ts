@@ -27,31 +27,6 @@ async function createTestEvent(page: import("@playwright/test").Page, title: str
   return event;
 }
 
-test("footer : lien profil visible pour un vrai compte, masque sur /connexion", async ({ page }) => {
-  const hostEmail = `e2e-profile-footer-${Date.now()}@example.com`;
-  let hostId: string | null = null;
-
-  try {
-    const host = await loginAs(page, hostEmail);
-    hostId = host.id;
-
-    await expect(page.getByRole("link", { name: "Modifier mon profil" })).toBeVisible();
-    const year = new Date().getFullYear();
-    await expect(page.getByText(`Konfeti - ${year} - Belgacai`)).toBeVisible();
-
-    // Signe hors de la session pour retomber sur une page publique, puis
-    // navigue vers une route protegee -> redirection /connexion : le lien
-    // "Modifier mon profil" ne doit pas y apparaitre (retour Thomas : "est-ce
-    // correct ?" -- non, corrige).
-    await page.context().clearCookies();
-    await page.goto("/creer");
-    await expect(page).toHaveURL(/\/connexion/);
-    await expect(page.getByRole("link", { name: "Modifier mon profil" })).not.toBeVisible();
-  } finally {
-    if (hostId) await deleteTestUser(hostId);
-  }
-});
-
 test("edition du profil (vrai compte) : prerempli, sauvegarde, propagation live sans reload", async ({ page }) => {
   const hostEmail = `e2e-profile-edit-${Date.now()}@example.com`;
   let hostId: string | null = null;
@@ -81,7 +56,7 @@ test("edition du profil (vrai compte) : prerempli, sauvegarde, propagation live 
     await expect(page.getByText("coucou avant modif")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("Hote Original")).toBeVisible();
 
-    await page.getByRole("link", { name: "Modifier mon profil" }).click();
+    await page.getByRole("link", { name: "Mon profil", exact: true }).click();
     await expect(page).toHaveURL(/\/profil$/);
     await expect(page.locator('input[placeholder="Julie"]')).toHaveValue("Hote");
 
@@ -136,8 +111,8 @@ test("un invite anonyme peut modifier son profil, prerempli depuis sa participat
       timeout: 10_000,
     });
 
-    await expect(guestPage.getByRole("link", { name: "Modifier mon profil" })).toBeVisible();
-    await guestPage.getByRole("link", { name: "Modifier mon profil" }).click();
+    await expect(guestPage.getByRole("link", { name: "Mon profil", exact: true })).toBeVisible();
+    await guestPage.getByRole("link", { name: "Mon profil", exact: true }).click();
     await expect(guestPage).toHaveURL(/\/profil$/);
     await expect(guestPage.locator('input[placeholder="Julie"]')).toHaveValue("Marc");
 

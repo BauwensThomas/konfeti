@@ -13,12 +13,24 @@ export function CancelEventButton({ eventId }: { eventId: string }) {
 
   return (
     <>
+      {/* Icône seule (poubelle), pas de texte -- demande de Thomas ("juste
+          une icone de poubelle"), maintenant que "Modifier"/"Partager" sont
+          des bulles pleines à côté : `aria-label` obligatoire (icône seule). */}
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="text-sm font-semibold text-accent-coral"
+        aria-label={t("deleteEvent")}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-coral text-white shadow-konfeti transition-[background-color,transform] duration-150 ease-out hover:brightness-95 active:scale-95"
       >
-        {t("deleteEvent")}
+        <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+          <path
+            d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0-.87 12.14A2 2 0 0 1 14.14 21H9.86a2 2 0 0 1-1.99-1.86L7 7m3 4v6m4-6v6"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
 
       <Modal open={confirming} onClose={() => setConfirming(false)}>

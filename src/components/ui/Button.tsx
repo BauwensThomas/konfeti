@@ -21,16 +21,22 @@ const SIZE_CLASSES: Record<Size, string> = {
   sm: "px-4 py-2 text-sm",
 };
 
+// Exportée pour styler un élément qui n'est pas un vrai `<button>` (ex. un
+// `Link` de navigation) exactement comme ce composant, sans dupliquer les
+// classes (ex. "Modifier" sur la page événement, brief 5.7).
+export function buttonClassName({
+  variant = "primary",
+  size = "md",
+  className = "",
+}: { variant?: Variant; size?: Size; className?: string } = {}) {
+  return `inline-flex items-center justify-center gap-2 rounded-full font-display font-semibold transition-[background-color,transform] duration-150 ease-out active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${SIZE_CLASSES[size]} ${VARIANT_CLASSES[variant]} ${className}`;
+}
+
 export function Button({
   variant = "primary",
   size = "md",
   className = "",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size }) {
-  return (
-    <button
-      className={`inline-flex items-center justify-center gap-2 rounded-full font-display font-semibold transition-[background-color,transform] duration-150 ease-out active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${SIZE_CLASSES[size]} ${VARIANT_CLASSES[variant]} ${className}`}
-      {...props}
-    />
-  );
+  return <button className={buttonClassName({ variant, size, className })} {...props} />;
 }

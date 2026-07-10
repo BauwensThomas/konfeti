@@ -4,6 +4,7 @@ import { ParticipantsList, type ParticipantRow } from "@/components/Participants
 
 type RawRsvpRow = {
   id: string;
+  profile_id: string;
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
@@ -35,12 +36,16 @@ export async function EventPersonnes({
   shortCode,
   viewerRsvpId,
   isAdmin,
+  isHost,
+  hostProfileId,
   potEnabled,
 }: {
   eventId: string;
   shortCode: string;
   viewerRsvpId: string | null;
   isAdmin: boolean;
+  isHost: boolean;
+  hostProfileId: string;
   potEnabled: boolean;
 }) {
   const supabase = await createClient();
@@ -51,7 +56,7 @@ export async function EventPersonnes({
     const { data } = await supabase
       .from("rsvps")
       .select(
-        "id, first_name, last_name, phone, avatar_kind, avatar_value, status, role, answer, pot_access_granted, wants_pot_access",
+        "id, profile_id, first_name, last_name, phone, avatar_kind, avatar_value, status, role, answer, pot_access_granted, wants_pot_access",
       )
       .eq("event_id", eventId)
       .in("status", ["pending", "restricted", "approved"])
@@ -70,9 +75,22 @@ export async function EventPersonnes({
       companionsCountByRsvp.set(c.rsvp_id, (companionsCountByRsvp.get(c.rsvp_id) ?? 0) + 1);
     }
 
+    // Vrai compte vs session anonyme (retour Thomas : symbole visuel +
+    // "Transférer l'organisation" impossible vers un admin anonyme) :
+    // `auth.users` n'est pas exposée via l'API REST classique, cette
+    // fonction dédiée y accède en SQL, réservée aux admins de l'événement.
+    const { data: accountTypes } = await supabase.rpc("get_event_participants_account_type", {
+      p_event_id: eventId,
+    });
+    const isAnonymousByProfile = new Map<string, boolean>();
+    for (const row of accountTypes ?? []) {
+      isAnonymousByProfile.set(row.profile_id, row.is_anonymous);
+    }
+
     rows = await Promise.all(
       rsvpRows.map(async (r) => ({
         id: r.id,
+        profileId: r.profile_id,
         firstName: r.first_name,
         lastName: r.last_name,
         phone: r.phone,
@@ -83,6 +101,9 @@ export async function EventPersonnes({
         companionsCount: companionsCountByRsvp.get(r.id) ?? 0,
         potAccessGranted: r.pot_access_granted,
         wantsPotAccess: r.wants_pot_access,
+        isRealAccount: isAnonymousByProfile.has(r.profile_id)
+          ? !isAnonymousByProfile.get(r.profile_id)
+          : null,
       })),
     );
   } else {
@@ -101,6 +122,7 @@ export async function EventPersonnes({
     rows = await Promise.all(
       rsvpRows.map(async (r) => ({
         id: r.id,
+        profileId: null,
         firstName: r.first_name,
         lastName: r.last_initial,
         phone: null,
@@ -111,15 +133,19 @@ export async function EventPersonnes({
         companionsCount: r.companions_count,
         potAccessGranted: false,
         wantsPotAccess: false,
+        isRealAccount: null,
       })),
     );
   }
 
   return (
     <ParticipantsList
+      eventId={eventId}
       shortCode={shortCode}
       viewerRsvpId={viewerRsvpId}
       isAdmin={isAdmin}
+      isHost={isHost}
+      hostProfileId={hostProfileId}
       potEnabled={potEnabled}
       rows={rows}
     />

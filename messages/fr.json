@@ -6,9 +6,17 @@
     "videoHeading": "En vidéo :",
     "waitlistHeading": "Sois prévenu au lancement"
   },
+  "Header": {
+    "back": "Retour",
+    "home": "Aller à l'accueil Konfeti",
+    "profile": "Mon profil"
+  },
   "Footer": {
-    "editProfile": "Modifier mon profil",
     "copyright": "Konfeti - {year} - Belgacai"
+  },
+  "LinkAccountBanner": {
+    "text": "Connecte-toi pour ne rien perdre : si tu perds ce téléphone ou effaces tes cookies, tu perds l'accès à tes événements.",
+    "cta": "Se connecter"
   },
   "Waitlist": {
     "emailLabel": "Ton adresse email",
@@ -40,6 +48,8 @@
     "subheading": "On a besoin de savoir qui tu es pour que les organisateurs et les autres invités te reconnaissent.",
     "editHeading": "Modifier mon profil",
     "editSubheading": "Ces informations sont utilisées partout où tu participes : chat, listes de participants...",
+    "linkAccountHeading": "Passer à un vrai compte",
+    "linkAccountSubheading": "Connecte-toi par email ou avec Google pour ne plus dépendre de cet appareil. Tes informations et tes événements sont conservés.",
     "firstNameLabel": "Prénom",
     "firstNamePlaceholder": "Julie",
     "lastNameLabel": "Nom",
@@ -56,6 +66,7 @@
     "submitting": "Un instant...",
     "save": "Enregistrer",
     "saved": "Profil mis à jour !",
+    "cancelEdit": "Annuler et revenir en arrière",
     "errorInvalid": "Vérifie tes informations, quelque chose ne va pas.",
     "errorUnknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant.",
     "errorPhoto": "L'envoi de la photo a échoué, réessaie.",
@@ -101,6 +112,7 @@
     "submitting": "Création en cours...",
     "submitEdit": "Enregistrer les modifications",
     "submittingEdit": "Enregistrement en cours...",
+    "cancelEdit": "Annuler et revenir à l'événement",
     "errorUnknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant.",
     "errorRateLimited": "Trop de tentatives, réessaie dans un instant.",
     "step1": {
@@ -184,7 +196,6 @@
       "participer": "Participer"
     },
     "comingSoon": "Bientôt disponible.",
-    "backToEvents": "← Retour à mes événements",
     "editEvent": "Modifier",
     "shareButton": "Partager",
     "shareCopied": "Lien copié !",
@@ -203,6 +214,7 @@
     "photoUploadError": "L'envoi de la photo a échoué, réessaie.",
     "photoUploadRateLimited": "Trop d'envois, réessaie dans un instant.",
     "hostBadge": "Tu es l'organisateur",
+    "adminBadge": "Tu es administrateur",
     "finishedBadge": "Terminé",
     "previewNotice": "Les détails complets (date, lieu, invités...) sont réservés aux personnes invitées.",
     "ogDescription": "Tu es invité(e) ! Découvre les détails sur Konfeti.",
@@ -299,8 +311,15 @@
     "removeConfirmTitle": "Es-tu sûr ? Cette action est définitive.",
     "removeConfirmYes": "Oui, retirer",
     "removeConfirmNo": "Annuler",
+    "transferHost": "Transférer l'organisation",
+    "transferHostRequiresAccount": "Transfert impossible (pas de compte)",
+    "transferHostConfirmTitle": "Cette personne deviendra l'organisateur de l'événement à ta place. Tu resteras administrateur.",
+    "transferHostConfirmYes": "Oui, transférer",
+    "transferHostConfirmNo": "Annuler",
+    "realAccountBadge": "Compte vérifié (pas une session invité)",
     "roleGuest": "Invité",
     "roleAdmin": "Administrateur",
+    "roleOrganizer": "Organisateur",
     "roleBeneficiary": "Bénéficiaire",
     "answerYes": "Vient",
     "answerMaybe": "Peut-être",
@@ -312,6 +331,7 @@
     "errorRateLimited": "Trop de tentatives, réessaie dans un instant.",
     "errorUnauthorized": "Tu n'as pas les droits pour faire ça.",
     "errorLastAdmin": "Il doit toujours rester au moins un administrateur pour cet événement.",
+    "errorTransferAnonymous": "Cette personne doit avoir un vrai compte (email ou Google) pour devenir organisateur.",
     "errorUnknown": "Une erreur est survenue, réessaie."
   },
   "Chat": {

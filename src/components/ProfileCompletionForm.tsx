@@ -249,9 +249,33 @@ export function ProfileCompletionForm({
         </p>
       )}
 
-      <Button onClick={handleSubmit} disabled={isPending || !canSubmit()}>
-        {isPending ? t("submitting") : mode === "edit" ? t("save") : t("submit")}
-      </Button>
+      <div className="flex items-center justify-center gap-3">
+        <Button className="h-11" onClick={handleSubmit} disabled={isPending || !canSubmit()}>
+          {isPending ? t("submitting") : mode === "edit" ? t("save") : t("submit")}
+        </Button>
+        {/* Croix rouge pour revenir en arrière sans enregistrer (retour
+            Thomas, même demande que sur le wizard "Modifier" d'un événement) :
+            uniquement en édition -- en `complete` (onboarding obligatoire),
+            il n'y a nulle part de sensé où "revenir" sans avoir terminé. */}
+        {mode === "edit" && (
+          <button
+            type="button"
+            onClick={() => router.back()}
+            aria-label={t("cancelEdit")}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-coral text-white shadow-konfeti transition-[background-color,transform] duration-150 ease-out hover:brightness-95 active:scale-95"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+              <path
+                d="M6 6l12 12M18 6L6 18"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

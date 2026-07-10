@@ -5,6 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { ConfettiBackground } from "@/components/ConfettiBackground";
+import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import "./globals.css";
 
@@ -88,12 +89,13 @@ export default async function LocaleLayout({
       <body className="min-h-full flex flex-col">
         <ConfettiBackground />
         <NextIntlClientProvider>
-          {/* `pt-safe` : marge additionnelle pour l'encoche/la caméra/la
-              batterie en haut d'écran (retour Thomas), vient s'ajouter au
-              padding déjà prévu par chaque page. Footer toujours en bas,
-              hors de cette colonne, avec sa propre marge de sécurité
-              (`pb-safe`, voir Footer.tsx) pour la barre de gestes. */}
-          <div className="pt-safe flex flex-1 flex-col">{children}</div>
+          {/* Header toujours en haut (`pt-safe` : marge pour l'encoche/la
+              caméra/la batterie, portée par le header lui-même puisque c'est
+              désormais le premier élément affiché). Footer toujours en bas,
+              avec sa propre marge de sécurité (`pb-safe`, voir Footer.tsx)
+              pour la barre de gestes. */}
+          <Header />
+          <div className="flex flex-1 flex-col">{children}</div>
           <Footer />
         </NextIntlClientProvider>
       </body>

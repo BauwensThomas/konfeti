@@ -4,6 +4,7 @@ import {
   approveRsvpSchema,
   setParticipantRoleSchema,
   updateMyAnswerSchema,
+  transferEventHostSchema,
 } from "./participants";
 
 describe("rsvpIdSchema", () => {
@@ -56,6 +57,26 @@ describe("updateMyAnswerSchema", () => {
   it("rejette une reponse invalide", () => {
     expect(
       updateMyAnswerSchema.safeParse({ rsvpId: crypto.randomUUID(), answer: "peut-etre" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("transferEventHostSchema", () => {
+  it("accepte deux uuid valides", () => {
+    expect(
+      transferEventHostSchema.safeParse({
+        eventId: crypto.randomUUID(),
+        newHostProfileId: crypto.randomUUID(),
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejette un id qui n'est pas un uuid", () => {
+    expect(
+      transferEventHostSchema.safeParse({
+        eventId: "not-a-uuid",
+        newHostProfileId: crypto.randomUUID(),
+      }).success,
     ).toBe(false);
   });
 });

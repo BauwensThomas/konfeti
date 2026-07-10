@@ -6,8 +6,15 @@ const isoDaysFromNow = (days: number) => new Date(Date.now() + days * DAY_MS).to
 
 describe("isEventFinished", () => {
   it("n'est pas terminé le jour même, même si l'heure est déjà passée", () => {
-    const earlierToday = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    expect(isEventFinished(earlierToday, "fixed")).toBe(false);
+    // `isEventFinished` ne compare que des dates civiles (voir son
+    // commentaire), l'heure exacte n'a donc aucune importance ici -- construit
+    // à partir d'AUJOURD'HUI plutôt que "maintenant moins 1h" : cette
+    // dernière approche traverse minuit (et retombe donc sur HIER) si le test
+    // tourne entre 00h00 et 01h00, un flake réel rencontré en exécutant la
+    // suite après le passage de minuit.
+    const earlierToday = new Date();
+    earlierToday.setHours(9, 0, 0, 0);
+    expect(isEventFinished(earlierToday.toISOString(), "fixed")).toBe(false);
   });
 
   it("est terminé à partir du lendemain", () => {

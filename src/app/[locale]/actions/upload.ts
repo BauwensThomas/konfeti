@@ -18,7 +18,12 @@ export async function uploadEventPhoto(formData: FormData): Promise<UploadPhotoR
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || user.is_anonymous) {
+  // Utilisée par le wizard (création ET modification) et par
+  // `EventPhotoEditor`. `/creer` bloque déjà les sessions anonymes en amont
+  // (proxy.ts), donc ce contrôle ne servait qu'à bloquer à tort un admin
+  // promu en session anonyme qui modifie la photo d'un événement existant
+  // (même bug que updateEvent, voir events.ts).
+  if (!user) {
     return { ok: false, error: "not_authenticated" };
   }
 

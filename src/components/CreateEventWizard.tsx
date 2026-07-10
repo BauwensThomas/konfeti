@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { createEvent, updateEvent } from "@/app/[locale]/actions/events";
 import { uploadEventPhoto } from "@/app/[locale]/actions/upload";
 import { EVENT_THEMES } from "@/lib/themes";
@@ -760,7 +761,7 @@ export function CreateEventWizard({
         </p>
       )}
 
-      <div className="flex justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         {step > 1 ? (
           <Button variant="ghost" onClick={() => setStep((s) => s - 1)}>
             {t("back")}
@@ -769,17 +770,46 @@ export function CreateEventWizard({
           <span />
         )}
 
-        {step < TOTAL_STEPS ? (
-          <Button onClick={() => canAdvance() && setStep((s) => s + 1)} disabled={!canAdvance()}>
-            {t("next")}
-          </Button>
-        ) : (
-          <Button onClick={handleSubmit} disabled={isPending}>
-            {isPending
-              ? t(isEditMode ? "submittingEdit" : "submitting")
-              : t(isEditMode ? "submitEdit" : "submit")}
-          </Button>
-        )}
+        <div className="flex items-center gap-3">
+          {step < TOTAL_STEPS ? (
+            <Button
+              className="h-11"
+              onClick={() => canAdvance() && setStep((s) => s + 1)}
+              disabled={!canAdvance()}
+            >
+              {t("next")}
+            </Button>
+          ) : (
+            <Button className="h-11" onClick={handleSubmit} disabled={isPending}>
+              {isPending
+                ? t(isEditMode ? "submittingEdit" : "submitting")
+                : t(isEditMode ? "submitEdit" : "submit")}
+            </Button>
+          )}
+          {/* Croix rouge pour quitter le wizard sans enregistrer, demande de
+              Thomas ("à côté de suivant et enregistrer, je veux une croix
+              dans une bulle rouge et ça ramène à l'accueil") : uniquement en
+              édition, où "l'accueil" (la page événement) existe déjà -- en
+              création, l'événement n'existe pas encore tant que le wizard
+              n'est pas soumis, quitter n'aurait nulle part de sensé où aller. */}
+          {isEditMode && shortCode && (
+            <Link
+              href={`/e/${shortCode}`}
+              aria-label={t("cancelEdit")}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-coral text-white shadow-konfeti transition-[background-color,transform] duration-150 ease-out hover:brightness-95 active:scale-95"
+            >
+              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                <path
+                  d="M6 6l12 12M18 6L6 18"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   );

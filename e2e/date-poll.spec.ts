@@ -99,3 +99,86 @@ test("un organisateur vote pour plusieurs dates puis valide celle qui est retenu
     await deleteTestUser(user.id);
   }
 });
+
+// Retour Thomas : "un admin ne peut pas valider la date, est-ce normal ?" --
+// bug réel trouvé en creusant : `isAdmin={isHost}` (page.tsx) au lieu de la
+// vraie variable `isAdmin` (host OU admin promu), donc "Valider cette date"
+// n'apparaissait jamais que pour l'hôte littéral, jamais un admin promu.
+test("un admin promu (pas l'hôte) peut aussi valider la date retenue", async ({ page, browser }) => {
+  const hostEmail = `e2e-datepoll-host-${Date.now()}@example.com`;
+  const adminEmail = `e2e-datepoll-admin-${Date.now()}@example.com`;
+  let hostId: string | null = null;
+  let adminId: string | null = null;
+  let eventId: string | null = null;
+
+  try {
+    const host = await loginAs(page, hostEmail);
+    hostId = host.id;
+
+    const title = `Fete sondage admin ${Date.now()}`;
+    await page.getByRole("link", { name: "Créer un événement" }).click();
+    await page.getByPlaceholder("L'anniversaire de Julie").fill(title);
+    await page.getByRole("button", { name: "On vote pour la date" }).click();
+    const dateInputs = page.locator('input[type="datetime-local"]');
+    await dateInputs.nth(0).fill("2026-12-24T20:00");
+    await dateInputs.nth(1).fill("2026-12-31T20:00");
+    await page.getByPlaceholder("Adresse et ville").fill("Rue de Test 2, 1000 Bruxelles");
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Créer l'événement" }).click();
+    await expect(page).toHaveURL(/\/mes-evenements$/);
+
+    const { data: event } = await supabaseAdmin
+      .from("events")
+      .select("id, short_code")
+      .eq("title", title)
+      .maybeSingle();
+    if (!event) throw new Error("evenement introuvable");
+    eventId = event.id;
+
+    const adminContext = await browser.newContext();
+    const adminPage = await adminContext.newPage();
+    const admin = await loginAs(adminPage, adminEmail, `/e/${event.short_code}`);
+    adminId = admin.id;
+    await adminPage.getByPlaceholder("Julie").fill("Marc");
+    await adminPage.getByPlaceholder("Dean").fill("Untel");
+    await adminPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000086");
+    await adminPage.getByLabel("Un homme").check();
+    await adminPage.getByRole("button", { name: "Avatar 2" }).click();
+    await adminPage.getByLabel("Je viens !").check();
+    await adminPage.getByRole("button", { name: "Envoyer ma réponse" }).click();
+    await expect(adminPage.getByText("Ta demande est chez l'organisateur !")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await page.goto(`/e/${event.short_code}`);
+    await page.getByRole("button", { name: "Personnes" }).click();
+    await page.getByRole("button", { name: "Approuver comme invité" }).click();
+    await page.getByRole("combobox").first().selectOption("admin");
+
+    await expect
+      .poll(async () => {
+        const { data } = await supabaseAdmin
+          .from("rsvps")
+          .select("role")
+          .eq("event_id", event.id)
+          .eq("profile_id", adminId)
+          .single();
+        return data?.role;
+      })
+      .toBe("admin");
+
+    await adminPage.goto(`/e/${event.short_code}`);
+    await expect(adminPage.getByRole("button", { name: "Valider cette date" }).first()).toBeVisible();
+    await adminPage.getByRole("button", { name: "Valider cette date" }).nth(1).click();
+    await adminPage.getByRole("button", { name: "Oui, valider" }).click();
+    await expect(adminPage.getByText("31 décembre 2026")).toBeVisible();
+
+    await adminContext.close();
+  } finally {
+    if (eventId) await supabaseAdmin.from("events").delete().eq("id", eventId);
+    if (hostId) await deleteTestUser(hostId);
+    if (adminId) await deleteTestUser(adminId);
+  }
+});

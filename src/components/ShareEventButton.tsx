@@ -38,7 +38,7 @@ export function ShareEventButton({ title, url }: { title: string; url: string })
   }
 
   return (
-    <Button variant="secondary" onClick={handleShare} className="text-sm">
+    <Button variant="secondary" onClick={handleShare} className="h-11 text-sm">
       {copied ? t("shareCopied") : error ? t("shareError") : t("shareButton")}
     </Button>
   );

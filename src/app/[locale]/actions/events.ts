@@ -136,7 +136,16 @@ export async function updateEvent(
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || user.is_anonymous) {
+  // Contrairement à createEvent (qui exige un vrai compte, l'hôte doit être
+  // identifiable durablement), modifier un événement est une action d'ADMIN
+  // ordinaire : un invité "code d'accès" promu admin par l'hôte a les mêmes
+  // droits que lui (retour Thomas : "il a les mêmes droits que celui qui a
+  // créé l'événement... modifier les infos"), donc pas de blocage
+  // `user.is_anonymous` ici — seule la policy RLS `events_update_by_admin`
+  // (is_event_admin) doit trancher. Bug réel trouvé en creusant "Oups,
+  // quelque chose s'est mal passé" pour un admin promu : ce blocage,
+  // pertinent pour createEvent, avait été copié ici sans être reconsidéré.
+  if (!user) {
     return { ok: false, error: "not_authenticated" };
   }
 
@@ -154,9 +163,9 @@ export async function updateEvent(
   }
 
   // Les options de date sont entièrement remplacées plutôt que fusionnées :
-  // plus simple et plus sûr qu'un diff ligne à ligne. Pour l'instant sans
-  // conséquence puisqu'il n'y a pas encore de vote invité réel (Phase 3),
-  // à revisiter si des date_votes existent déjà au moment de la modification.
+  // plus simple et plus sûr qu'un diff ligne à ligne. `date_votes` existants
+  // sont supprimés en cascade (`on delete cascade`), perte de vote assumée
+  // sur un changement des options elles-mêmes.
   const { error: deleteOptionsError } = await supabase
     .from("date_options")
     .delete()
@@ -187,7 +196,9 @@ export async function cancelEvent(eventId: string): Promise<{ ok: boolean }> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || user.is_anonymous) {
+  // Même raison que updateEvent ci-dessus : un admin promu, même en session
+  // anonyme, a les mêmes droits que l'hôte.
+  if (!user) {
     return { ok: false };
   }
 
@@ -217,7 +228,9 @@ export async function updateEventCoverPhoto(
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || user.is_anonymous) {
+  // Même raison que updateEvent ci-dessus : un admin promu, même en session
+  // anonyme, a les mêmes droits que l'hôte.
+  if (!user) {
     return { ok: false };
   }
 

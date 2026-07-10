@@ -40,6 +40,36 @@ export async function resolveAvatarUrl(
   return data?.signedUrl ?? null;
 }
 
+// Avatar d'un utilisateur pour un usage transverse (ex. Header, affiché sur
+// toutes les pages) : même repli que `/profil` (profiles vide -> dernière
+// participation rsvps) mais on n'a besoin que de l'URL affichable ici, pas de
+// toute l'identité (nom, téléphone...).
+export async function resolveUserAvatarUrl(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<string | null> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("avatar_kind, avatar_value")
+    .eq("id", userId)
+    .maybeSingle();
+
+  let identity = profile;
+  if (!identity?.avatar_value) {
+    const { data: latestRsvp } = await supabase
+      .from("rsvps")
+      .select("avatar_kind, avatar_value")
+      .eq("profile_id", userId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    identity = latestRsvp;
+  }
+
+  if (!identity?.avatar_value) return null;
+  return resolveAvatarUrl(supabase, identity.avatar_kind as "preset" | "photo", identity.avatar_value);
+}
+
 // Même bucket privé "event-photos", pour une photo postée dans le chat
 // (brief 4.3) : le chemin stocké en base (`messages.photo_url`) n'est jamais
 // directement affichable, toujours une URL signée à générer à la lecture.

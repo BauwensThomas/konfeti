@@ -18,3 +18,8 @@ export const updateMyAnswerSchema = z.object({
   rsvpId: z.string().uuid(),
   answer: z.enum(["yes", "maybe", "no"]),
 });
+
+export const transferEventHostSchema = z.object({
+  eventId: z.string().uuid(),
+  newHostProfileId: z.string().uuid(),
+});

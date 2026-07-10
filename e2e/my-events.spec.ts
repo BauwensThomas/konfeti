@@ -151,11 +151,12 @@ test("un invite anonyme qui participe a plusieurs evenements voit sa liste, et l
     await host2Page.getByRole("button", { name: "Personnes" }).click();
     await host2Page.getByRole("button", { name: "Approuver comme invité" }).click();
 
-    // Le lien "Retour à mes événements" doit être visible pour un invité
-    // anonyme (retour Thomas), pas seulement un admin.
+    // La flèche retour du header (qui remplace l'ancien lien texte "Retour à
+    // mes événements", devenu redondant) doit être visible et fonctionnelle
+    // pour un invité anonyme (retour Thomas), pas seulement un admin.
     await marcPage.goto(`/e/${event1.short_code}`);
-    await expect(marcPage.getByRole("link", { name: "Retour à mes événements" })).toBeVisible();
-    await marcPage.getByRole("link", { name: "Retour à mes événements" }).click();
+    await expect(marcPage.getByRole("button", { name: "Retour" })).toBeVisible();
+    await marcPage.getByRole("button", { name: "Retour" }).click();
     await expect(marcPage).toHaveURL(/\/mes-evenements$/);
 
     await expect(marcPage.getByText(title1)).toBeVisible();

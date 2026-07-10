@@ -7,6 +7,7 @@ import {
   approveRsvpSchema,
   setParticipantRoleSchema,
   updateMyAnswerSchema,
+  transferEventHostSchema,
 } from "@/lib/validation/participants";
 import { isRateLimited } from "@/lib/rate-limit";
 
@@ -14,7 +15,15 @@ export type ParticipantActionResult =
   | { ok: true }
   | {
       ok: false;
-      error: "invalid" | "not_authenticated" | "rate_limited" | "unauthorized" | "last_admin" | "unknown";
+      error:
+        | "invalid"
+        | "not_authenticated"
+        | "rate_limited"
+        | "unauthorized"
+        | "last_admin"
+        | "invalid_new_host"
+        | "target_anonymous"
+        | "unknown";
     };
 
 // Un admin valide une demande en attente en lui attribuant un rôle (brief
@@ -322,6 +331,57 @@ export async function updateMyAnswer(
 
   if (error) {
     return { ok: false, error: error.message.includes("not authorized") ? "unauthorized" : "unknown" };
+  }
+
+  revalidatePath(`/e/${shortCode}`);
+  return { ok: true };
+}
+
+// Transfert explicite de l'organisation vers un autre admin déjà approuvé
+// (retour Thomas : impossible de quitter son propre événement en tant
+// qu'hôte, `host_id` étant une colonne fixe jamais transférée jusqu'ici — un
+// admin promu ne peut, lui, jamais faire ce transfert : `transfer_event_host`
+// (SQL) vérifie elle-même que l'appelant est bien l'hôte ACTUEL). Une fois
+// transféré, l'ancien hôte redevient un admin comme un autre et peut alors
+// utiliser le circuit normal "Quitter l'événement" (`leaveEvent` ci-dessus).
+export async function transferEventHost(
+  eventId: string,
+  newHostProfileId: string,
+  shortCode: string,
+): Promise<ParticipantActionResult> {
+  const parsed = transferEventHostSchema.safeParse({ eventId, newHostProfileId });
+  if (!parsed.success) {
+    return { ok: false, error: "invalid" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "not_authenticated" };
+  }
+
+  if (isRateLimited(`transferEventHost:${user.id}`, 20, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
+  const { error } = await supabase.rpc("transfer_event_host", {
+    p_event_id: parsed.data.eventId,
+    p_new_host_profile_id: parsed.data.newHostProfileId,
+  });
+
+  if (error) {
+    return {
+      ok: false,
+      error: error.message.includes("not authorized")
+        ? "unauthorized"
+        : error.message.includes("real account")
+          ? "target_anonymous"
+          : error.message.includes("new host must be")
+            ? "invalid_new_host"
+            : "unknown",
+    };
   }
 
   revalidatePath(`/e/${shortCode}`);

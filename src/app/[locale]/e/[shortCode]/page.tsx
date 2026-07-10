@@ -17,7 +17,9 @@ import { MyParticipationCard } from "@/components/MyParticipationCard";
 import { EventPersonnes } from "@/components/EventPersonnes";
 import { EventChat, getInitialUnreadCount } from "@/components/EventChat";
 import { ShareEventButton } from "@/components/ShareEventButton";
+import { LinkAccountBanner } from "@/components/LinkAccountBanner";
 import { Card } from "@/components/ui/Card";
+import { buttonClassName } from "@/components/ui/Button";
 
 // Open Graph dynamique (brief 5.7/Phase 3) : le titre/aperçu de partage
 // reflète l'événement (titre réel), mais ne se base QUE sur `events_public_data`
@@ -195,34 +197,26 @@ export default async function EventPage({
 
     return (
       <main className="flex flex-1 flex-col items-center gap-6 px-6 py-8 sm:py-12">
-        {user && (
-          // "Retour à mes événements" visible à TOUT utilisateur connecté
-          // (pas seulement un admin) : /mes-evenements liste désormais aussi
-          // les événements où l'on participe simplement, pas seulement ceux
-          // qu'on héberge (retour Thomas : "si un anonyme participe à
-          // plusieurs événements, il ne devrait pas avoir accès à... et voir
-          // la liste de ses événements ?"). Modifier/Supprimer restent, eux,
-          // réservés aux admins.
-          <div className="flex w-full max-w-lg lg:max-w-2xl items-center justify-between gap-3">
-            <Link href="/mes-evenements" className="text-sm font-semibold text-primary">
-              {t("backToEvents")}
-            </Link>
+        {/* "Retour à mes événements" retiré (demande de Thomas) : la flèche
+            retour du header global couvre désormais ce besoin pour tout
+            utilisateur connecté. Partager/Modifier/Supprimer regroupés dans
+            une seule rangée de bulles, chacune dans une couleur distincte
+            (Partager en jaune déjà via ShareEventButton, Modifier en violet,
+            Supprimer en corail, icône seule). */}
+        {(canShare || isAdmin) && (
+          <div className="flex w-full max-w-lg lg:max-w-2xl flex-wrap items-center justify-center gap-3">
+            {canShare && <ShareEventButton title={event.title} url={shareUrl} />}
             {isAdmin && (
-              <div className="flex items-center gap-4">
+              <>
                 <Link
                   href={`/e/${event.short_code}/modifier`}
-                  className="text-sm font-semibold text-primary"
+                  className={buttonClassName({ variant: "primary", size: "sm", className: "h-11" })}
                 >
                   {t("editEvent")}
                 </Link>
                 <CancelEventButton eventId={event.id} />
-              </div>
+              </>
             )}
-          </div>
-        )}
-        {canShare && (
-          <div className="flex w-full max-w-lg lg:max-w-2xl justify-center">
-            <ShareEventButton title={event.title} url={shareUrl} />
           </div>
         )}
         <EventTabs
@@ -230,7 +224,9 @@ export default async function EventPage({
             <EventAccueil
               event={event}
               isHost={isHost}
+              isAdmin={isAdmin}
               isBeneficiary={isBeneficiary}
+              isAnonymous={!!user?.is_anonymous}
               dateOptions={dateOptions}
               coverPhotoUrl={coverPhotoUrl}
               myRsvp={
@@ -246,6 +242,8 @@ export default async function EventPage({
               shortCode={event.short_code}
               viewerRsvpId={myRsvpRow?.id ?? null}
               isAdmin={isAdmin}
+              isHost={isHost}
+              hostProfileId={event.host_id}
               potEnabled={event.pot_enabled}
             />
           }
@@ -415,14 +413,18 @@ type EventRow = {
 async function EventAccueil({
   event,
   isHost,
+  isAdmin,
   isBeneficiary,
+  isAnonymous,
   dateOptions,
   coverPhotoUrl,
   myRsvp,
 }: {
   event: EventRow;
   isHost: boolean;
+  isAdmin: boolean;
   isBeneficiary: boolean;
+  isAnonymous: boolean;
   dateOptions: {
     id: string;
     startsAt: string;
@@ -446,6 +448,7 @@ async function EventAccueil({
 
   return (
     <div className="flex flex-col gap-4">
+      {isAnonymous && <LinkAccountBanner />}
       <div
         className="flex items-center gap-4 rounded-konfeti p-6 text-white shadow-konfeti"
         style={{
@@ -457,6 +460,15 @@ async function EventAccueil({
             {isHost && (
               <span className="w-fit rounded-full bg-white/20 px-3 py-1 text-xs font-semibold">
                 {t("hostBadge")}
+              </span>
+            )}
+            {/* Retour Thomas : sur l'Accueil, un admin promu (pas l'hôte) n'a
+                aucun badge équivalent à "Tu es l'organisateur" -- ajouté en
+                miroir, même style, juste réservé à isAdmin && !isHost pour ne
+                jamais doubler avec le badge organisateur. */}
+            {isAdmin && !isHost && (
+              <span className="w-fit rounded-full bg-white/20 px-3 py-1 text-xs font-semibold">
+                {t("adminBadge")}
               </span>
             )}
             {isEventFinished(event.starts_at, event.date_mode) && (
@@ -510,7 +522,7 @@ async function EventAccueil({
           <DatePollVoting
             eventId={event.id}
             shortCode={event.short_code}
-            isAdmin={isHost}
+            isAdmin={isAdmin}
             options={dateOptions}
           />
         ) : (

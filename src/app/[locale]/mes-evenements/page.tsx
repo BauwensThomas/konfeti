@@ -7,6 +7,7 @@ import { isEventFinished, sortEventsByDate } from "@/lib/event-status";
 import { computeUnreadCount } from "@/lib/chat/unread";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { LinkAccountBanner } from "@/components/LinkAccountBanner";
 
 type EventRow = {
   id: string;
@@ -137,6 +138,7 @@ export default async function MyEventsPage() {
 
   return (
     <main className="flex flex-1 flex-col items-center gap-8 px-6 py-12 sm:py-16">
+      {user.is_anonymous && <LinkAccountBanner />}
       <div className="flex w-full max-w-lg lg:max-w-2xl items-center justify-between">
         <h1 className="font-display text-2xl font-bold text-primary sm:text-3xl">
           {t("heading")}
