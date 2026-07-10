@@ -42,8 +42,8 @@ drop policy "pot_contributions_select" on pot_contributions;
 create policy "pot_contributions_select" on pot_contributions
   for select to authenticated
   using (
-    is_event_admin(event_id)
-    or (is_event_approved_participant(event_id) and not is_block_hidden_for_me(event_id, 'pot'))
+    private.is_event_admin(event_id)
+    or (private.is_event_approved_participant(event_id) and not private.is_block_hidden_for_me(event_id, 'pot'))
   );
 -- pot_payouts_select_admin (details Stripe) INCHANGEE : jamais montre a un
 -- beneficiaire meme admin, hors perimetre de cette demande.
@@ -61,12 +61,12 @@ drop policy "messages_select" on messages;
 create policy "messages_select" on messages
   for select to authenticated
   using (
-    is_event_admin(event_id)
+    private.is_event_admin(event_id)
     or (
-      is_event_approved_participant(event_id)
+      private.is_event_approved_participant(event_id)
       and (
-        (channel = 'main' and not is_block_hidden_for_me(event_id, 'chat'))
-        or (channel = 'backstage' and not is_block_hidden_for_me(event_id, 'backstage'))
+        (channel = 'main' and not private.is_block_hidden_for_me(event_id, 'chat'))
+        or (channel = 'backstage' and not private.is_block_hidden_for_me(event_id, 'backstage'))
       )
     )
   );
@@ -75,11 +75,11 @@ drop policy "messages_insert_own" on messages;
 create policy "messages_insert_own" on messages
   for insert to authenticated
   with check (
-    is_event_approved_participant(event_id)
-    and is_my_rsvp(rsvp_id)
+    private.is_event_approved_participant(event_id)
+    and private.is_my_rsvp(rsvp_id)
     and (
-      (channel = 'main' and not is_block_hidden_for_me(event_id, 'chat'))
-      or (channel = 'backstage' and not is_block_hidden_for_me(event_id, 'backstage'))
+      (channel = 'main' and not private.is_block_hidden_for_me(event_id, 'chat'))
+      or (channel = 'backstage' and not private.is_block_hidden_for_me(event_id, 'backstage'))
     )
   );
 
