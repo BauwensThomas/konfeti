@@ -22,6 +22,8 @@ function eventRowFromInput(data: CreateEventInput) {
     starts_at: data.dateMode === "fixed" ? data.startsAt : null,
     ends_at: data.endsAt || null,
     location_text: data.locationText,
+    location_lat: data.locationLat,
+    location_lng: data.locationLng,
     cover_photo_path: data.coverPhotoPath || null,
     occasion: data.occasion,
     // Bug réel signalé par Thomas : "j'ai modifié en nouvelle année, sur la

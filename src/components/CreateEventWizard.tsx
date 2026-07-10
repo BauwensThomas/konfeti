@@ -14,6 +14,7 @@ import { AvatarPlaceholder } from "@/components/AvatarPlaceholder";
 import { toLocalDateTimeValue } from "@/lib/datetime";
 import { joinNames } from "@/lib/joinNames";
 import { UnitPickerButton, type BringUnit } from "@/components/bring/UnitPickerButton";
+import { LocationAutocomplete } from "@/components/LocationAutocomplete";
 
 type DateOption = { startsAt: string; label: string };
 
@@ -25,6 +26,12 @@ export type WizardData = {
   endsAt: string;
   dateOptions: DateOption[];
   locationText: string;
+  // Météo (brief 4.6) : renseignés UNIQUEMENT quand l'organisateur choisit
+  // une vraie suggestion dans `LocationAutocomplete` (jamais par un
+  // géocodage serveur séparé) -- `null` tant qu'il tape un texte libre non
+  // sélectionné, la météo ne s'affichera simplement pas dans ce cas.
+  locationLat: number | null;
+  locationLng: number | null;
   coverPhotoPath: string;
   occasion: (typeof OCCASIONS)[number];
   birthdayPerson: string;
@@ -81,6 +88,8 @@ const INITIAL_DATA: WizardData = {
     { startsAt: "", label: "" },
   ],
   locationText: "",
+  locationLat: null,
+  locationLng: null,
   coverPhotoPath: "",
   occasion: "other",
   birthdayPerson: "",
@@ -302,6 +311,8 @@ export function CreateEventWizard({
                 .map((o) => ({ startsAt: o.startsAt, label: o.label || undefined }))
             : undefined,
         locationText: data.locationText,
+        locationLat: data.locationLat,
+        locationLng: data.locationLng,
         coverPhotoPath: data.coverPhotoPath || undefined,
         occasion: data.occasion,
         birthdayPerson: data.birthdayPerson || undefined,
@@ -533,11 +544,15 @@ export function CreateEventWizard({
             )}
 
             <Field label={t("step1.locationLabel")}>
-              <input
-                type="text"
+              <LocationAutocomplete
                 value={data.locationText}
-                onChange={(e) => update("locationText", e.target.value)}
+                onChange={(text, coords) => {
+                  update("locationText", text);
+                  update("locationLat", coords?.lat ?? null);
+                  update("locationLng", coords?.lng ?? null);
+                }}
                 placeholder={t("step1.locationPlaceholder")}
+                ariaLabel={t("step1.locationLabel")}
                 className={inputClass}
               />
             </Field>

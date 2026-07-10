@@ -194,13 +194,13 @@
       "bringItemQuantityAria": "Quantité demandée pour l'item {index}",
       "bringItemUnitAria": "Unité pour l'item {index}",
       "bringUnit": {
-        "piece": "Pièce",
-        "liter": "Litre",
-        "gram": "Gramme",
-        "kilogram": "Kilo"
+        "piece": "Pièce(s)",
+        "liter": "Litre(s)",
+        "gram": "Gramme(s)",
+        "kilogram": "Kilo(s)"
       },
-      "removeBringItem": "Retirer cet item",
-      "addBringItem": "Ajouter un item"
+      "removeBringItem": "Retirer ce produit",
+      "addBringItem": "Ajouter un produit"
     },
     "step5": {
       "heading": "Ce que voient les bénéficiaires",
@@ -296,6 +296,25 @@
     "validateDateConfirmNo": "Annuler",
     "endsAtLabel": "Jusqu'à {time}",
     "dateLocationHeading": "Quand et où ?",
+    "weatherPeriod": {
+      "morning": "Matin",
+      "afternoon": "Après-midi",
+      "evening": "Soir",
+      "nextMorning": "Lendemain"
+    },
+    "weather": {
+      "sunny": "Ensoleillé",
+      "partlyCloudy": "Peu nuageux",
+      "cloudy": "Nuageux",
+      "overcast": "Couvert",
+      "foggy": "Brouillard",
+      "drizzle": "Bruine",
+      "rainy": "Pluie",
+      "snowy": "Neige",
+      "showers": "Averses",
+      "snowShowers": "Averses de neige",
+      "stormy": "Orage"
+    },
     "descriptionHeading": "Description",
     "birthdaySentenceWithAge": "C'est l'anniversaire de {person}, qui fêtera ses {age} ans !",
     "birthdaySentence": "C'est l'anniversaire de {person} !",
@@ -492,10 +511,10 @@
     "proposeUnitAria": "Unité proposée",
     "proposeSubmit": "Proposer",
     "unit": {
-      "piece": "Pièce",
-      "liter": "Litre",
-      "gram": "Gramme",
-      "kilogram": "Kilo"
+      "piece": "Pièce(s)",
+      "liter": "Litre(s)",
+      "gram": "Gramme(s)",
+      "kilogram": "Kilo(s)"
     }
   }
 }

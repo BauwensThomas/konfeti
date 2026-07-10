@@ -26,7 +26,7 @@ const cspHeader = `
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: ${supabaseUrl};
   font-src 'self';
-  connect-src 'self' ${supabaseUrl} ${supabaseWsUrl} https://*.sentry.io https://*.ingest.sentry.io;
+  connect-src 'self' ${supabaseUrl} ${supabaseWsUrl} https://*.sentry.io https://*.ingest.sentry.io https://photon.komoot.io;
   object-src 'none';
   base-uri 'self';
   form-action 'self';

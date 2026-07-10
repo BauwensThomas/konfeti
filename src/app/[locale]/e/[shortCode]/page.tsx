@@ -17,6 +17,8 @@ import { MyParticipationCard } from "@/components/MyParticipationCard";
 import { EventPersonnes } from "@/components/EventPersonnes";
 import { EventChat, getInitialUnreadCount } from "@/components/EventChat";
 import { BringList } from "@/components/BringList";
+import { EventWeather } from "@/components/EventWeather";
+import { shouldShowWeather } from "@/lib/weather";
 import { BringAccueilGauges } from "@/components/bring/BringAccueilGauges";
 import { ShareEventButton } from "@/components/ShareEventButton";
 import { LinkAccountBanner } from "@/components/LinkAccountBanner";
@@ -490,6 +492,8 @@ type EventRow = {
   starts_at: string | null;
   ends_at: string | null;
   location_text: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
   cover_photo_path: string | null;
   occasion: string | null;
   birthday_person: string | null;
@@ -657,6 +661,14 @@ async function EventAccueil({
           />
         ) : (
           <p className="text-base font-semibold text-foreground">{t("dateTBD")}</p>
+        )}
+
+        {shouldShowWeather(event.starts_at, event.date_mode, event.location_lat !== null && event.location_lng !== null) && (
+          <EventWeather
+            lat={event.location_lat!}
+            lng={event.location_lng!}
+            dateISO={event.starts_at!.slice(0, 10)}
+          />
         )}
 
         {event.location_text && (

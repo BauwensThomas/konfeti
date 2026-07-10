@@ -242,8 +242,10 @@ test("changer l'occasion d'un événement efface les infos de l'ancienne occasio
     await page.getByPlaceholder("Adresse et ville").fill("Rue de Test 1, 1000 Bruxelles");
     await page.getByRole("button", { name: "Suivant" }).click();
 
-    // Étape 2 : occasion "Anniversaire", nom rempli.
-    await page.getByRole("combobox").first().selectOption("birthday");
+    // Étape 2 : occasion "Anniversaire" (popup, plus un <select> natif depuis
+    // la généralisation du pattern bouton+Modal à tout le wizard), nom rempli.
+    await page.getByRole("button", { name: "Autre", exact: true }).click();
+    await page.getByRole("button", { name: "Anniversaire", exact: true }).click();
     await page.locator("input[type='text']").first().fill("Julie");
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
@@ -259,20 +261,23 @@ test("changer l'occasion d'un événement efface les infos de l'ancienne occasio
     if (!event) throw new Error("evenement introuvable");
 
     await page.goto(`/e/${event.short_code}`);
-    await expect(page.getByText("Julie", { exact: true })).toBeVisible();
+    // Phrase contextuelle (pas juste le prénom brut) depuis le redesign de
+    // l'Accueil -- voir ARCHITECTURE.md, "C'est l'anniversaire de {person}...".
+    await expect(page.getByText("C'est l'anniversaire de Julie !")).toBeVisible();
 
     // Modifie l'occasion vers "Nouvel An".
     await page.goto(`/e/${event.short_code}/modifier`);
     await page.getByRole("button", { name: "Suivant" }).click();
-    await page.getByRole("combobox").first().selectOption("new_year");
+    await page.getByRole("button", { name: "Anniversaire", exact: true }).click();
+    await page.getByRole("button", { name: "Nouvel An", exact: true }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Suivant" }).click();
     await page.getByRole("button", { name: "Enregistrer les modifications" }).click();
     await expect(page).toHaveURL(new RegExp(`/e/${event.short_code}$`));
 
-    // "Julie" ne doit plus apparaître nulle part sur l'Accueil.
-    await expect(page.getByText("Julie", { exact: true })).not.toBeVisible();
+    // La phrase d'anniversaire ne doit plus apparaître nulle part sur l'Accueil.
+    await expect(page.getByText("C'est l'anniversaire de Julie !")).not.toBeVisible();
 
     const { data: eventAfter } = await supabaseAdmin
       .from("events")

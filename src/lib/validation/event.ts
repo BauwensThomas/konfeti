@@ -23,6 +23,11 @@ const eventFieldsSchema = z.object({
     .max(5)
     .optional(),
   locationText: z.string().trim().min(1).max(300),
+  // Météo (brief 4.6) : renseignés seulement si l'organisateur a choisi une
+  // vraie suggestion Photon (LocationAutocomplete.tsx), jamais par un
+  // géocodage serveur -- `null` sinon, la météo ne s'affiche simplement pas.
+  locationLat: z.number().nullable().default(null),
+  locationLng: z.number().nullable().default(null),
   coverPhotoPath: z.string().trim().optional(),
 
   // Écran 2 : l'occasion

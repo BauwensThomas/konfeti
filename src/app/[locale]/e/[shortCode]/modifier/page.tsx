@@ -96,6 +96,8 @@ export default async function EditEventPage({
             { startsAt: "", label: "" },
           ],
     locationText: event.location_text ?? "",
+    locationLat: event.location_lat ?? null,
+    locationLng: event.location_lng ?? null,
     coverPhotoPath: event.cover_photo_path ?? "",
     occasion: event.occasion ?? "other",
     birthdayPerson: event.birthday_person ?? "",
