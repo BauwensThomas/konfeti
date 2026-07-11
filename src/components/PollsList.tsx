@@ -1,0 +1,126 @@
+import { createClient } from "@/lib/supabase/server";
+import { PollsListClient, type PollView } from "@/components/polls/PollsListClient";
+
+type RawPollRow = {
+  id: string;
+  question: string;
+  status: "pending" | "approved";
+  proposed_by_rsvp_id: string | null;
+};
+
+type RawOptionRow = {
+  id: string;
+  poll_id: string;
+  label: string;
+};
+
+type RawVoteRow = {
+  id: string;
+  option_id: string;
+  rsvp_id: string;
+};
+
+// Onglet Participer (brief : "Sondage(s) optionnel(s)") -- sondages définis
+// par l'organisateur au wizard (voir CreateEventWizard.tsx/actions/events.ts)
+// ou proposés par un invité et modérés par un admin, même organisation que
+// "qui apporte quoi" (`BringList.tsx`). Comptage des votes agrégé ici (pas
+// de nom de votant affiché, comme le sondage de date `DatePollVoting.tsx`
+// -- une préférence de sondage reste plus discrète qu'un engagement "qui
+// apporte quoi"), délègue l'affichage + les interactions + le temps réel à
+// `PollsListClient`.
+export async function PollsList({
+  eventId,
+  shortCode,
+  viewerRsvpId,
+  isAdmin,
+}: {
+  eventId: string;
+  shortCode: string;
+  viewerRsvpId: string | null;
+  isAdmin: boolean;
+}) {
+  const supabase = await createClient();
+
+  // RLS (`polls_select`) filtre déjà "approved uniquement" pour un
+  // non-admin, "tout (y compris pending)" pour un admin -- une seule
+  // requête suffit, pas besoin de distinguer ici.
+  const { data: pollRows } = await supabase
+    .from("polls")
+    .select("id, question, status, proposed_by_rsvp_id")
+    .eq("event_id", eventId)
+    .order("question")
+    .returns<RawPollRow[]>();
+
+  const polls = pollRows ?? [];
+  const pollIds = polls.map((p) => p.id);
+
+  const { data: optionRows } =
+    pollIds.length > 0
+      ? await supabase
+          .from("poll_options")
+          .select("id, poll_id, label")
+          .in("poll_id", pollIds)
+          .order("label")
+          .returns<RawOptionRow[]>()
+      : { data: [] as RawOptionRow[] };
+
+  const options = optionRows ?? [];
+  const optionIds = options.map((o) => o.id);
+
+  const { data: voteRows } =
+    optionIds.length > 0
+      ? await supabase.from("poll_votes").select("id, option_id, rsvp_id").in("option_id", optionIds).returns<RawVoteRow[]>()
+      : { data: [] as RawVoteRow[] };
+
+  const votes = voteRows ?? [];
+
+  // Prénoms des proposants de sondages en attente uniquement (même pattern
+  // que `BringList.tsx`).
+  const proposerRsvpIds = [...new Set(polls.map((p) => p.proposed_by_rsvp_id).filter((id): id is string => !!id))];
+  const nameByRsvpId = new Map<string, string>();
+
+  if (proposerRsvpIds.length > 0) {
+    if (isAdmin) {
+      const { data } = await supabase.from("rsvps").select("id, first_name, last_name").in("id", proposerRsvpIds);
+      for (const r of data ?? []) {
+        nameByRsvpId.set(r.id, `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Anonyme");
+      }
+    } else {
+      const { data } = await supabase
+        .from("rsvps_public_data")
+        .select("id, first_name, last_initial")
+        .in("id", proposerRsvpIds);
+      for (const r of data ?? []) {
+        nameByRsvpId.set(r.id, `${r.first_name ?? ""} ${r.last_initial ?? ""}`.trim() || "Anonyme");
+      }
+    }
+  }
+
+  const pollViews: PollView[] = polls.map((poll) => ({
+    id: poll.id,
+    question: poll.question,
+    status: poll.status,
+    proposedByName: poll.proposed_by_rsvp_id ? (nameByRsvpId.get(poll.proposed_by_rsvp_id) ?? "Anonyme") : null,
+    options: options
+      .filter((o) => o.poll_id === poll.id)
+      .map((option) => {
+        const optionVotes = votes.filter((v) => v.option_id === option.id);
+        return {
+          id: option.id,
+          label: option.label,
+          voteCount: optionVotes.length,
+          votedByMe: optionVotes.some((v) => v.rsvp_id === viewerRsvpId),
+        };
+      }),
+  }));
+
+  return (
+    <PollsListClient
+      eventId={eventId}
+      shortCode={shortCode}
+      viewerRsvpId={viewerRsvpId}
+      isAdmin={isAdmin}
+      initialPolls={pollViews}
+    />
+  );
+}

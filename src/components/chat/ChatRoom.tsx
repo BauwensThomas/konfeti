@@ -18,7 +18,6 @@ export function ChatRoom({
   eventId,
   viewerRsvpId: initialViewerRsvpId,
   isAdmin,
-  hasBackstage,
   hideBackstageForViewer,
   isBackstageHiddenForBeneficiaries,
   backstageBeneficiaryNames,
@@ -33,10 +32,6 @@ export function ChatRoom({
   eventId: string;
   viewerRsvpId: string | null;
   isAdmin: boolean;
-  // L'onglet Coulisses reste TOUJOURS affiché (retour Thomas : "il faut
-  // toujours laisser coulisse et général, même pour le bénéficiaire") : ce
-  // booléen ne pilote plus la visibilité de l'onglet, seulement son contenu.
-  hasBackstage: boolean;
   // Étape 5 du wizard (retour Thomas : "s'il clique sur coulisses, il faut
   // dire vous avez pas accès") : true si CE viewer est le bénéficiaire
   // concerné par le masquage Coulisses -- remplace le contenu de CET onglet
@@ -200,8 +195,6 @@ export function ChatRoom({
   // dès que le message réellement non lu n'était connu que du rattrapage
   // (retour Thomas : "je ne vois plus la ligne rouge").
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
-
-  const showBackstageToggle = hasBackstage;
 
   // L'hôte n'a pas forcément de ligne rsvps tant qu'il n'a jamais voté/écrit
   // (voir date-poll.ts) : on la crée/récupère paresseusement au premier
@@ -793,41 +786,41 @@ export function ChatRoom({
           de pilule violette). Retour Thomas ensuite : le fond vert foncé de
           l'onglet inactif rendait le texte blanc à peine lisible -- remplacé
           par une bulle au contour vert (fond transparent) et un texte foncé,
-          cohérent avec le reste de la palette. */}
-      {showBackstageToggle && (
-        <div className="flex shrink-0 gap-1 bg-canvas p-3 pb-0">
-          <div className="flex flex-1 gap-1 rounded-full p-1">
-            {(["main", "backstage"] as const).map((ch) => {
-              const unreadForTab = ch === "main" ? mainUnreadCount : backstageUnreadCount;
-              return (
-                <button
-                  key={ch}
-                  type="button"
-                  onClick={() => handleSwitchChannel(ch)}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-sm font-semibold transition-colors ${
-                    activeChannel === ch
-                      ? "border-accent-mint bg-accent-mint text-foreground"
-                      : "border-accent-mint bg-transparent text-foreground"
-                  }`}
-                >
-                  <span>{t(ch === "main" ? "tabs.main" : "tabs.backstage")}</span>
-                  {/* Compteur PAR ONGLET (retour Thomas : "mettre le nombre de
-                      notif dans général et/ou coulisses") -- jamais affiché
-                      sur l'onglet déjà actif (son compteur reste à 0, voir
-                      `handleSwitchChannel`), ni sur un canal bloqué pour ce
-                      viewer (RLS ne lui livre alors jamais ces messages, donc
-                      `unreadForTab` y vaut structurellement 0). */}
-                  {unreadForTab > 0 && (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-coral px-1 text-xs font-bold text-white">
-                      {unreadForTab}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          cohérent avec le reste de la palette. Toujours affichés, y compris
+          sans aucun bénéficiaire désigné sur l'événement (bug réel signalé
+          par Thomas, voir EventChat.tsx). */}
+      <div className="flex shrink-0 gap-1 bg-canvas p-3 pb-0">
+        <div className="flex flex-1 gap-1 rounded-full p-1">
+          {(["main", "backstage"] as const).map((ch) => {
+            const unreadForTab = ch === "main" ? mainUnreadCount : backstageUnreadCount;
+            return (
+              <button
+                key={ch}
+                type="button"
+                onClick={() => handleSwitchChannel(ch)}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  activeChannel === ch
+                    ? "border-accent-mint bg-accent-mint text-foreground"
+                    : "border-accent-mint bg-transparent text-foreground"
+                }`}
+              >
+                <span>{t(ch === "main" ? "tabs.main" : "tabs.backstage")}</span>
+                {/* Compteur PAR ONGLET (retour Thomas : "mettre le nombre de
+                    notif dans général et/ou coulisses") -- jamais affiché
+                    sur l'onglet déjà actif (son compteur reste à 0, voir
+                    `handleSwitchChannel`), ni sur un canal bloqué pour ce
+                    viewer (RLS ne lui livre alors jamais ces messages, donc
+                    `unreadForTab` y vaut structurellement 0). */}
+                {unreadForTab > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-coral px-1 text-xs font-bold text-white">
+                    {unreadForTab}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-      )}
+      </div>
 
       {/* Bannière "X a accès" / "X n'a pas accès" (retour Thomas : "il faut
           le dire quand X a accès et aussi quand elle a pas accès" -- jamais

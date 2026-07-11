@@ -225,6 +225,13 @@ test("message systeme, moderation admin, Coulisses masque au beneficiaire, anony
   page,
   browser,
 }) => {
+  // Test le plus lourd du fichier (3 comptes reels : hote + 2 invites, dont
+  // un flux complet moderation/beneficiaire/depart) -- le timeout par defaut
+  // (30s) s'est revele trop court en pratique (le test progresse plus loin
+  // a chaque essai selon la charge du moment, jamais bloque au meme endroit
+  // -- pas un bug deterministe), meme raison que les autres tests multi-
+  // comptes de ce fichier deja portes a 60s.
+  test.setTimeout(60_000);
   const hostEmail = `e2e-chat-mod-${Date.now()}@example.com`;
   const host = await loginAs(page, hostEmail);
   let eventId: string | null = null;

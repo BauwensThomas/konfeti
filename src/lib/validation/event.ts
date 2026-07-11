@@ -75,6 +75,25 @@ const eventFieldsSchema = z.object({
     .max(30)
     .default([]),
 
+  // Sondages (brief : "Sondage(s) optionnel(s)"), même convention `id: null`
+  // = pas encore créé que `bringItems` ci-dessus -- synchronisés par diff
+  // (voir `syncPolls`, `actions/events.ts`), toujours `status = 'approved'`
+  // (comportement historique d'un sondage défini par l'organisateur, comme
+  // les items du wizard).
+  polls: z
+    .array(
+      z.object({
+        id: z.string().uuid().nullable(),
+        question: z.string().trim().min(1).max(300),
+        options: z
+          .array(z.object({ id: z.string().uuid().nullable(), label: z.string().trim().min(1).max(200) }))
+          .min(2)
+          .max(10),
+      }),
+    )
+    .max(10)
+    .default([]),
+
   // Écran 5 : ce que voient les bénéficiaires (brief 1.4 + retour Thomas).
   // "backstage" masque le fil Coulisses, "chat" masque le chat GÉNÉRAL
   // (canal 'main') -- ajouté après coup (retour Thomas : un bénéficiaire
@@ -193,3 +212,4 @@ export function updateEventSchema(skipPastDateCheck: boolean) {
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type BringItemInput = CreateEventInput["bringItems"][number];
+export type PollInput = CreateEventInput["polls"][number];

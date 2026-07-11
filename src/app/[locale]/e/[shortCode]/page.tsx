@@ -17,9 +17,11 @@ import { MyParticipationCard } from "@/components/MyParticipationCard";
 import { EventPersonnes } from "@/components/EventPersonnes";
 import { EventChat, getInitialUnreadCount } from "@/components/EventChat";
 import { BringList } from "@/components/BringList";
+import { PollsList } from "@/components/PollsList";
 import { EventWeather } from "@/components/EventWeather";
 import { shouldShowWeather } from "@/lib/weather";
 import { BringAccueilGauges } from "@/components/bring/BringAccueilGauges";
+import { PollsAccueilSummary } from "@/components/polls/PollsAccueilSummary";
 import { ShareEventButton } from "@/components/ShareEventButton";
 import { LinkAccountBanner } from "@/components/LinkAccountBanner";
 import { Card } from "@/components/ui/Card";
@@ -151,6 +153,10 @@ export default async function EventPage({
     // manquait jusqu'ici.
     const isBringHiddenForBeneficiaries = hiddenBlocks.includes("bring");
     const isBringListHidden = isBeneficiary && isBringHiddenForBeneficiaries;
+    // Sondages : même masquage purement applicatif que "qui apporte quoi"
+    // juste au-dessus.
+    const arePollsHiddenForBeneficiaries = hiddenBlocks.includes("polls");
+    const isPollsListHidden = isBeneficiary && arePollsHiddenForBeneficiaries;
 
     // Canaux de chat réellement accessibles à CE viewer (retour Thomas :
     // pastille non-lus par canal, sans jamais notifier un bénéficiaire
@@ -205,6 +211,18 @@ export default async function EventPage({
         .eq("event_id", event.id)
         .eq("status", "pending");
       pendingBringCount = count ?? 0;
+    }
+
+    // Sondages proposés par un invité, en attente de validation admin --
+    // même pattern que `pendingBringCount` ci-dessus.
+    let pendingPollsCount = 0;
+    if (isAdmin) {
+      const { count } = await supabase
+        .from("polls")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", event.id)
+        .eq("status", "pending");
+      pendingPollsCount = count ?? 0;
     }
 
     const initialUnreadCount = await getInitialUnreadCount(event.id, myRsvpRow?.id ?? null, chatAllowedChannels);
@@ -307,6 +325,7 @@ export default async function EventPage({
               coverPhotoUrl={coverPhotoUrl}
               beneficiaryNames={beneficiaryNames}
               isBringListHidden={isBringListHidden}
+              isPollsListHidden={isPollsListHidden}
               myRsvp={
                 !isHost && myRsvpRow
                   ? { id: myRsvpRow.id, answer: myRsvpRow.answer as "yes" | "maybe" | "no" }
@@ -336,6 +355,7 @@ export default async function EventPage({
           }
           pendingCount={pendingCount}
           pendingBringCount={pendingBringCount}
+          pendingPollsCount={pendingPollsCount}
           chat={
             <EventChat
               eventId={event.id}
@@ -347,16 +367,28 @@ export default async function EventPage({
             />
           }
           participer={
-            isBringListHidden ? (
-              <Card className="text-center text-sm text-foreground/60">{t("bringListHidden")}</Card>
-            ) : (
-              <BringList
-                eventId={event.id}
-                shortCode={event.short_code}
-                viewerRsvpId={myRsvpRow?.id ?? null}
-                isAdmin={isAdmin}
-              />
-            )
+            <div className="flex flex-col gap-4">
+              {isPollsListHidden ? (
+                <Card className="text-center text-sm text-foreground/60">{t("pollsListHidden")}</Card>
+              ) : (
+                <PollsList
+                  eventId={event.id}
+                  shortCode={event.short_code}
+                  viewerRsvpId={myRsvpRow?.id ?? null}
+                  isAdmin={isAdmin}
+                />
+              )}
+              {isBringListHidden ? (
+                <Card className="text-center text-sm text-foreground/60">{t("bringListHidden")}</Card>
+              ) : (
+                <BringList
+                  eventId={event.id}
+                  shortCode={event.short_code}
+                  viewerRsvpId={myRsvpRow?.id ?? null}
+                  isAdmin={isAdmin}
+                />
+              )}
+            </div>
           }
           eventId={event.id}
           viewerRsvpId={myRsvpRow?.id ?? null}
@@ -527,6 +559,7 @@ async function EventAccueil({
   beneficiaryNames,
   myRsvp,
   isBringListHidden,
+  isPollsListHidden,
 }: {
   event: EventRow;
   isHost: boolean;
@@ -553,6 +586,9 @@ async function EventAccueil({
   // d'accueil") -- même garde-fou de masquage que le reste (jamais montré au
   // bénéficiaire concerné).
   isBringListHidden: boolean;
+  // Sondages (retour Thomas : "il ne faut pas mettre les sondages sur
+  // l'accueil ?") -- même principe que `isBringListHidden` juste au-dessus.
+  isPollsListHidden: boolean;
 }) {
   const t = await getTranslations("EventPage");
   const tOccasions = await getTranslations("Occasions");
@@ -773,6 +809,12 @@ async function EventAccueil({
           demandée") -- même composant `BringGauge` que l'onglet Participer,
           BringAccueilGauges ne rend rien si aucun item n'existe. */}
       {!isBringListHidden && <BringAccueilGauges eventId={event.id} />}
+
+      {/* Sondages : même principe compact sur l'Accueil (retour Thomas : "il
+          ne faut pas mettre les sondages sur l'accueil ?"), lecture seule
+          (vote uniquement depuis l'onglet Participer) -- ne rend rien si
+          aucun sondage n'existe. */}
+      {!isPollsListHidden && <PollsAccueilSummary eventId={event.id} />}
     </div>
   );
 }

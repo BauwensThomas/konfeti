@@ -55,6 +55,7 @@ export type WizardData = {
   potGoalEuros: string;
   potLabel: string;
   bringItems: BringItemRow[];
+  polls: PollRow[];
   beneficiaryHiddenBlocks: BeneficiaryBlock[];
 };
 
@@ -76,6 +77,11 @@ export type BringItemRow = {
   unit: BringUnit | "";
   quantityNeeded: string;
 };
+
+// Sondages (brief : "Sondage(s) optionnel(s)") : même convention `id: null`
+// que `BringItemRow` -- une option sans id n'existe pas encore en base.
+export type PollOptionRow = { id: string | null; label: string };
+export type PollRow = { id: string | null; question: string; options: PollOptionRow[] };
 
 const INITIAL_DATA: WizardData = {
   title: "",
@@ -113,6 +119,7 @@ const INITIAL_DATA: WizardData = {
   potGoalEuros: "",
   potLabel: "",
   bringItems: [],
+  polls: [],
   // Cagnotte + Coulisses masquées par défaut (préserve le comportement
   // historique de ces deux blocs, "toujours masqués", avant qu'ils ne
   // deviennent configurables ici) ; le chat GÉNÉRAL et le reste restent
@@ -349,6 +356,18 @@ export function CreateEventWizard({
             unit: item.unit as BringUnit,
             quantityNeeded: Number(item.quantityNeeded),
           })),
+        // Sondages : sondage sans question ou avec moins de 2 options
+        // valides retiré entièrement (comme un item "qui apporte quoi" sans
+        // libellé) -- une option vide ne compte jamais.
+        polls: data.polls
+          .map((poll) => ({
+            id: poll.id,
+            question: poll.question.trim(),
+            options: poll.options
+              .filter((option) => option.label.trim())
+              .map((option) => ({ id: option.id, label: option.label.trim() })),
+          }))
+          .filter((poll) => poll.question && poll.options.length >= 2),
         beneficiaryHiddenBlocks: data.beneficiaryHiddenBlocks,
       };
 
@@ -984,6 +1003,111 @@ export function CreateEventWizard({
                   className="text-sm font-semibold text-primary"
                 >
                   + {t("step4.addBringItem")}
+                </button>
+              </div>
+            </Field>
+
+            {/* Sondages (brief : "Sondage(s) optionnel(s)") : même pattern
+                répétable à deux niveaux (sondage -> options), une nouvelle
+                ligne de sondage démarre déjà avec 2 options vides (jamais
+                moins de 2 affichées, le bouton "Retirer" d'une option
+                disparaît en dessous de ce seuil). */}
+            <Field label={t("step4.pollsLabel")}>
+              <div className="flex flex-col gap-3">
+                {data.polls.map((poll, pollIndex) => (
+                  <div key={pollIndex} className="flex flex-col gap-2 rounded-konfeti border border-border p-3">
+                    <input
+                      type="text"
+                      value={poll.question}
+                      onChange={(e) => {
+                        const next = [...data.polls];
+                        next[pollIndex] = { ...next[pollIndex], question: e.target.value };
+                        update("polls", next);
+                      }}
+                      placeholder={t("step4.pollQuestionPlaceholder")}
+                      aria-label={t("step4.pollQuestionAria", { index: pollIndex + 1 })}
+                      className={inputClass}
+                    />
+                    <div className="flex flex-col gap-2">
+                      {poll.options.map((option, optionIndex) => (
+                        <div key={optionIndex} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={option.label}
+                            onChange={(e) => {
+                              const next = [...data.polls];
+                              const nextOptions = [...next[pollIndex].options];
+                              nextOptions[optionIndex] = { ...nextOptions[optionIndex], label: e.target.value };
+                              next[pollIndex] = { ...next[pollIndex], options: nextOptions };
+                              update("polls", next);
+                            }}
+                            placeholder={t("step4.pollOptionPlaceholder")}
+                            aria-label={t("step4.pollOptionAria", {
+                              pollIndex: pollIndex + 1,
+                              optionIndex: optionIndex + 1,
+                            })}
+                            className={`${inputClass} flex-1`}
+                          />
+                          {poll.options.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = [...data.polls];
+                                next[pollIndex] = {
+                                  ...next[pollIndex],
+                                  options: next[pollIndex].options.filter((_, i) => i !== optionIndex),
+                                };
+                                update("polls", next);
+                              }}
+                              className="text-xs font-semibold text-accent-coral"
+                            >
+                              {t("step4.removePollOption")}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = [...data.polls];
+                          next[pollIndex] = {
+                            ...next[pollIndex],
+                            options: [...next[pollIndex].options, { id: null, label: "" }],
+                          };
+                          update("polls", next);
+                        }}
+                        className="self-start text-xs font-semibold text-primary"
+                      >
+                        + {t("step4.addPollOption")}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => update("polls", data.polls.filter((_, i) => i !== pollIndex))}
+                      className="self-start text-sm text-accent-coral"
+                    >
+                      {t("step4.removePoll")}
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    update("polls", [
+                      ...data.polls,
+                      {
+                        id: null,
+                        question: "",
+                        options: [
+                          { id: null, label: "" },
+                          { id: null, label: "" },
+                        ],
+                      },
+                    ])
+                  }
+                  className="text-sm font-semibold text-primary"
+                >
+                  + {t("step4.addPoll")}
                 </button>
               </div>
             </Field>

@@ -44,7 +44,11 @@ export function BringGauge({
   const t = useTranslations("Bring");
   const ratio = needed > 0 ? claimed / needed : 0;
   const fillPercent = Math.min(ratio, 1) * 100;
-  const isOverflow = claimed > needed;
+  // Retour Thomas : "quand on atteint le nombre de pièces demandé... il faut
+  // les confettis" -- atteindre PILE la cible (10/10) mérite déjà la
+  // célébration, pas seulement la dépasser (11/10). `needed > 0` exclu du
+  // déclenchement un item à 0 demandé (cas limite, jamais 0/0 "complet").
+  const isOverflow = needed > 0 && claimed >= needed;
 
   return (
     <div className="flex flex-col gap-1">

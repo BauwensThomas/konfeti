@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import {
+  addBringItem,
   approveBringItem,
   claimBringItem,
   deleteBringClaim,
@@ -78,13 +79,23 @@ export function BringListClient({
   const [proposeUnit, setProposeUnit] = useState<BringUnit | "">("");
   const [proposeSuccess, setProposeSuccess] = useState(false);
 
+  // Formulaire de proposition dans un popup plutôt que toujours déplié
+  // (retour Thomas : "ça va être beaucoup sur téléphone" une fois empilé
+  // avec la section Sondages) -- même `Modal` réutilisable que partout
+  // ailleurs (UnitPickerButton, fusion/suppression d'item juste en dessous).
+  const [isProposeOpen, setIsProposeOpen] = useState(false);
+
   // Retour Thomas : le message restait affiché indéfiniment, y compris une
   // fois la proposition déjà validée par l'organisateur -- un message de
   // confirmation transitoire, pas un statut permanent (même logique que les
-  // toasts, auto-disparition après quelques secondes).
+  // toasts, auto-disparition après quelques secondes). Referme aussi le
+  // popup de proposition une fois le message écoulé.
   useEffect(() => {
     if (!proposeSuccess) return;
-    const timeout = setTimeout(() => setProposeSuccess(false), 5000);
+    const timeout = setTimeout(() => {
+      setProposeSuccess(false);
+      setIsProposeOpen(false);
+    }, 5000);
     return () => clearTimeout(timeout);
   }, [proposeSuccess]);
 
@@ -101,6 +112,37 @@ export function BringListClient({
   // quantité demandée par l'item lui-même).
   const [itemQuantityDrafts, setItemQuantityDrafts] = useState<Record<string, string>>({});
   const [confirmingDeleteItemId, setConfirmingDeleteItemId] = useState<string | null>(null);
+
+  // Ajustement de la quantité nécessaire au moment même de l'approbation
+  // (retour Thomas : "l'admin quand il accepte, il doit dire combien de
+  // quantité il faudrait") -- brouillon séparé de `itemQuantityDrafts` (qui,
+  // lui, porte l'édition d'un item DÉJÀ approuvé). Préremplit avec la
+  // quantité proposée par l'invité, modifiable avant de cliquer "Approuver".
+  const [pendingQuantityDrafts, setPendingQuantityDrafts] = useState<Record<string, string>>({});
+
+  // Ajout direct d'un item par un admin depuis Participer (retour Thomas :
+  // "pour les admin il faut juste un seul bouton, proposer/ajouter un
+  // item") -- un SEUL bouton/formulaire pour l'admin (remplace à la fois
+  // "Proposer" et l'ancien bouton "Ajouter" séparé), toujours approuvé
+  // d'emblée. `addOwnQuantity` optionnel : "s'il met pas de quantité à ce
+  // qu'il rapporte, ça créera l'item avec 0 apporté pour le moment" -- une
+  // réclamation n'est créée pour l'admin que s'il renseigne ce champ (voir
+  // `addBringItem`).
+  const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+  const [addLabel, setAddLabel] = useState("");
+  const [addQuantity, setAddQuantity] = useState("");
+  const [addUnit, setAddUnit] = useState<BringUnit | "">("");
+  const [addOwnQuantity, setAddOwnQuantity] = useState("");
+  const [addSuccess, setAddSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!addSuccess) return;
+    const timeout = setTimeout(() => {
+      setAddSuccess(false);
+      setIsAddItemOpen(false);
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }, [addSuccess]);
 
   const approvedItems = initialItems.filter((item) => item.status === "approved");
   const pendingItems = initialItems.filter((item) => item.status === "pending");
@@ -179,12 +221,46 @@ export function BringListClient({
 
   function handleApprove(itemId: string) {
     setError(null);
+    const draft = pendingQuantityDrafts[itemId];
+    const quantityNeeded = draft !== undefined && draft !== "" ? Number(draft) : undefined;
     startTransition(async () => {
-      const result = await approveBringItem(shortCode, itemId);
+      const result = await approveBringItem(shortCode, itemId, quantityNeeded);
       if (!result.ok) {
         setError(t("errorUnknown"));
         return;
       }
+      setPendingQuantityDrafts((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+      router.refresh();
+    });
+  }
+
+  function handleAddItem() {
+    if (!addUnit || !viewerRsvpId) return;
+    const quantity = Number(addQuantity);
+    if (!addLabel.trim() || !quantity || quantity <= 0) return;
+    const ownQuantity = addOwnQuantity ? Number(addOwnQuantity) : undefined;
+    setError(null);
+    setAddSuccess(false);
+    startTransition(async () => {
+      const result = await addBringItem(eventId, shortCode, viewerRsvpId, {
+        label: addLabel.trim(),
+        unit: addUnit,
+        quantityNeeded: quantity,
+        ownQuantity,
+      });
+      if (!result.ok) {
+        setError(t("errorUnknown"));
+        return;
+      }
+      setAddLabel("");
+      setAddQuantity("");
+      setAddUnit("");
+      setAddOwnQuantity("");
+      setAddSuccess(true);
       router.refresh();
     });
   }
@@ -250,6 +326,15 @@ export function BringListClient({
 
   return (
     <Card className="flex flex-col gap-4">
+      {/* Gros titre de section (retour Thomas : visible sur l'onglet
+          Participer désormais empilé avec Sondages au-dessus -- sans lui,
+          la liste enchaînait directement sans rien pour la distinguer de la
+          section voisine). Même style que "Proposer un item"/"Proposer un
+          sondage" juste plus bas, réutilise `accueilHeading` (déjà "Qui
+          apporte quoi", jusqu'ici affiché seulement sur la version compacte
+          de l'Accueil, voir BringAccueilGauges.tsx). */}
+      <p className="font-display text-lg font-bold text-foreground">{t("accueilHeading")}</p>
+
       {error && (
         <p role="alert" className="text-sm text-accent-coral">
           {error}
@@ -272,6 +357,23 @@ export function BringListClient({
               {item.proposedByName && (
                 <p className="text-xs text-foreground/60">{t("proposedBy", { name: item.proposedByName })}</p>
               )}
+              {/* Retour Thomas : "l'admin quand il accepte, il doit dire
+                  combien de quantité il faudrait" -- préremplie à la
+                  quantité proposée, modifiable avant d'approuver. Même
+                  disposition (étiquette sur sa propre ligne) que l'édition
+                  d'un item déjà approuvé juste plus bas. */}
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-foreground/60">{t("editQuantityLabel")}</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={pendingQuantityDrafts[item.id] ?? item.quantityNeeded.toString()}
+                  onChange={(e) => setPendingQuantityDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                  aria-label={t("editQuantityLabel")}
+                  className="w-20 rounded-konfeti border border-border bg-surface px-2 py-1 text-sm text-foreground"
+                />
+              </div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" disabled={isPending} onClick={() => handleApprove(item.id)}>
                   {t("approve")}
@@ -397,13 +499,100 @@ export function BringListClient({
         })
       )}
 
-      {/* Proposition d'item par un invité (brief 4.4, retour Thomas) --
-          visible à tout participant approuvé non masqué (même condition
-          que la réclamation d'un item existant : `viewerRsvpId` n'existe
-          que dans ce cas, voir page.tsx/EventChat.tsx pour le pattern déjà
-          établi). */}
-      {viewerRsvpId && (
-        <div className="flex flex-col gap-2 rounded-konfeti border border-border p-3">
+      {/* Proposition d'item par un invité (brief 4.4, retour Thomas), dans un
+          popup plutôt que toujours déplié (retour Thomas : trop de place
+          prise sur mobile une fois empilé avec Sondages) -- visible à tout
+          participant approuvé non masqué, SAUF un admin (retour Thomas :
+          "pour les admin il faut juste un seul bouton, proposer/ajouter un
+          item" -- l'admin n'a que le bouton juste en dessous). */}
+      {viewerRsvpId && !isAdmin && (
+        <Button variant="secondary" className="w-full" onClick={() => setIsProposeOpen(true)}>
+          + {t("proposeHeading")}
+        </Button>
+      )}
+
+      {/* Bouton unique pour l'admin (retour Thomas, voir plus haut) --
+          toujours déjà approuvé, avec une quantité personnelle optionnelle
+          ("s'il met pas de quantité à ce qu'il rapporte, ça créera l'item
+          avec 0 apporté pour le moment"). */}
+      {isAdmin && viewerRsvpId && (
+        <Button variant="secondary" className="w-full" onClick={() => setIsAddItemOpen(true)}>
+          + {t("addItemHeading")}
+        </Button>
+      )}
+
+      <Modal open={isAddItemOpen} onClose={() => setIsAddItemOpen(false)}>
+        <div className="flex flex-col gap-2">
+          <p className="font-display text-lg font-bold text-foreground">{t("addItemHeading")}</p>
+          {addSuccess && <p className="text-sm text-accent-mint">{t("addItemSuccess")}</p>}
+          <input
+            type="text"
+            value={addLabel}
+            onChange={(e) => {
+              setAddLabel(e.target.value);
+              setAddSuccess(false);
+            }}
+            placeholder={t("proposeLabelPlaceholder")}
+            className="rounded-konfeti border border-border bg-surface px-3 py-2 text-sm text-foreground"
+          />
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-foreground/60">{t("editQuantityLabel")}</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={addQuantity}
+                onChange={(e) => {
+                  setAddQuantity(e.target.value);
+                  setAddSuccess(false);
+                }}
+                aria-label={t("proposeQuantityAria")}
+                className="flex-1 rounded-konfeti border border-border bg-surface px-3 py-2 text-sm text-foreground"
+              />
+              <UnitPickerButton
+                value={addUnit}
+                onChange={(unit) => {
+                  setAddUnit(unit);
+                  setAddSuccess(false);
+                }}
+                unitLabels={{
+                  piece: t("unit.piece"),
+                  liter: t("unit.liter"),
+                  gram: t("unit.gram"),
+                  kilogram: t("unit.kilogram"),
+                }}
+                placeholder={t("proposeUnitPlaceholder")}
+                ariaLabel={t("proposeUnitAria")}
+                className="flex-1 rounded-konfeti border border-border bg-surface px-3 py-2 text-left text-sm text-foreground"
+              />
+            </div>
+          </div>
+          {/* Optionnel (retour Thomas) : combien l'admin apporte lui-même,
+              distinct de la quantité totale nécessaire juste au-dessus. */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-foreground/60">{t("addItemOwnQuantityLabel")}</span>
+            <input
+              type="number"
+              min={0}
+              step="any"
+              value={addOwnQuantity}
+              onChange={(e) => {
+                setAddOwnQuantity(e.target.value);
+                setAddSuccess(false);
+              }}
+              aria-label={t("addItemOwnQuantityLabel")}
+              className="w-20 rounded-konfeti border border-border bg-surface px-2 py-1 text-sm text-foreground"
+            />
+          </div>
+          <Button size="sm" disabled={isPending} onClick={handleAddItem}>
+            {t("addItemSubmit")}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal open={isProposeOpen} onClose={() => setIsProposeOpen(false)}>
+        <div className="flex flex-col gap-2">
           <p className="font-display text-lg font-bold text-foreground">{t("proposeHeading")}</p>
           {proposeSuccess && <p className="text-sm text-accent-mint">{t("proposeSuccess")}</p>}
           <input
@@ -450,7 +639,7 @@ export function BringListClient({
             {t("proposeSubmit")}
           </Button>
         </div>
-      )}
+      </Modal>
 
       <Modal open={confirmingDeleteItemId !== null} onClose={() => setConfirmingDeleteItemId(null)}>
         <p className="text-center text-base text-foreground">{t("deleteItemConfirmTitle")}</p>

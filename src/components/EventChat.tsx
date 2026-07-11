@@ -54,13 +54,18 @@ export async function EventChat({
     .eq("role", "beneficiary")
     .eq("status", "approved")
     .maybeSingle();
-  // Les onglets Général ET Coulisses restent TOUJOURS affichés, même au
-  // bénéficiaire bloqué de l'un ou l'autre (retour Thomas : "il faut
-  // toujours laisser coulisse et général, même pour le bénéficiaire mais
-  // s'il clique sur coulisses, il faut dire vous avez pas accès") --
-  // `hasBackstage` ne dépend donc que de l'existence d'un bénéficiaire dans
-  // l'événement, jamais des restrictions elles-mêmes.
-  const hasBackstage = !!beneficiaryRow;
+  // Les onglets Général ET Coulisses restent TOUJOURS affichés, y compris
+  // sans aucun bénéficiaire désigné sur l'événement (bug réel signalé par
+  // Thomas : "pourquoi dans le chat je ne vois plus général et l'autre ?" --
+  // l'ancienne condition `hasBackstage = !!beneficiaryRow` faisait
+  // disparaître la barre d'onglets ENTIÈRE dès qu'aucun bénéficiaire
+  // n'existait, alors que la RLS (`messages_select`, migration
+  // 20260710002200) autorise déjà la lecture/écriture du canal 'backstage' à
+  // tout participant approuvé indépendamment de l'existence d'un
+  // bénéficiaire -- seul `is_block_hidden_for_me` compte. `beneficiaryRow`
+  // reste utile plus bas, pour savoir s'il faut résoudre des prénoms de
+  // bannière.
+  const hasBeneficiary = !!beneficiaryRow;
 
   // Bannière "X a accès" / "X n'a pas accès au fil Coulisses" (ou au chat
   // général), affichée aux AUTRES participants quand ils consultent l'onglet
@@ -74,7 +79,7 @@ export async function EventChat({
   // bénéficiaires (un seul rôle 'beneficiary' par événement dans les faits),
   // une seule requête suffit pour les deux bannières.
   let beneficiaryNamesForBanners: string[] = [];
-  if (hasBackstage && !isBeneficiary) {
+  if (hasBeneficiary && !isBeneficiary) {
     const { data: rows } = await supabase
       .from("rsvps_public_data")
       .select("first_name")
@@ -89,10 +94,12 @@ export async function EventChat({
   // Pas la peine de charger les messages d'un canal bloqué pour LE VIEWER
   // COURANT (RLS les rejetterait de toute façon, voir migration
   // 20260710002200) : l'onglet reste affiché (ci-dessus), mais son contenu
-  // n'a rien à charger, ChatRoom y affiche directement le placeholder.
+  // n'a rien à charger, ChatRoom y affiche directement le placeholder. Le
+  // canal 'backstage' est chargé qu'un bénéficiaire existe ou non (voir
+  // `hasBeneficiary` plus haut) : la RLS ne le conditionne jamais à ça.
   const visibleChannels: ("main" | "backstage")[] = [
     ...(mainBlockedForMe ? [] : (["main"] as const)),
-    ...(hasBackstage && !backstageBlockedForMe ? (["backstage"] as const) : []),
+    ...(backstageBlockedForMe ? [] : (["backstage"] as const)),
   ];
 
   // Position de lecture au dernier passage (brief : reprendre au premier
@@ -118,7 +125,7 @@ export async function EventChat({
   // qu'à la ligne "non lus" du canal Général, jamais renommé/étendu pour ne
   // pas perturber ce mécanisme déjà réglé).
   const { data: backstageReadRow } =
-    viewerRsvpId && hasBackstage
+    viewerRsvpId
       ? await supabase
           .from("chat_reads")
           .select("last_read_at")
@@ -214,7 +221,6 @@ export async function EventChat({
       eventId={eventId}
       viewerRsvpId={viewerRsvpId}
       isAdmin={isAdmin}
-      hasBackstage={hasBackstage}
       hideBackstageForViewer={backstageBlockedForMe}
       isBackstageHiddenForBeneficiaries={isBackstageHidden}
       backstageBeneficiaryNames={backstageBeneficiaryNames}

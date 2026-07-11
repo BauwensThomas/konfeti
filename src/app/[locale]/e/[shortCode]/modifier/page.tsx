@@ -57,6 +57,16 @@ export default async function EditEventPage({
     .select("id, label, unit, quantity_needed")
     .eq("event_id", event.id);
 
+  // Sondages : mêmes ids réels nécessaires pour que `syncPolls` diffe plutôt
+  // que tout recréer (voir DECISIONS.md, même principe que `bringItemsRows`
+  // ci-dessus). Options récupérées séparément puis groupées par sondage.
+  const { data: pollRows } = await supabase.from("polls").select("id, question").eq("event_id", event.id);
+  const pollIds = (pollRows ?? []).map((p) => p.id);
+  const { data: pollOptionRows } =
+    pollIds.length > 0
+      ? await supabase.from("poll_options").select("id, poll_id, label").in("poll_id", pollIds)
+      : { data: [] as { id: string; poll_id: string; label: string }[] };
+
   // Étape 5 (visibilité bénéficiaires) : prénoms des bénéficiaires déjà
   // approuvés, pour que les phrases ("Julie a accès à...") soient réelles
   // plutôt que génériques. Vide à la création (pas de participants encore),
@@ -125,6 +135,13 @@ export default async function EditEventPage({
       label: item.label,
       unit: item.unit as "piece" | "liter" | "gram" | "kilogram",
       quantityNeeded: item.quantity_needed.toString(),
+    })),
+    polls: (pollRows ?? []).map((poll) => ({
+      id: poll.id,
+      question: poll.question,
+      options: (pollOptionRows ?? [])
+        .filter((option) => option.poll_id === poll.id)
+        .map((option) => ({ id: option.id, label: option.label })),
     })),
     beneficiaryHiddenBlocks: event.beneficiary_hidden_blocks ?? [],
   };

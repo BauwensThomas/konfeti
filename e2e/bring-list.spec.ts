@@ -102,11 +102,14 @@ test("proposition d'item par un invite, moderation (approbation avec reclamation
 
     // Marc propose un nouvel item -- le message de confirmation est transitoire
     // (retour Thomas : il restait affiché indéfiniment), et l'item en attente
-    // ne lui est jamais renvoyé par RLS (visible seulement à l'admin).
+    // ne lui est jamais renvoyé par RLS (visible seulement à l'admin). Le
+    // formulaire est désormais dans un popup (retour Thomas : trop de place
+    // prise sur mobile), ouvert via son bouton déclencheur.
+    await marcPage.getByRole("button", { name: "Proposer un item" }).click();
     await marcPage.getByPlaceholder("Ex. Glaçons, jus d'orange...").fill("Jus d'orange");
     await marcPage.getByLabel("Quantité proposée").fill("3");
     await selectUnit(marcPage, "Unité proposée", "Litre(s)");
-    await marcPage.getByRole("button", { name: "Proposer" }).click();
+    await marcPage.getByRole("button", { name: "Proposer", exact: true }).click();
     const proposeSuccess = marcPage.getByText("Merci ! Ta proposition attend la validation de l'organisateur.");
     await expect(proposeSuccess).toBeVisible({ timeout: 15_000 });
     await expect(marcPage.getByText("Jus d'orange")).not.toBeVisible();
@@ -146,10 +149,11 @@ test("proposition d'item par un invite, moderation (approbation avec reclamation
     // la proposition en double (4), pas cumulée avec son ancienne (2).
     await marcPage.goto(`/e/${event.short_code}`);
     await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "Proposer un item" }).click();
     await marcPage.getByPlaceholder("Ex. Glaçons, jus d'orange...").fill("Bouteilles de soda");
     await marcPage.getByLabel("Quantité proposée").fill("4");
     await selectUnit(marcPage, "Unité proposée", "Pièce(s)");
-    await marcPage.getByRole("button", { name: "Proposer" }).click();
+    await marcPage.getByRole("button", { name: "Proposer", exact: true }).click();
 
     await page.goto(`/e/${event.short_code}`);
     await page.getByRole("button", { name: "Participer" }).click();
@@ -205,10 +209,11 @@ test("proposition d'item par un invite, moderation (approbation avec reclamation
     // définitive, jamais renvoyé à personne.
     await marcPage.goto(`/e/${event.short_code}`);
     await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "Proposer un item" }).click();
     await marcPage.getByPlaceholder("Ex. Glaçons, jus d'orange...").fill("Bonbons");
     await marcPage.getByLabel("Quantité proposée").fill("1");
     await selectUnit(marcPage, "Unité proposée", "Pièce(s)");
-    await marcPage.getByRole("button", { name: "Proposer" }).click();
+    await marcPage.getByRole("button", { name: "Proposer", exact: true }).click();
 
     await page.goto(`/e/${event.short_code}`);
     await page.getByRole("button", { name: "Participer" }).click();
@@ -332,10 +337,11 @@ test("dire 'je ne peux pas' retire automatiquement les réclamations déjà pris
     // (retour Thomas : "celui en attente doit disparaitre aussi, c'est
     // logique non ?" -- une proposition n'a de sens que parce que le
     // proposant comptait venir).
+    await marcPage.getByRole("button", { name: "Proposer un item" }).click();
     await marcPage.getByPlaceholder("Ex. Glaçons, jus d'orange...").fill("Chips");
     await marcPage.getByLabel("Quantité proposée").fill("2");
     await selectUnit(marcPage, "Unité proposée", "Pièce(s)");
-    await marcPage.getByRole("button", { name: "Proposer" }).click();
+    await marcPage.getByRole("button", { name: "Proposer", exact: true }).click();
     await expect(
       marcPage.getByText("Merci ! Ta proposition attend la validation de l'organisateur."),
     ).toBeVisible({ timeout: 15_000 });

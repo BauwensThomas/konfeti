@@ -200,7 +200,16 @@
         "kilogram": "Kilo(s)"
       },
       "removeBringItem": "Retirer ce produit",
-      "addBringItem": "Ajouter un produit"
+      "addBringItem": "Ajouter un produit",
+      "pollsLabel": "Sondages",
+      "pollQuestionPlaceholder": "Ex. Quelle activité pour l'apéro ?",
+      "pollQuestionAria": "Question du sondage {index}",
+      "pollOptionPlaceholder": "Ex. Pétanque",
+      "pollOptionAria": "Option {optionIndex} du sondage {pollIndex}",
+      "removePollOption": "Retirer cette option",
+      "addPollOption": "Ajouter une option",
+      "removePoll": "Retirer ce sondage",
+      "addPoll": "Ajouter un sondage"
     },
     "step5": {
       "heading": "Ce que voient les bénéficiaires",
@@ -263,6 +272,7 @@
     "comingSoon": "Bientôt disponible.",
     "participantsListHidden": "L'organisateur a masqué la liste des participants pour toi.",
     "bringListHidden": "L'organisateur a masqué \"qui apporte quoi\" pour toi.",
+    "pollsListHidden": "L'organisateur a masqué les sondages pour toi.",
     "editEvent": "Modifier",
     "shareButton": "Partager",
     "shareCopied": "Lien copié !",
@@ -505,11 +515,38 @@
     "proposeUnitPlaceholder": "Choisir...",
     "proposeUnitAria": "Unité proposée",
     "proposeSubmit": "Proposer",
+    "addItemHeading": "Ajouter un item",
+    "addItemOwnQuantityLabel": "Toi tu apportes (optionnel)",
+    "addItemSuccess": "Item ajouté !",
+    "addItemSubmit": "Ajouter",
     "unit": {
       "piece": "Pièce(s)",
       "liter": "Litre(s)",
       "gram": "Gramme(s)",
       "kilogram": "Kilo(s)"
     }
+  },
+  "Polls": {
+    "heading": "Sondages",
+    "empty": "Aucun sondage pour l'instant.",
+    "voteCount": "{count, plural, =0 {Aucun vote} one {1 vote} other {# votes}}",
+    "errorUnknown": "Une erreur est survenue, réessaie.",
+    "pendingSectionTitle": "En attente d'approbation",
+    "proposedBy": "Proposé par {name}",
+    "approve": "Approuver",
+    "reject": "Refuser",
+    "deletePoll": "Supprimer le sondage",
+    "deletePollConfirmTitle": "Es-tu sûr ? Cette action est définitive.",
+    "deletePollConfirmYes": "Oui, supprimer",
+    "deletePollConfirmNo": "Annuler",
+    "proposeHeading": "Proposer un sondage",
+    "proposeSuccess": "Merci ! Ta proposition attend la validation de l'organisateur.",
+    "proposeSuccessAdmin": "Sondage ajouté !",
+    "proposeQuestionPlaceholder": "Ex. Quelle activité pour l'apéro ?",
+    "proposeOptionPlaceholder": "Proposition {index}",
+    "proposeOptionAria": "Option {index}",
+    "removeProposeOption": "Retirer cette option",
+    "addProposeOption": "Ajouter une option",
+    "proposeSubmit": "Proposer"
   }
 }

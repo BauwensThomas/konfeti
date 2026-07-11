@@ -111,6 +111,88 @@ async function syncBringItems(
   return true;
 }
 
+// Sondages (brief : "Sondage(s) optionnel(s)") : même principe de diff que
+// `syncBringItems`, mais à deux niveaux -- un sondage a ses propres options,
+// qui doivent elles aussi être synchronisées par diff plutôt que
+// recréées (un delete+reinsert d'une option ferait tomber ses `poll_votes`
+// déjà pris en cascade, même raison que pour `bring_claims`).
+async function syncPolls(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  eventId: string,
+  polls: CreateEventInput["polls"],
+): Promise<boolean> {
+  const { data: existing, error: fetchError } = await supabase.from("polls").select("id").eq("event_id", eventId);
+  if (fetchError) return false;
+
+  const existingIds = new Set((existing ?? []).map((r) => r.id as string));
+  const submittedIds = new Set(polls.filter((p) => p.id).map((p) => p.id!));
+
+  const toDelete = [...existingIds].filter((id) => !submittedIds.has(id));
+  if (toDelete.length > 0) {
+    const { error } = await supabase.from("polls").delete().in("id", toDelete);
+    if (error) return false;
+  }
+
+  // Les sondages du wizard sont toujours `status = 'approved'` (comportement
+  // historique), comme les items du wizard pour "qui apporte quoi" -- une
+  // proposition d'invité (status 'pending') passe par `proposePoll`
+  // (actions/polls.ts), jamais par ici.
+  const toInsert = polls.filter((p) => !p.id);
+  const insertedPolls: { id: string; question: string; options: CreateEventInput["polls"][number]["options"] }[] = [];
+  if (toInsert.length > 0) {
+    const { data: inserted, error } = await supabase
+      .from("polls")
+      .insert(toInsert.map((p) => ({ event_id: eventId, question: p.question, status: "approved" })))
+      .select("id, question");
+    if (error || !inserted) return false;
+    // `insert().select()` renvoie les lignes dans l'ordre d'insertion (même
+    // ordre que `toInsert`) : on peut donc réassocier chaque id généré à ses
+    // options soumises par position.
+    inserted.forEach((row, index) => {
+      insertedPolls.push({ id: row.id as string, question: row.question as string, options: toInsert[index].options });
+    });
+  }
+
+  const existingPolls = polls.filter((p) => p.id);
+  for (const poll of existingPolls) {
+    const { error } = await supabase.from("polls").update({ question: poll.question }).eq("id", poll.id!);
+    if (error) return false;
+  }
+
+  // Diff des options, sondage par sondage (existants ET nouvellement créés).
+  for (const poll of [...existingPolls.map((p) => ({ id: p.id!, options: p.options })), ...insertedPolls]) {
+    const { data: existingOptions, error: fetchOptionsError } = await supabase
+      .from("poll_options")
+      .select("id")
+      .eq("poll_id", poll.id);
+    if (fetchOptionsError) return false;
+
+    const existingOptionIds = new Set((existingOptions ?? []).map((r) => r.id as string));
+    const submittedOptionIds = new Set(poll.options.filter((o) => o.id).map((o) => o.id!));
+
+    const optionsToDelete = [...existingOptionIds].filter((id) => !submittedOptionIds.has(id));
+    if (optionsToDelete.length > 0) {
+      const { error } = await supabase.from("poll_options").delete().in("id", optionsToDelete);
+      if (error) return false;
+    }
+
+    const optionsToInsert = poll.options.filter((o) => !o.id);
+    if (optionsToInsert.length > 0) {
+      const { error } = await supabase
+        .from("poll_options")
+        .insert(optionsToInsert.map((o) => ({ poll_id: poll.id, label: o.label })));
+      if (error) return false;
+    }
+
+    for (const option of poll.options.filter((o) => o.id)) {
+      const { error } = await supabase.from("poll_options").update({ label: option.label }).eq("id", option.id!);
+      if (error) return false;
+    }
+  }
+
+  return true;
+}
+
 export async function createEvent(
   input: CreateEventInput,
 ): Promise<CreateEventResult> {
@@ -181,6 +263,10 @@ export async function createEvent(
   }
 
   if (!(await syncBringItems(supabase, event.id, data.bringItems))) {
+    return { ok: false, error: "unknown" };
+  }
+
+  if (!(await syncPolls(supabase, event.id, data.polls))) {
     return { ok: false, error: "unknown" };
   }
 
@@ -270,6 +356,10 @@ export async function updateEvent(
   }
 
   if (!(await syncBringItems(supabase, eventId, data.bringItems))) {
+    return { ok: false, error: "unknown" };
+  }
+
+  if (!(await syncPolls(supabase, eventId, data.polls))) {
     return { ok: false, error: "unknown" };
   }
 

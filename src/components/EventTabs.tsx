@@ -18,6 +18,7 @@ export function EventTabs({
   participer,
   pendingCount = 0,
   pendingBringCount = 0,
+  pendingPollsCount = 0,
   eventId,
   viewerRsvpId = null,
   initialUnreadCount = 0,
@@ -32,6 +33,8 @@ export function EventTabs({
   // personnes" -- items "qui apporte quoi" proposés par un invité, en
   // attente de validation admin (même pattern que `pendingCount`).
   pendingBringCount?: number;
+  // Même pattern, pour les sondages proposés par un invité.
+  pendingPollsCount?: number;
   eventId?: string;
   viewerRsvpId?: string | null;
   initialUnreadCount?: number;
@@ -232,6 +235,34 @@ export function EventTabs({
     };
   }, [eventId, router]);
 
+  // Sondages : canal Realtime SÉPARÉ, même précaution que "qui apporte quoi"
+  // ci-dessus (jamais fusionné à un canal existant -- une seule table pas
+  // encore activée côté publication fait échouer l'abonnement de TOUT le
+  // canal partagé, voir DECISIONS.md).
+  useEffect(() => {
+    if (!eventId) return;
+    let cancelled = false;
+    const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    ensureRealtimeAuth(supabase).then(() => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`event-${eventId}-polls`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "polls" }, () => router.refresh())
+        .on("postgres_changes", { event: "*", schema: "public", table: "poll_options" }, () => router.refresh())
+        // `poll_votes` n'a pas de colonne `event_id` : même imprécision
+        // acceptée que `bring_claims` ci-dessus.
+        .on("postgres_changes", { event: "*", schema: "public", table: "poll_votes" }, () => router.refresh())
+        .subscribe();
+    });
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [eventId, router]);
+
   // Réf plutôt qu'une dépendance directe de l'effet Realtime ci-dessous (même
   // pattern qu'`activeRef`) : `chatAllowedChannels` est un tableau littéral
   // recréé à chaque rendu par l'appelant, l'ajouter aux dépendances
@@ -363,9 +394,13 @@ export function EventTabs({
                 {pendingCount}
               </span>
             )}
-            {tab === "participer" && pendingBringCount > 0 && (
+            {/* Un seul chiffre pour l'onglet Participer (qui apporte quoi +
+                sondages additionnés) -- une fois l'onglet ouvert, les deux
+                sections de modération restent clairement séparées et
+                libellées, pas besoin de deux pastilles distinctes ici. */}
+            {tab === "participer" && pendingBringCount + pendingPollsCount > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-coral px-1 text-xs font-bold text-white">
-                {pendingBringCount}
+                {pendingBringCount + pendingPollsCount}
               </span>
             )}
             {/* Simple pastille (pas de chiffre) sur l'onglet Chat au niveau

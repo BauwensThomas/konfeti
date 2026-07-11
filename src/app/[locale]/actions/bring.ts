@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
+  addBringItemSchema,
+  approveBringItemSchema,
   claimBringItemSchema,
   itemIdSchema,
   mergeBringItemProposalSchema,
@@ -142,8 +144,20 @@ export async function proposeBringItem(
 // qu'il va ramener ça" -- approuver crée AUSSI une réclamation automatique
 // pour le proposant, avec la quantité qu'il avait lui-même indiquée (pas
 // juste rendre l'item visible en le laissant sans personne pour l'apporter).
-export async function approveBringItem(shortCode: string, itemId: string): Promise<BringActionResult> {
-  const parsed = itemIdSchema.safeParse({ itemId });
+//
+// Retour Thomas, ajouté après coup : "l'admin quand il accepte, il doit dire
+// combien de quantité il faudrait" -- l'admin peut donc ajuster la quantité
+// NÉCESSAIRE au moment de l'approbation (ex. le proposant n'a demandé que
+// 3L, mais l'admin sait qu'il en faut 10 au total pour tout le monde).
+// `quantityNeeded` ici ne change QUE `bring_items.quantity_needed` -- la
+// réclamation auto-créée pour le proposant reste sur SA quantité d'origine
+// (jamais gonflée au nouveau total, il n'a jamais promis d'apporter plus).
+export async function approveBringItem(
+  shortCode: string,
+  itemId: string,
+  quantityNeeded?: number,
+): Promise<BringActionResult> {
+  const parsed = approveBringItemSchema.safeParse({ itemId, quantityNeeded });
   if (!parsed.success) {
     return { ok: false, error: "invalid" };
   }
@@ -164,7 +178,10 @@ export async function approveBringItem(shortCode: string, itemId: string): Promi
 
   const { error } = await supabase
     .from("bring_items")
-    .update({ status: "approved" })
+    .update({
+      status: "approved",
+      ...(parsed.data.quantityNeeded !== undefined ? { quantity_needed: parsed.data.quantityNeeded } : {}),
+    })
     .eq("id", parsed.data.itemId);
 
   if (error) {
@@ -178,6 +195,68 @@ export async function approveBringItem(shortCode: string, itemId: string): Promi
       item.proposed_by_rsvp_id,
       item.quantity_needed,
     );
+    if (claimError) {
+      return { ok: false, error: "unknown" };
+    }
+  }
+
+  revalidatePath(`/e/${shortCode}`);
+  return { ok: true };
+}
+
+// Ajout direct d'un item par un admin depuis l'onglet Participer (retour
+// Thomas : "pour les admin il faut juste un seul bouton, proposer/ajouter un
+// item") -- toujours `status: 'approved'` d'emblée (comme un item défini au
+// wizard), un SEUL formulaire pour l'admin (contrairement à la proposition
+// d'un invité, jamais deux boutons distincts). `ownQuantity` optionnel :
+// "s'il met pas de quantité à ce qu'il rapporte, ça créera l'item avec 0
+// apporté pour le moment" -- une réclamation n'est créée pour l'admin QUE
+// s'il a renseigné ce champ, jamais automatiquement à la quantité totale
+// (contrairement à `approveBringItem`, où le proposant EST le seul
+// destinataire prévu de la quantité demandée). `bring_items_write_admin`
+// (RLS, déjà en place) est la vraie frontière de sécurité pour l'insertion
+// de l'item -- `rsvpId` vient du client comme ailleurs, la frontière pour la
+// réclamation reste `bring_claims_write_own` (élargie aux admins, migration
+// 20260710002500).
+export async function addBringItem(
+  eventId: string,
+  shortCode: string,
+  rsvpId: string,
+  input: { label: string; unit: string; quantityNeeded: number; ownQuantity?: number },
+): Promise<BringActionResult> {
+  const parsed = addBringItemSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "invalid" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "not_authenticated" };
+  }
+
+  if (isRateLimited(`addBringItem:${user.id}`, 30, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
+  const itemId = crypto.randomUUID();
+  const { error } = await supabase.from("bring_items").insert({
+    id: itemId,
+    event_id: eventId,
+    label: parsed.data.label,
+    unit: parsed.data.unit,
+    quantity_needed: parsed.data.quantityNeeded,
+    status: "approved",
+  });
+
+  if (error) {
+    return { ok: false, error: "unknown" };
+  }
+
+  if (parsed.data.ownQuantity && parsed.data.ownQuantity > 0) {
+    const { error: claimError } = await upsertBringClaim(supabase, itemId, rsvpId, parsed.data.ownQuantity);
     if (claimError) {
       return { ok: false, error: "unknown" };
     }
