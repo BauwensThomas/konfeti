@@ -18,6 +18,7 @@ export type WeatherPeriod = "morning" | "afternoon" | "evening" | "nextMorning";
 
 export type PeriodForecast = {
   period: WeatherPeriod;
+  hour: number;
   code: number;
   temp: number;
 };
@@ -67,7 +68,7 @@ export async function fetchPeriodForecasts(
       const code = codes[index];
       const temp = temps[index];
       if (index === -1 || typeof code !== "number" || typeof temp !== "number") continue;
-      results.push({ period, code, temp });
+      results.push({ period, hour, code, temp });
     }
 
     return results.length > 0 ? results : null;

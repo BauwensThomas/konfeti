@@ -296,12 +296,7 @@
     "validateDateConfirmNo": "Annuler",
     "endsAtLabel": "Jusqu'à {time}",
     "dateLocationHeading": "Quand et où ?",
-    "weatherPeriod": {
-      "morning": "Matin",
-      "afternoon": "Après-midi",
-      "evening": "Soir",
-      "nextMorning": "Lendemain"
-    },
+    "weatherNextDay": "Lendemain",
     "weather": {
       "sunny": "Ensoleillé",
       "partlyCloudy": "Peu nuageux",

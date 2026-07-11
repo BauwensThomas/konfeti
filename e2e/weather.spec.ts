@@ -69,10 +69,11 @@ test("la météo s'affiche à partir de J-5 pour un lieu géocodé via Photon, j
 
     await page.goto(`/e/${soonEvent.short_code}`);
     // Assertion volontairement lâche (température/condition réelles non
-    // déterministes) : le libellé "Matin" (créneau) + une température au
-    // format "N°" suffisent à prouver que les 4 créneaux s'affichent, jamais
-    // une valeur météo exacte en dur.
-    await expect(page.getByText("Matin", { exact: true })).toBeVisible({ timeout: 15_000 });
+    // déterministes) : le créneau "9h" (matin, retour Thomas : des heures
+    // plutôt que "Matin/Après-midi/Soir") + une température au format "N°"
+    // suffisent à prouver que les 4 créneaux s'affichent, jamais une valeur
+    // météo exacte en dur.
+    await expect(page.getByText("9h", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/^-?\d+°$/).first()).toBeVisible();
 
     const farTitle = `Fete meteo lointaine ${Date.now()}`;
@@ -80,7 +81,7 @@ test("la météo s'affiche à partir de J-5 pour un lieu géocodé via Photon, j
     farEventId = farEvent.id;
 
     await page.goto(`/e/${farEvent.short_code}`);
-    await expect(page.getByText("Matin", { exact: true })).not.toBeVisible();
+    await expect(page.getByText("9h", { exact: true })).not.toBeVisible();
   } finally {
     if (soonEventId) await supabaseAdmin.from("events").delete().eq("id", soonEventId);
     if (farEventId) await supabaseAdmin.from("events").delete().eq("id", farEventId);
@@ -123,7 +124,7 @@ test("un lieu tapé en texte libre sans sélectionner de suggestion n'affiche pa
 
     await page.goto(`/e/${event.short_code}`);
     await expect(page.getByText("Chez Mamie, au fond du jardin")).toBeVisible();
-    await expect(page.getByText("Matin", { exact: true })).not.toBeVisible();
+    await expect(page.getByText("9h", { exact: true })).not.toBeVisible();
   } finally {
     if (eventId) await supabaseAdmin.from("events").delete().eq("id", eventId);
     await deleteTestUser(host.id);
