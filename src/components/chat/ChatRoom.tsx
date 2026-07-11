@@ -71,6 +71,39 @@ export function ChatRoom({
   const t = useTranslations("Chat");
   const [viewerRsvpId, setViewerRsvpId] = useState(initialViewerRsvpId);
   const [messages, setMessages] = useState<ChatMessageView[]>(initialMessages);
+  // Bug réel trouvé en écrivant le test e2e "propagation live sans reload" du
+  // profil (retour Thomas : "ça doit se répercuter sur tout le site, le
+  // chat, personnes etc") : `messages` n'est initialisé qu'UNE FOIS depuis
+  // `initialMessages` (useState), donc un `router.refresh()` déclenché par le
+  // canal `rsvps`/`rsvps_public_data` de EventTabs.tsx (voir ce fichier) a
+  // beau relire des données fraîches côté serveur, ce panneau déjà monté
+  // n'en tenait jamais compte pour des messages DÉJÀ affichés -- seul le nom
+  // capturé au premier montage restait visible, indéfiniment. Corrigé en
+  // resynchronisant nom/avatar par `rsvpId` à chaque nouvelle valeur de
+  // `initialMessages`, sans jamais toucher au reste (pagination, bulles
+  // optimistes, messages reçus depuis en direct).
+  useEffect(() => {
+    const infoByRsvpId = new Map(
+      initialMessages
+        .filter((m) => m.rsvpId)
+        .map((m) => [m.rsvpId as string, { authorName: m.authorName, authorAvatarUrl: m.authorAvatarUrl }]),
+    );
+    if (infoByRsvpId.size === 0) return;
+    // Différé (même remède que LocationAutocomplete.tsx/EventTabs.tsx pour
+    // le même avertissement) : un `setState` synchrone dans le corps de
+    // l'effet déclenche des rendus en cascade.
+    const timeout = setTimeout(() => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          const fresh = m.rsvpId ? infoByRsvpId.get(m.rsvpId) : undefined;
+          if (!fresh) return m;
+          if (fresh.authorName === m.authorName && fresh.authorAvatarUrl === m.authorAvatarUrl) return m;
+          return { ...m, authorName: fresh.authorName, authorAvatarUrl: fresh.authorAvatarUrl };
+        }),
+      );
+    }, 0);
+    return () => clearTimeout(timeout);
+  }, [initialMessages]);
   const [reactionsByMessage, setReactionsByMessage] =
     useState<Record<string, ChatReactionSummary[]>>(initialReactions);
   const [activeChannel, setActiveChannel] = useState<"main" | "backstage">("main");

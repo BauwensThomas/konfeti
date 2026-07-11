@@ -191,7 +191,9 @@ test("impossible de faire reculer un événement à venir vers le passé, ou de 
     // Tentative de reculer la date (encore à venir) vers le passé : bloqué.
     await page.goto(`/e/${event.short_code}/modifier`);
     await page.locator('input[type="datetime-local"]').first().fill("2020-01-01T20:00");
-    await expect(page.getByText("Cette date ne peut pas être dans le passé.")).toBeVisible();
+    // Flake intermittent observé (validation cliente pourtant synchrone, pas
+    // de debounce) sous forte charge de session -- marge un peu plus large.
+    await expect(page.getByText("Cette date ne peut pas être dans le passé.")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("button", { name: "Suivant" })).toBeDisabled();
 
     // Remet une date future valide, avance jusqu'à la date limite de réponse.

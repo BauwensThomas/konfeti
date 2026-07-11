@@ -225,8 +225,12 @@ test("le transfert d'organisation est impossible vers un admin en session anonym
       .toBe("admin");
 
     // Le bouton "Transférer l'organisation" est remplacé par un texte
-    // expliquant pourquoi, jamais silencieusement absent.
+    // expliquant pourquoi, jamais silencieusement absent. L'onglet actif
+    // n'est qu'un état local (EventTabs.tsx, pas synchronisé à l'URL) :
+    // `page.reload()` retombe toujours sur "Accueil", il faut recliquer
+    // "Personnes" pour retrouver ce bouton.
     await page.reload();
+    await page.getByRole("button", { name: "Personnes" }).click();
     await expect(
       page.getByRole("button", { name: "Transférer l'organisation" }),
     ).not.toBeVisible();

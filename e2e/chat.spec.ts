@@ -300,7 +300,9 @@ test("message systeme, moderation admin, Coulisses masque au beneficiaire, anony
       })
       .toBe(true);
 
-    // Beneficiaire designe : Coulisses apparait pour l'hote, jamais pour elle.
+    // Beneficiaire designee : Coulisses reste TOUJOURS visible (redesign
+    // documente dans DECISIONS.md -- plus jamais un onglet qui disparait en
+    // silence), seul son CONTENU est remplace par un message d'acces refuse.
     const guest2Context = await browser.newContext();
     const guest2Page = await guest2Context.newPage();
     await submitGuestIdentity(guest2Page, event.short_code, "Sophie");
@@ -323,7 +325,9 @@ test("message systeme, moderation admin, Coulisses masque au beneficiaire, anony
 
     await guest2Page.goto(`/e/${event.short_code}`);
     await guest2Page.getByRole("button", { name: "Chat" }).click();
-    await expect(guest2Page.getByRole("button", { name: "Coulisses" })).not.toBeVisible();
+    await expect(guest2Page.getByRole("button", { name: "Coulisses" })).toBeVisible();
+    await guest2Page.getByRole("button", { name: "Coulisses" }).click();
+    await expect(guest2Page.getByText("Tu n'as pas accès à cette discussion.")).toBeVisible();
     await expect(guest2Page.getByText("Organisons la surprise")).not.toBeVisible();
 
     // Depart volontaire : le message reste, attribue a "Anonyme".

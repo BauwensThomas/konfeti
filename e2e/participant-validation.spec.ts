@@ -278,8 +278,16 @@ test("acces restreint (je peux pas), cagnotte masquee au beneficiaire, et retour
       })
       .toBe("restricted");
 
+    // Test corrigé (l'ancienne version attendait à tort que la cagnotte
+    // réapparaisse automatiquement ici) : `pot_access_granted` a déjà été
+    // remis à `false` plus haut, dès qu'elle a quitté "restricted" en
+    // cliquant "Je viens !" (migration `20260710001600_pot_access_reset_and_revoke.sql`,
+    // "un retour ultérieur sur 'je ne peux pas' redémarre le parcours de
+    // zéro" -- décision produit délibérée, pas un oubli). Un second
+    // "restricted" ne redonne jamais l'accès sans une NOUVELLE autorisation
+    // explicite de l'admin.
     await guestPage.reload();
-    await expect(guestPage.getByText("Cadeau surprise", { exact: false })).toBeVisible();
+    await expect(guestPage.getByText("Cadeau surprise", { exact: false })).not.toBeVisible();
 
     await guestContext.close();
   } finally {

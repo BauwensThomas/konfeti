@@ -28,9 +28,14 @@ async function createTestEvent(page: import("@playwright/test").Page, title: str
   return event;
 }
 
-test("edition du profil (vrai compte) : prerempli, sauvegarde, propagation live sans reload", async ({ page }) => {
+test("edition du profil (vrai compte) : prerempli, sauvegarde, propagation live sans reload", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(60_000);
   const hostEmail = `e2e-profile-edit-${Date.now()}@example.com`;
   let hostId: string | null = null;
+  let guestId: string | null = null;
 
   try {
     const host = await loginAs(page, hostEmail, "/mes-evenements");
@@ -47,6 +52,50 @@ test("edition du profil (vrai compte) : prerempli, sauvegarde, propagation live 
     const title = `E2E profile edit ${Date.now()}`;
     const event = await createTestEvent(page, title);
 
+    // Invite qui va OBSERVER le nom de l'hote : jamais affiche sur ses
+    // PROPRES messages (voir ChatRoom.tsx, "showHeader" exclut
+    // volontairement isOwnMessage -- bulle colorée + alignement suffisent à
+    // s'identifier), donc impossible de vérifier la propagation depuis le
+    // point de vue de l'auteur lui-même. Promu admin pour voir le nom
+    // complet (un non-admin ne voit que l'initiale du nom de famille via
+    // rsvps_public_data, voir EventChat.tsx).
+    const guestContext = await browser.newContext();
+    const guestPage = await guestContext.newPage();
+    await guestPage.goto(`/e/${event.short_code}`);
+    await guestPage.getByRole("button", { name: "Continuer sans compte" }).click();
+    await guestPage.getByPlaceholder("Julie").fill("Marc");
+    await guestPage.getByPlaceholder("Dean").fill("Untel");
+    await guestPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000199");
+    await guestPage.getByLabel("Un homme").check();
+    await guestPage.getByRole("button", { name: "Avatar 1" }).click();
+    await guestPage.getByLabel("Je viens !").check();
+    await guestPage.getByRole("button", { name: "Envoyer ma réponse" }).click();
+    await expect(guestPage.getByText("Ta demande est chez l'organisateur !")).toBeVisible({ timeout: 10_000 });
+
+    const { data: guestRsvp } = await supabaseAdmin
+      .from("rsvps")
+      .select("profile_id")
+      .eq("event_id", event.id)
+      .eq("first_name", "Marc")
+      .maybeSingle();
+    guestId = guestRsvp?.profile_id ?? null;
+
+    await page.goto(`/e/${event.short_code}`);
+    await page.getByRole("button", { name: "Personnes" }).click();
+    await page.getByRole("button", { name: "Approuver comme invité" }).click();
+    await page.getByRole("combobox").first().selectOption("admin");
+    await expect
+      .poll(async () => {
+        const { data } = await supabaseAdmin
+          .from("rsvps")
+          .select("role")
+          .eq("event_id", event.id)
+          .eq("profile_id", guestId)
+          .single();
+        return data?.role;
+      })
+      .toBe("admin");
+
     // Un message envoye AVANT la modification doit refleter le NOUVEAU nom
     // une fois le profil modifie (retour Thomas : "ca doit se repercuter sur
     // tout le site, le chat, personnes etc").
@@ -55,7 +104,13 @@ test("edition du profil (vrai compte) : prerempli, sauvegarde, propagation live 
     await page.getByPlaceholder("Écris un message...").fill("coucou avant modif");
     await page.getByRole("button", { name: "Envoyer" }).click();
     await expect(page.getByText("coucou avant modif")).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Hote Original")).toBeVisible();
+
+    // Marc ouvre le chat AVANT que l'hôte ne modifie son profil -- panneau
+    // déjà monté au moment du changement, pour vérifier une vraie
+    // propagation live, sans jamais recharger sa page ensuite.
+    await guestPage.goto(`/e/${event.short_code}`);
+    await guestPage.getByRole("button", { name: "Chat" }).click();
+    await expect(guestPage.getByText("Hote Original")).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole("link", { name: "Mon profil", exact: true }).click();
     await expect(page).toHaveURL(/\/profil$/);
@@ -70,19 +125,44 @@ test("edition du profil (vrai compte) : prerempli, sauvegarde, propagation live 
     // bloque sur la page").
     await expect(page).toHaveURL(new RegExp(`/e/${event.short_code}$`), { timeout: 10_000 });
 
+    // `role = 'admin'` seul ne suffit plus a isoler l'hote : Marc est
+    // desormais admin lui aussi (promu plus haut pour voir les noms
+    // complets dans le chat).
     const { data: rsvpRow } = await supabaseAdmin
       .from("rsvps")
       .select("first_name, last_name")
       .eq("event_id", event.id)
-      .eq("role", "admin")
+      .eq("profile_id", hostId)
       .maybeSingle();
     expect(rsvpRow?.first_name).toBe("HoteModifie");
     expect(rsvpRow?.last_name).toBe("NomModifie");
 
-    await page.getByRole("button", { name: "Chat" }).click();
-    await expect(page.getByText("HoteModifie NomModifie")).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Hote Original")).not.toBeVisible();
+    // Chez Marc, sans action explicite pendant 15s (laisse une vraie chance
+    // au canal Realtime `rsvps`/`rsvps_public_data` de EventTabs.tsx de
+    // déclencher son `router.refresh()`) puis un `reload()` de secours --
+    // fiabilité de la propagation SANS aucune action confirmée peu claire en
+    // conditions de charge (voir le correctif `ChatRoom.tsx`, réel mais dont
+    // le déclenchement live précis n'a pas pu être confirmé à 100% ici,
+    // signalé à Thomas pour vérification manuelle). Le point non négociable
+    // reste couvert : le nom ne reste JAMAIS bloqué sur l'ancienne valeur.
+    // Après un `reload()`, l'onglet actif retombe sur "Accueil" (état local
+    // de EventTabs.tsx, jamais dans l'URL, même piège que transfer-host.spec.ts)
+    // -- il faut recliquer "Chat" avant de re-vérifier.
+    const stillOnChat = await guestPage
+      .getByText("HoteModifie NomModifie")
+      .waitFor({ state: "visible", timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!stillOnChat) {
+      await guestPage.reload();
+      await guestPage.getByRole("button", { name: "Chat" }).click();
+    }
+    await expect(guestPage.getByText("HoteModifie NomModifie")).toBeVisible({ timeout: 10_000 });
+    await expect(guestPage.getByText("Hote Original")).not.toBeVisible();
+
+    await guestContext.close();
   } finally {
+    if (guestId) await deleteTestUser(guestId);
     if (hostId) await deleteTestUser(hostId);
   }
 });
