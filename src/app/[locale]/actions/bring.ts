@@ -13,6 +13,9 @@ import {
   updateBringItemQuantitySchema,
 } from "@/lib/validation/bring";
 import { isRateLimited } from "@/lib/rate-limit";
+import { getEventAdminUserIds } from "@/lib/push-recipients";
+import { sendPush } from "@/lib/push-send";
+import { pushMessages } from "@/lib/push-messages";
 
 export type BringActionResult =
   | { ok: true }
@@ -86,6 +89,25 @@ export async function claimBringItem(
   }
 
   revalidatePath(`/e/${shortCode}`);
+
+  try {
+    const [{ data: event }, { data: item }, { data: rsvp }] = await Promise.all([
+      supabase.from("events").select("title").eq("id", eventId).single(),
+      supabase.from("bring_items").select("label").eq("id", parsed.data.itemId).single(),
+      supabase.from("rsvps").select("first_name").eq("id", rsvpId).single(),
+    ]);
+    if (event && item) {
+      const adminUserIds = await getEventAdminUserIds(supabase, eventId);
+      void sendPush(
+        adminUserIds,
+        "organisation",
+        pushMessages.bringItemClaimed(shortCode, event.title, rsvp?.first_name ?? "Un invité", item.label),
+      );
+    }
+  } catch {
+    // Best-effort.
+  }
+
   return { ok: true };
 }
 
@@ -132,6 +154,17 @@ export async function proposeBringItem(
   }
 
   revalidatePath(`/e/${shortCode}`);
+
+  try {
+    const { data: event } = await supabase.from("events").select("title").eq("id", eventId).single();
+    if (event) {
+      const adminUserIds = await getEventAdminUserIds(supabase, eventId);
+      void sendPush(adminUserIds, "organisation", pushMessages.newBringItemProposed(shortCode, event.title, parsed.data.label));
+    }
+  } catch {
+    // Best-effort.
+  }
+
   return { ok: true };
 }
 

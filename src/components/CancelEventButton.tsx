@@ -20,7 +20,7 @@ export function CancelEventButton({ eventId }: { eventId: string }) {
         type="button"
         onClick={() => setConfirming(true)}
         aria-label={t("deleteEvent")}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-coral text-white shadow-konfeti transition-[background-color,transform] duration-150 ease-out hover:brightness-95 active:scale-95"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-danger-strong text-white shadow-konfeti transition-[background-color,transform] duration-150 ease-out hover:brightness-95 active:scale-95"
       >
         <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
           <path

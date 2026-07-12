@@ -104,13 +104,54 @@ export async function updateProfile(input: ProfileCompletionInput): Promise<Upda
   // vérifiant : "permission denied for table rsvps" sur tout le update dès
   // que cette colonne était incluse, alors que les colonnes d'identité elles
   // le sont) — jamais l'inclure ici, la ligne reste malgré tout à jour sur
-  // les colonnes qui comptent pour l'affichage.
+  // les colonnes qui comptent pour l'affichage. `restricted` exclu
+  // délibérément (contrairement à avant) : une ligne "Je ne peux pas" est
+  // anonymisée à dessein (retour Thomas, voir `update_my_answer`) -- une
+  // simple édition de profil ne doit jamais la désanonymiser en douce, seul
+  // un vrai changement de réponse le fait (restauration depuis `profiles`).
   const { error: rsvpsError } = await supabase
     .from("rsvps")
     .update(identity)
     .eq("profile_id", user.id)
-    .in("status", ["pending", "approved", "restricted"]);
+    .in("status", ["pending", "approved"]);
   if (rsvpsError) {
+    return { ok: false, error: "unknown" };
+  }
+
+  return { ok: true };
+}
+
+export type UpdateReminderPreferenceResult =
+  | { ok: true }
+  | { ok: false; error: "unknown" | "not_authenticated" | "rate_limited" };
+
+// Réglage global "recevoir des rappels par email" (retour Thomas : "dans le
+// profil il faut pouvoir cocher ou décocher de recevoir les mails"),
+// distinct de la case par événement à l'inscription (`GuestIdentityForm`,
+// jamais pré-cochée, choix délibéré conservé). `update_reminder_preference`
+// (RPC security definer) applique le changement à `profiles` ET à toutes
+// les participations `approved` en cours -- sinon basculer ce réglage
+// n'aurait aucun effet sur les rappels déjà programmés par le cron.
+export async function updateReminderPreference(
+  wantsReminders: boolean,
+): Promise<UpdateReminderPreferenceResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "not_authenticated" };
+  }
+
+  if (isRateLimited(`updateReminderPreference:${user.id}`, 20, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
+  const { error } = await supabase.rpc("update_reminder_preference", {
+    p_wants_reminders: wantsReminders,
+  });
+  if (error) {
     return { ok: false, error: "unknown" };
   }
 

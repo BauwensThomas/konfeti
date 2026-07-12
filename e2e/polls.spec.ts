@@ -52,8 +52,7 @@ test("sondage defini au wizard, vote multiple, proposition d'un invite moderee (
     // Marc rejoint et est approuvé comme invité normal.
     const marcContext = await browser.newContext();
     const marcPage = await marcContext.newPage();
-    await marcPage.goto(`/e/${event.short_code}`);
-    await marcPage.getByRole("button", { name: "Continuer sans compte" }).click();
+    await loginAs(marcPage, `marc-${Date.now()}@test.konfeti.local`, `/e/${event.short_code}`);
     await marcPage.getByPlaceholder("Julie").fill("Marc");
     await marcPage.getByPlaceholder("Dean").fill("Untel");
     await marcPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000092");
@@ -208,8 +207,7 @@ test("dire 'je ne peux pas' retire automatiquement le vote et la proposition de 
 
     const marcContext = await browser.newContext();
     const marcPage = await marcContext.newPage();
-    await marcPage.goto(`/e/${event.short_code}`);
-    await marcPage.getByRole("button", { name: "Continuer sans compte" }).click();
+    await loginAs(marcPage, `marc-${Date.now()}@test.konfeti.local`, `/e/${event.short_code}`);
     await marcPage.getByPlaceholder("Julie").fill("Marc");
     await marcPage.getByPlaceholder("Dean").fill("Untel");
     await marcPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000091");
@@ -287,9 +285,10 @@ test("dire 'je ne peux pas' retire automatiquement le vote et la proposition de 
       .maybeSingle();
     expect(lieuPollBefore).not.toBeNull();
 
-    // Marc change sa réponse : "Je ne peux pas".
+    // Marc change sa réponse : "Je ne peux pas" (confirmation requise).
     await marcPage.goto(`/e/${event.short_code}`);
     await marcPage.getByRole("button", { name: "Je ne peux pas" }).click();
+    await marcPage.getByRole("button", { name: "Oui, je ne peux pas venir" }).click();
     await expect
       .poll(async () => {
         const { data } = await supabaseAdmin.from("rsvps").select("status").eq("id", marcRsvp!.id).single();

@@ -19,6 +19,8 @@ type RawOptionRow = {
 // ne s'affiche pas du tout tant qu'aucun sondage n'existe. La RLS
 // (`polls_select`) filtre déjà les sondages encore en attente pour un
 // non-admin, comme pour la liste complète de l'onglet Participer.
+// L'avertissement de quota (dépassement/budget non réparti) vit séparément,
+// tout en haut de l'Accueil (retour Thomas) -- voir `PollsQuotaWarningSection`.
 export async function PollsAccueilSummary({ eventId }: { eventId: string }) {
   const supabase = await createClient();
   const t = await getTranslations("Polls");
@@ -45,13 +47,13 @@ export async function PollsAccueilSummary({ eventId }: { eventId: string }) {
   const optionIds = options.map((o) => o.id);
   const { data: voteRows } =
     optionIds.length > 0
-      ? await supabase.from("poll_votes").select("option_id").in("option_id", optionIds)
-      : { data: [] as { option_id: string }[] };
+      ? await supabase.from("poll_votes").select("option_id, quantity").in("option_id", optionIds)
+      : { data: [] as { option_id: string; quantity: number }[] };
 
   const votes = voteRows ?? [];
   const voteCountByOption = new Map<string, number>();
   for (const vote of votes) {
-    voteCountByOption.set(vote.option_id, (voteCountByOption.get(vote.option_id) ?? 0) + 1);
+    voteCountByOption.set(vote.option_id, (voteCountByOption.get(vote.option_id) ?? 0) + vote.quantity);
   }
 
   return (

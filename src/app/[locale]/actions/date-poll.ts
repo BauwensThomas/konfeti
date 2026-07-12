@@ -16,10 +16,6 @@ export async function voteDateOption(
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Voter est ouvert à tout participant, y compris une session anonyme
-  // "code d'accès" (même principe que le RSVP/le chat, jamais réservé aux
-  // vrais comptes) : même bug que updateEvent (voir events.ts), ce blocage
-  // n'avait pas lieu d'être ici.
   if (!user) {
     return { ok: false };
   }
@@ -59,9 +55,6 @@ export async function finalizeDatePoll(
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Même raison que voteDateOption/updateEvent : un admin promu, même en
-  // session anonyme, a les mêmes droits que l'hôte (RLS événements_update_by_admin
-  // tranche déjà, voir le commentaire plus bas).
   if (!user) {
     return { ok: false };
   }

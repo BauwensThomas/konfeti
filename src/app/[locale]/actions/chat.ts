@@ -1,8 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { ensureGuestSession } from "@/lib/supabase/guest-session";
+import { requireUser } from "@/lib/supabase/guest-session";
 import { isRateLimited } from "@/lib/rate-limit";
+import { getEventApprovedUserIds } from "@/lib/push-recipients";
+import { sendPush } from "@/lib/push-send";
+import { pushMessages } from "@/lib/push-messages";
 import {
   sendMessageSchema,
   editMessageSchema,
@@ -16,11 +19,6 @@ export type ChatActionResult =
   | { ok: true }
   | { ok: false; error: "invalid" | "rate_limited" | "unauthorized" | "unknown" };
 
-// Le chat est ouvert à tout participant, y compris un invité "code d'accès"
-// en session anonyme (brief 1.1/4.3) : jamais de contrôle `is_anonymous`
-// ici, contrairement aux Server Actions réservées à l'hôte/aux comptes réels
-// (createEvent, voteDateOption...).
-
 // L'hôte n'a jamais de ligne rsvps automatique (voir date-poll.ts). Pour un
 // participant normal, une ligne existe déjà depuis son onboarding (identité
 // + réponse) : `ensure_own_rsvp` (RPC déjà existant) la retourne telle
@@ -31,7 +29,7 @@ export async function ensureMyChatRsvpId(
   eventId: string,
 ): Promise<{ ok: true; rsvpId: string } | { ok: false }> {
   const supabase = await createClient();
-  const user = await ensureGuestSession(supabase);
+  const user = await requireUser(supabase);
   if (!user) return { ok: false };
 
   const { data: rsvpId, error } = await supabase.rpc("ensure_own_rsvp", { p_event_id: eventId });
@@ -55,7 +53,7 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
   const data = parsed.data;
 
   const supabase = await createClient();
-  const user = await ensureGuestSession(supabase);
+  const user = await requireUser(supabase);
   if (!user) {
     return { ok: false, error: "unknown" };
   }
@@ -90,6 +88,25 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
       { event_id: data.eventId, rsvp_id: data.rsvpId, channel: data.channel, last_read_at: new Date().toISOString() },
       { onConflict: "event_id,rsvp_id,channel" },
     );
+
+  try {
+    const [{ data: event }, { data: rsvp }] = await Promise.all([
+      supabase.from("events").select("title, short_code").eq("id", data.eventId).single(),
+      supabase.from("rsvps").select("first_name").eq("id", data.rsvpId).single(),
+    ]);
+    if (event) {
+      const recipientUserIds = (await getEventApprovedUserIds(supabase, data.eventId, { channel: data.channel })).filter(
+        (id) => id !== user.id,
+      );
+      void sendPush(
+        recipientUserIds,
+        "chat",
+        pushMessages.newChatMessage(event.short_code, event.title, rsvp?.first_name ?? "Un invité", data.channel),
+      );
+    }
+  } catch {
+    // Best-effort.
+  }
 
   return { ok: true, messageId: inserted.id };
 }
@@ -174,7 +191,7 @@ export async function setReaction(
   }
 
   const supabase = await createClient();
-  const user = await ensureGuestSession(supabase);
+  const user = await requireUser(supabase);
   if (!user) {
     return { ok: false, error: "unknown" };
   }

@@ -15,6 +15,8 @@ type RawRsvpRow = {
   answer: "yes" | "maybe" | "no";
   pot_access_granted: boolean;
   wants_pot_access: boolean;
+  checked_in_at: string | null;
+  arrived_home_at: string | null;
 };
 
 type RawPublicRsvpRow = {
@@ -27,6 +29,8 @@ type RawPublicRsvpRow = {
   role: "guest" | "admin" | "beneficiary";
   answer: "yes" | "maybe" | "no";
   companions_count: number;
+  checked_in_at: string | null;
+  arrived_home_at: string | null;
 };
 
 // Onglet Personnes (brief 1.3/1.5) : la file d'attente + les rôles pour un
@@ -42,6 +46,7 @@ export async function EventPersonnes({
   isBeneficiary,
   isParticipantsHidden,
   beneficiaryNames,
+  isJourJ,
 }: {
   eventId: string;
   shortCode: string;
@@ -58,6 +63,10 @@ export async function EventPersonnes({
   isBeneficiary: boolean;
   isParticipantsHidden: boolean;
   beneficiaryNames: string[];
+  // Mode Jour J (brief 4.11) : badges "Arrivé"/"Bien rentré" n'affichés que
+  // ce jour-là, jamais avant (répond à "pratique pour savoir qui on attend
+  // avant de lancer le gâteau").
+  isJourJ: boolean;
 }) {
   const supabase = await createClient();
 
@@ -67,7 +76,7 @@ export async function EventPersonnes({
     const { data } = await supabase
       .from("rsvps")
       .select(
-        "id, profile_id, first_name, last_name, phone, avatar_kind, avatar_value, status, role, answer, pot_access_granted, wants_pot_access",
+        "id, profile_id, first_name, last_name, phone, avatar_kind, avatar_value, status, role, answer, pot_access_granted, wants_pot_access, checked_in_at, arrived_home_at",
       )
       .eq("event_id", eventId)
       .in("status", ["pending", "restricted", "approved"])
@@ -86,18 +95,6 @@ export async function EventPersonnes({
       companionsCountByRsvp.set(c.rsvp_id, (companionsCountByRsvp.get(c.rsvp_id) ?? 0) + 1);
     }
 
-    // Vrai compte vs session anonyme (retour Thomas : symbole visuel +
-    // "Transférer l'organisation" impossible vers un admin anonyme) :
-    // `auth.users` n'est pas exposée via l'API REST classique, cette
-    // fonction dédiée y accède en SQL, réservée aux admins de l'événement.
-    const { data: accountTypes } = await supabase.rpc("get_event_participants_account_type", {
-      p_event_id: eventId,
-    });
-    const isAnonymousByProfile = new Map<string, boolean>();
-    for (const row of accountTypes ?? []) {
-      isAnonymousByProfile.set(row.profile_id, row.is_anonymous);
-    }
-
     rows = await Promise.all(
       rsvpRows.map(async (r) => ({
         id: r.id,
@@ -112,9 +109,8 @@ export async function EventPersonnes({
         companionsCount: companionsCountByRsvp.get(r.id) ?? 0,
         potAccessGranted: r.pot_access_granted,
         wantsPotAccess: r.wants_pot_access,
-        isRealAccount: isAnonymousByProfile.has(r.profile_id)
-          ? !isAnonymousByProfile.get(r.profile_id)
-          : null,
+        checkedInAt: r.checked_in_at,
+        arrivedHomeAt: r.arrived_home_at,
       })),
     );
   } else {
@@ -124,7 +120,9 @@ export async function EventPersonnes({
     // que les participants réellement approuvés dans cette liste.
     const { data } = await supabase
       .from("rsvps_public_data")
-      .select("id, first_name, last_initial, avatar_kind, avatar_value, status, role, answer, companions_count")
+      .select(
+        "id, first_name, last_initial, avatar_kind, avatar_value, status, role, answer, companions_count, checked_in_at, arrived_home_at",
+      )
       .eq("event_id", eventId)
       .eq("status", "approved")
       .returns<RawPublicRsvpRow[]>();
@@ -144,7 +142,8 @@ export async function EventPersonnes({
         companionsCount: r.companions_count,
         potAccessGranted: false,
         wantsPotAccess: false,
-        isRealAccount: null,
+        checkedInAt: r.checked_in_at,
+        arrivedHomeAt: r.arrived_home_at,
       })),
     );
   }
@@ -162,6 +161,7 @@ export async function EventPersonnes({
       isBeneficiary={isBeneficiary}
       isParticipantsHidden={isParticipantsHidden}
       beneficiaryNames={beneficiaryNames}
+      isJourJ={isJourJ}
     />
   );
 }

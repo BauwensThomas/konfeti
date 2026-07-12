@@ -19,29 +19,48 @@ export function MyParticipationCard({
   shortCode,
   currentAnswer,
   showLeaveButton,
+  isEventOver = false,
 }: {
   rsvpId: string;
   shortCode: string;
   currentAnswer: Answer;
   showLeaveButton: boolean;
+  // Retour Thomas : "quand c'est fini on ne doit plus pouvoir choisir je
+  // viens, peut-être ou je viens pas" -- répondre à un événement déjà passé
+  // n'a plus de sens.
+  isEventOver?: boolean;
 }) {
   const t = useTranslations("GuestIdentity");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
+  // "Je ne peux pas" retire désormais accompagnants/qui-apporte-quoi/sondages
+  // et anonymise l'identité (retour Thomas, voir `update_my_answer`) --
+  // action destructive comme "Quitter", donc confirmée de la même façon
+  // plutôt qu'appliquée au premier clic.
+  const [confirmingNo, setConfirmingNo] = useState(false);
 
-  function handleAnswer(answer: Answer) {
-    if (answer === currentAnswer) return;
+  function submitAnswer(answer: Answer) {
     setError(null);
     startTransition(async () => {
       const result = await updateMyAnswer(rsvpId, shortCode, answer);
       if (result.ok) {
+        setConfirmingNo(false);
         router.refresh();
       } else {
         setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
       }
     });
+  }
+
+  function handleAnswer(answer: Answer) {
+    if (answer === currentAnswer) return;
+    if (answer === "no") {
+      setConfirmingNo(true);
+      return;
+    }
+    submitAnswer(answer);
   }
 
   function handleLeave() {
@@ -78,7 +97,7 @@ export function MyParticipationCard({
           <button
             key={a.value}
             type="button"
-            disabled={isPending}
+            disabled={isPending || isEventOver}
             onClick={() => handleAnswer(a.value)}
             className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed ${
               a.value === currentAnswer
@@ -119,6 +138,19 @@ export function MyParticipationCard({
           </Modal>
         </>
       )}
+      <Modal open={confirmingNo} onClose={() => setConfirmingNo(false)}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- asset local déjà optimisé, voir CancelEventButton */}
+        <img src="/attention.webp" alt="" width={200} height={200} className="mx-auto" />
+        <p className="text-center text-base text-foreground">{t("noConfirmTitle")}</p>
+        <div className="flex justify-center gap-3">
+          <Button variant="danger" disabled={isPending} onClick={() => submitAnswer("no")}>
+            {t("noConfirmYes")}
+          </Button>
+          <Button variant="ghost" onClick={() => setConfirmingNo(false)}>
+            {t("leaveConfirmNo")}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

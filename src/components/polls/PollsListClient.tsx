@@ -3,7 +3,7 @@
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
-import { approvePoll, proposePoll, rejectPoll, votePollOption } from "@/app/[locale]/actions/polls";
+import { approvePoll, proposePoll, rejectPoll, setPollVote } from "@/app/[locale]/actions/polls";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
@@ -11,8 +11,9 @@ import { Modal } from "@/components/ui/Modal";
 export type PollOptionView = {
   id: string;
   label: string;
-  voteCount: number;
-  votedByMe: boolean;
+  totalQuantity: number;
+  // Quantité déjà allouée par le viewer à CETTE option (0 = pas votée).
+  myQuantity: number;
 };
 
 export type PollView = {
@@ -24,6 +25,11 @@ export type PollView = {
   // l'organisateur (jamais proposé par quelqu'un), même principe que
   // `BringItemView`.
   status: "pending" | "approved";
+  // "single" (menu resto...) : budget partagé "1 + accompagnants" à répartir
+  // entre les options. "multiple" (comportement historique) : cases à cocher
+  // sans limite (retour Thomas : "je sais voter pour les 3 c'est un
+  // problème... j'ai le droit qu'à un menu").
+  choiceMode: "single" | "multiple";
   proposedByName: string | null;
   options: PollOptionView[];
 };
@@ -37,14 +43,23 @@ export function PollsListClient({
   eventId,
   shortCode,
   viewerRsvpId,
+  viewerBudget,
   isAdmin,
   initialPolls,
+  readOnly = false,
 }: {
   eventId: string;
   shortCode: string;
   viewerRsvpId: string | null;
+  // Budget de vote pour un sondage "choix unique" : 1 (le viewer) + ses
+  // accompagnants (voir PollsList.tsx). Sans objet pour un sondage "choix
+  // multiple", jamais utilisé dans ce cas.
+  viewerBudget: number;
   isAdmin: boolean;
   initialPolls: PollView[];
+  // Événement terminé (brief 4.11, retour Thomas) : garde les résultats,
+  // mais plus aucun vote/proposition possible.
+  readOnly?: boolean;
 }) {
   const t = useTranslations("Polls");
   const router = useRouter();
@@ -58,6 +73,7 @@ export function PollsListClient({
   // wizard (CreateEventWizard.tsx, étape 4).
   const [proposeQuestion, setProposeQuestion] = useState("");
   const [proposeOptions, setProposeOptions] = useState(["", ""]);
+  const [proposeChoiceMode, setProposeChoiceMode] = useState<"single" | "multiple">("multiple");
   const [proposeSuccess, setProposeSuccess] = useState(false);
 
   // Formulaire de proposition dans un popup plutôt que toujours déplié
@@ -81,18 +97,19 @@ export function PollsListClient({
   }, [proposeSuccess]);
 
   // Retour visuel immédiat au clic (avant que le Server Action + la
-  // revalidation ne confirment la vraie valeur), sinon la case à cocher
-  // "rebondit" à son ancien état le temps de l'aller-retour serveur --
-  // bug réel trouvé en testant (la case se décochait aussitôt cliquée),
-  // même correctif que `DatePollVoting.tsx` pour le sondage de date.
+  // revalidation ne confirment la vraie valeur), sinon la case à cocher /
+  // le compteur "rebondit" à son ancien état le temps de l'aller-retour
+  // serveur -- bug réel trouvé en testant (la case se décochait aussitôt
+  // cliquée), même correctif que `DatePollVoting.tsx` pour le sondage de
+  // date.
   const [optimisticPolls, setOptimisticVote] = useOptimistic(
     initialPolls,
-    (state, { optionId, checked }: { optionId: string; checked: boolean }) =>
+    (state, { optionId, quantity }: { optionId: string; quantity: number }) =>
       state.map((poll) => ({
         ...poll,
         options: poll.options.map((option) =>
           option.id === optionId
-            ? { ...option, votedByMe: checked, voteCount: option.voteCount + (checked ? 1 : -1) }
+            ? { ...option, myQuantity: quantity, totalQuantity: option.totalQuantity - option.myQuantity + quantity }
             : option,
         ),
       })),
@@ -101,14 +118,14 @@ export function PollsListClient({
   const approvedPolls = optimisticPolls.filter((poll) => poll.status === "approved");
   const pendingPolls = optimisticPolls.filter((poll) => poll.status === "pending");
 
-  function handleVote(optionId: string, checked: boolean) {
+  function handleVote(optionId: string, quantity: number) {
     if (!viewerRsvpId) return;
     setError(null);
     startTransition(async () => {
-      setOptimisticVote({ optionId, checked });
-      const result = await votePollOption(eventId, viewerRsvpId, shortCode, { optionId, checked });
+      setOptimisticVote({ optionId, quantity });
+      const result = await setPollVote(eventId, viewerRsvpId, shortCode, { optionId, quantity });
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        setError(result.error === "quota_exceeded" ? t("quotaExceeded") : t("errorUnknown"));
         return;
       }
       router.refresh();
@@ -126,6 +143,7 @@ export function PollsListClient({
       const result = await proposePoll(eventId, shortCode, viewerRsvpId, {
         question,
         options: options.map((label) => ({ label })),
+        choiceMode: proposeChoiceMode,
       });
       if (!result.ok) {
         setError(t("errorUnknown"));
@@ -133,6 +151,7 @@ export function PollsListClient({
       }
       setProposeQuestion("");
       setProposeOptions(["", ""]);
+      setProposeChoiceMode("multiple");
       setProposeSuccess(true);
       router.refresh();
     });
@@ -200,7 +219,7 @@ export function PollsListClient({
           toute façon les sondages 'pending' qu'à un admin -- `pendingPolls`
           reste structurellement vide pour tout autre viewer, ce garde-fou
           `isAdmin` est une défense en profondeur, pas la seule protection). */}
-      {isAdmin && pendingPolls.length > 0 && (
+      {!readOnly && isAdmin && pendingPolls.length > 0 && (
         <div className="flex flex-col gap-2">
           <p className="font-display text-lg font-bold text-foreground">{t("pendingSectionTitle")}</p>
           {pendingPolls.map((poll) => (
@@ -230,42 +249,102 @@ export function PollsListClient({
       {approvedPolls.length === 0 ? (
         <p className="text-center text-sm text-foreground/60">{t("empty")}</p>
       ) : (
-        approvedPolls.map((poll) => (
-          <div key={poll.id} className="flex flex-col gap-2 rounded-konfeti border border-border p-3">
-            <p className="font-display text-lg font-bold text-foreground">{poll.question}</p>
-            <ul className="flex flex-col gap-2">
-              {poll.options.map((option) => (
-                <li key={option.id} className="flex items-center justify-between gap-3">
-                  <label className="flex flex-1 items-center gap-3 text-sm text-foreground">
-                    <input
-                      type="checkbox"
-                      checked={option.votedByMe}
-                      disabled={isPending || !viewerRsvpId}
-                      onChange={(e) => handleVote(option.id, e.target.checked)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                    {t("voteCount", { count: option.voteCount })}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            {/* Retour Thomas : "les admins ou organisateur doivent avoir la
-                possibilité de supprimer le sondage" -- pas seulement refuser
-                une proposition encore en attente. */}
-            {isAdmin && (
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => setConfirmingDeletePollId(poll.id)}
-                className="self-start text-xs font-semibold text-accent-coral"
-              >
-                {t("deletePoll")}
-              </button>
-            )}
-          </div>
-        ))
+        approvedPolls.map((poll) => {
+          const isSingle = poll.choiceMode === "single";
+          const allocated = poll.options.reduce((sum, o) => sum + o.myQuantity, 0);
+          const remaining = viewerBudget - allocated;
+          return (
+            <div key={poll.id} className="flex flex-col gap-2 rounded-konfeti border border-border p-3">
+              <p className="font-display text-lg font-bold text-foreground">{poll.question}</p>
+              {/* Quota "choix unique" (retour Thomas) : budget partagé entre
+                  toutes les options de CE sondage, pas un vote par option.
+                  Si le budget a diminué après coup (retour Thomas : "je
+                  retire un accompagnant, comment savoir lequel vote
+                  retirer ?") -- personne ne peut deviner à la place de la
+                  personne quel choix retirer, donc on ne retire rien tout
+                  seul : juste un avertissement clair, le -/+ reste
+                  utilisable pour choisir soi-même lequel réduire. */}
+              {!readOnly && isSingle && viewerRsvpId && (
+                <p
+                  className={`text-xs font-semibold ${remaining < 0 ? "text-accent-coral" : "text-foreground/60"}`}
+                >
+                  {remaining < 0 ? t("budgetExceeded", { count: -remaining }) : t("budgetRemaining", { count: remaining })}
+                </p>
+              )}
+              {/* Grille à 3 colonnes fixes (label / contrôle / pastille de
+                  votes) plutôt qu'un simple `flex justify-between` (retour
+                  Thomas : "aligne ça bien"/"ce n'est toujours pas bien
+                  aligné") -- la grille doit être partagée par la `<ul>`
+                  ENTIÈRE (`display: contents` sur chaque `<li>`, qui devient
+                  transparente pour la grille et laisse ses enfants devenir
+                  des cellules directes) : une grille par `<li>` séparée,
+                  comme au premier essai, recalcule ses propres largeurs de
+                  colonne indépendamment ligne par ligne, donc rien ne
+                  s'aligne réellement d'une option à l'autre. */}
+              <ul className="grid grid-cols-[1fr_5.5rem_auto] items-center gap-x-3 gap-y-2">
+                {poll.options.map((option) => (
+                  <li key={option.id} className="contents">
+                    <span className="min-w-0 truncate text-sm text-foreground">{option.label}</span>
+                    {readOnly ? (
+                      <span className="text-xs font-semibold text-accent-mint">
+                        {option.myQuantity > 0 && `✓${option.myQuantity > 1 ? ` x${option.myQuantity}` : ""}`}
+                      </span>
+                    ) : isSingle ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isPending || !viewerRsvpId || option.myQuantity <= 0}
+                          onClick={() => handleVote(option.id, option.myQuantity - 1)}
+                          aria-label={t("decreaseVote", { label: option.label })}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-canvas text-sm font-bold text-foreground disabled:opacity-40"
+                        >
+                          −
+                        </button>
+                        <span className="w-4 shrink-0 text-center text-sm font-semibold text-foreground">
+                          {option.myQuantity}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={isPending || !viewerRsvpId || remaining <= 0}
+                          onClick={() => handleVote(option.id, option.myQuantity + 1)}
+                          aria-label={t("increaseVote", { label: option.label })}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-canvas text-sm font-bold text-foreground disabled:opacity-40"
+                        >
+                          +
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center gap-3 text-sm text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={option.myQuantity > 0}
+                          disabled={isPending || !viewerRsvpId}
+                          onChange={(e) => handleVote(option.id, e.target.checked ? 1 : 0)}
+                        />
+                      </label>
+                    )}
+                    <span className="justify-self-end whitespace-nowrap rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                      {t("voteCount", { count: option.totalQuantity })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {/* Retour Thomas : "les admins ou organisateur doivent avoir la
+                  possibilité de supprimer le sondage" -- pas seulement refuser
+                  une proposition encore en attente. */}
+              {!readOnly && isAdmin && (
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => setConfirmingDeletePollId(poll.id)}
+                  className="self-start text-xs font-semibold text-accent-coral"
+                >
+                  {t("deletePoll")}
+                </button>
+              )}
+            </div>
+          );
+        })
       )}
 
       {/* Proposition de sondage par un invité, dans un popup plutôt que
@@ -273,7 +352,7 @@ export function PollsListClient({
           fois empilé avec "qui apporte quoi") -- visible à tout participant
           approuvé non masqué (même condition que le vote : `viewerRsvpId`
           n'existe que dans ce cas). */}
-      {viewerRsvpId && (
+      {!readOnly && viewerRsvpId && (
         <Button variant="secondary" className="w-full" onClick={() => setIsProposeOpen(true)}>
           + {t("proposeHeading")}
         </Button>
@@ -295,6 +374,29 @@ export function PollsListClient({
             placeholder={t("proposeQuestionPlaceholder")}
             className="rounded-konfeti border border-border bg-surface px-3 py-2 text-sm text-foreground"
           />
+          {/* "Choix unique" (menu resto...) vs "choix multiple" (retour
+              Thomas : "je sais voter pour les 3... j'ai le droit qu'à un
+              menu"). */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setProposeChoiceMode("multiple")}
+              className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition-colors ${
+                proposeChoiceMode === "multiple" ? "bg-primary text-white" : "bg-surface text-foreground/70"
+              }`}
+            >
+              {t("choiceModeMultiple")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setProposeChoiceMode("single")}
+              className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition-colors ${
+                proposeChoiceMode === "single" ? "bg-primary text-white" : "bg-surface text-foreground/70"
+              }`}
+            >
+              {t("choiceModeSingle")}
+            </button>
+          </div>
           <div className="flex flex-col gap-2">
             {proposeOptions.map((option, index) => (
               <div key={index} className="flex items-center gap-2">

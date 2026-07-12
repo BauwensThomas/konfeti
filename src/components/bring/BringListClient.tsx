@@ -58,12 +58,17 @@ export function BringListClient({
   viewerRsvpId,
   isAdmin,
   initialItems,
+  readOnly = false,
 }: {
   eventId: string;
   shortCode: string;
   viewerRsvpId: string | null;
   isAdmin: boolean;
   initialItems: BringItemView[];
+  // Événement terminé (brief 4.11, retour Thomas) : garde la trace de qui a
+  // apporté quoi, mais plus aucun contrôle interactif (réclamer, proposer,
+  // approuver, cocher "apporté"...).
+  readOnly?: boolean;
 }) {
   const t = useTranslations("Bring");
   const router = useRouter();
@@ -346,7 +351,7 @@ export function BringListClient({
           admin -- `pendingItems` reste structurellement vide pour tout
           autre viewer, ce garde-fou `isAdmin` est une défense en
           profondeur, pas la seule protection). */}
-      {isAdmin && pendingItems.length > 0 && (
+      {!readOnly && isAdmin && pendingItems.length > 0 && (
         <div className="flex flex-col gap-2">
           <p className="font-display text-lg font-bold text-foreground">{t("pendingSectionTitle")}</p>
           {pendingItems.map((item) => (
@@ -416,7 +421,7 @@ export function BringListClient({
         return (
           <div key={item.id} className="flex flex-col gap-2 rounded-konfeti border border-border p-3">
             <BringGauge label={item.label} claimed={claimed} needed={item.quantityNeeded} unit={item.unit} />
-            {isAdmin && (
+            {!readOnly && isAdmin && (
               <div className="flex flex-col gap-1 rounded-konfeti bg-canvas p-2">
                 <span className="text-xs font-semibold text-foreground/60">{t("editQuantityLabel")}</span>
                 <div className="flex items-center gap-2">
@@ -450,7 +455,7 @@ export function BringListClient({
                     <span>
                       {claim.name} : {formatQuantity(claim.quantity, item.unit)}
                     </span>
-                    {isAdmin && (
+                    {!readOnly && isAdmin ? (
                       <label className="flex items-center gap-1">
                         <input
                           type="checkbox"
@@ -460,12 +465,14 @@ export function BringListClient({
                         />
                         {t("broughtLabel")}
                       </label>
+                    ) : (
+                      claim.brought && <span className="text-accent-mint">{t("broughtLabel")}</span>
                     )}
                   </li>
                 ))}
               </ul>
             )}
-            {viewerRsvpId && (
+            {!readOnly && viewerRsvpId && (
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-semibold text-foreground/60">{t("myClaimLabel")}</span>
                 <div className="flex items-center gap-2">
@@ -505,7 +512,7 @@ export function BringListClient({
           participant approuvé non masqué, SAUF un admin (retour Thomas :
           "pour les admin il faut juste un seul bouton, proposer/ajouter un
           item" -- l'admin n'a que le bouton juste en dessous). */}
-      {viewerRsvpId && !isAdmin && (
+      {!readOnly && viewerRsvpId && !isAdmin && (
         <Button variant="secondary" className="w-full" onClick={() => setIsProposeOpen(true)}>
           + {t("proposeHeading")}
         </Button>
@@ -515,7 +522,7 @@ export function BringListClient({
           toujours déjà approuvé, avec une quantité personnelle optionnelle
           ("s'il met pas de quantité à ce qu'il rapporte, ça créera l'item
           avec 0 apporté pour le moment"). */}
-      {isAdmin && viewerRsvpId && (
+      {!readOnly && isAdmin && viewerRsvpId && (
         <Button variant="secondary" className="w-full" onClick={() => setIsAddItemOpen(true)}>
           + {t("addItemHeading")}
         </Button>

@@ -1,6 +1,6 @@
 import { type ButtonHTMLAttributes } from "react";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "highlight" | "successFilled" | "sky" | "highlightDark";
 type Size = "md" | "sm";
 
 const VARIANT_CLASSES: Record<Variant, string> = {
@@ -9,6 +9,21 @@ const VARIANT_CLASSES: Record<Variant, string> = {
   secondary: "bg-secondary text-foreground hover:brightness-95",
   ghost: "bg-transparent text-primary hover:bg-primary/10",
   danger: "bg-accent-coral text-white hover:brightness-95 shadow-konfeti",
+  // Orange plein, texte blanc (Mode Jour J : "Je suis bien rentré" avant
+  // confirmation, retour Thomas -- "en complet orange... texte visible
+  // blanc"), réutilise `--color-highlight`, seul orange de la palette (voir
+  // globals.css).
+  highlight: "bg-highlight text-white hover:brightness-95 shadow-konfeti",
+  // Vert plein, une fois confirmé -- "Arrivé !" et "Bien rentré !" (retour
+  // Thomas : "quand il est rentré, en vert comme arrivé").
+  successFilled: "bg-accent-mint text-white hover:brightness-95 shadow-konfeti",
+  // Bleu ciel plein, texte blanc -- réservé au bouton "Export PDF" (retour
+  // Thomas : "export CSV doit être en bleu clair").
+  sky: "bg-accent-sky text-white hover:brightness-95 shadow-konfeti",
+  // Orange foncé plein, texte blanc -- réservé au bouton "Modifier" (retour
+  // Thomas), distinct de `highlight` (orange plein, déjà pris par "Je suis
+  // bien rentré" avant confirmation en Mode Jour J).
+  highlightDark: "bg-highlight-dark text-white hover:brightness-95 shadow-konfeti",
 };
 
 // Classes de taille jamais concatenees avec un override partiel ailleurs

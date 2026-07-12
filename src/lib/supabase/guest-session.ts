@@ -1,18 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * Garantit une session pour l'appelant (porte 2, brief 1.2) : si personne
- * n'est connecté, crée une session anonyme Supabase à la volée. Un visiteur
- * peut ainsi remplir son identité et répondre sans jamais passer par
- * /connexion ("zéro friction").
+ * Exige une vraie session pour l'appelant (retour Thomas : "que les gens se
+ * connectent à leur compte directement" -- plus de création de session à la
+ * volée, contrairement à l'ancien comportement de cette fonction). `null` si
+ * personne n'est connecté : simple filet de sécurité côté serveur, puisque
+ * l'UI ne devrait de toute façon jamais atteindre ces actions sans session
+ * réelle au préalable (porte unique "Se connecter", voir GuestParticipation.tsx).
  */
-export async function ensureGuestSession(supabase: Awaited<ReturnType<typeof createClient>>) {
+export async function requireUser(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user) return user;
-
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error || !data.user) return null;
-  return data.user;
+  return user;
 }

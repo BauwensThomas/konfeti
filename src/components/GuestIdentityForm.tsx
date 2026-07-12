@@ -47,6 +47,8 @@ export function GuestIdentityForm({
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [answer, setAnswer] = useState<"yes" | "maybe" | "no" | null>(null);
   const [companions, setCompanions] = useState<Companion[]>([]);
+  // Consentement rappels par email (brief 4.7) : JAMAIS pré-coché.
+  const [wantsReminders, setWantsReminders] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -108,6 +110,7 @@ export function GuestIdentityForm({
         kind: c.kind,
         firstName: c.firstName.trim() || undefined,
       })),
+      wantsReminders,
     };
 
     startTransition(async () => {
@@ -267,7 +270,7 @@ export function GuestIdentityForm({
           <button
             type="button"
             onClick={addCompanion}
-            className="w-fit text-sm font-semibold text-primary underline"
+            className="w-fit text-sm font-semibold text-primary"
           >
             {t("companionAdd")}
           </button>
@@ -298,6 +301,18 @@ export function GuestIdentityForm({
           </label>
         </div>
       </fieldset>
+
+      {/* Consentement rappels par email (brief 4.7/section 9, RGPD) : JAMAIS
+          pré-coché -- `useState(false)` par défaut, opt-in explicite. */}
+      <label className="flex items-start gap-2 text-sm text-foreground">
+        <input
+          type="checkbox"
+          checked={wantsReminders}
+          onChange={(e) => setWantsReminders(e.target.checked)}
+          className="mt-0.5"
+        />
+        {t("wantsRemindersLabel")}
+      </label>
 
       {error && (
         <p role="alert" className="text-sm text-accent-coral">

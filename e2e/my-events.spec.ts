@@ -47,7 +47,7 @@ async function createTestEvent(page: import("@playwright/test").Page, title: str
 
 // Retour Thomas : "/mes-evenements" ne listait que les événements dont on
 // est l'hôte -- élargi pour aussi lister ceux où l'on participe simplement
-// (host ET simple invité, ou invité anonyme sans jamais organiser).
+// (host ET simple invité, ou invité sans jamais organiser).
 test("mes-evenements liste J'organise et Je participe pour qui fait les deux", async ({ page, browser }) => {
   const aliceEmail = `e2e-myevents-alice-${Date.now()}@example.com`;
   const bobEmail = `e2e-myevents-bob-${Date.now()}@example.com`;
@@ -97,20 +97,22 @@ test("mes-evenements liste J'organise et Je participe pour qui fait les deux", a
   }
 });
 
-test("un invite anonyme qui participe a plusieurs evenements voit sa liste, et le lien retour", async ({
+test("un invité qui participe a plusieurs evenements voit sa liste, et le lien retour", async ({
   page,
   browser,
 }) => {
   const host1Email = `e2e-myevents-host1-${Date.now()}@example.com`;
   const host2Email = `e2e-myevents-host2-${Date.now()}@example.com`;
+  const marcEmail = `e2e-myevents-marc-${Date.now()}@example.com`;
   let host1Id: string | null = null;
   let host2Id: string | null = null;
+  let marcId: string | null = null;
 
   try {
     const host1 = await loginAs(page, host1Email);
     host1Id = host1.id;
     await completeProfile(page, "Hote1", "+32470000093", "Avatar 1", "Une femme");
-    const title1 = `E2E anon events A ${Date.now()}`;
+    const title1 = `E2E events A ${Date.now()}`;
     const event1 = await createTestEvent(page, title1);
 
     const host2Context = await browser.newContext();
@@ -118,17 +120,17 @@ test("un invite anonyme qui participe a plusieurs evenements voit sa liste, et l
     const host2 = await loginAs(host2Page, host2Email);
     host2Id = host2.id;
     await completeProfile(host2Page, "Hote2", "+32470000094", "Avatar 2", "Un homme");
-    const title2 = `E2E anon events B ${Date.now()}`;
+    const title2 = `E2E events B ${Date.now()}`;
     const event2 = await createTestEvent(host2Page, title2);
 
-    // Marc (invite anonyme "code d'acces") rejoint les DEUX evenements.
+    // Marc rejoint les DEUX evenements, connecte une seule fois.
     const marcContext = await browser.newContext();
     const marcPage = await marcContext.newPage();
+    const marc = await loginAs(marcPage, marcEmail, `/e/${event1.short_code}`);
+    marcId = marc.id;
 
     async function joinAsMarc(event: { short_code: string }) {
       await marcPage.goto(`/e/${event.short_code}`);
-      const continueBtn = marcPage.getByRole("button", { name: "Continuer sans compte" });
-      if (await continueBtn.count()) await continueBtn.click();
       await marcPage.getByPlaceholder("Julie").fill("Marc");
       await marcPage.getByPlaceholder("Dean").fill("Untel");
       await marcPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000095");
@@ -154,7 +156,7 @@ test("un invite anonyme qui participe a plusieurs evenements voit sa liste, et l
 
     // La flèche retour du header (qui remplace l'ancien lien texte "Retour à
     // mes événements", devenu redondant) doit être visible et fonctionnelle
-    // pour un invité anonyme (retour Thomas), pas seulement un admin.
+    // pour un simple invité (retour Thomas), pas seulement un admin.
     await marcPage.goto(`/e/${event1.short_code}`);
     await expect(marcPage.getByRole("button", { name: "Retour" })).toBeVisible();
     await marcPage.getByRole("button", { name: "Retour" }).click();
@@ -169,5 +171,6 @@ test("un invite anonyme qui participe a plusieurs evenements voit sa liste, et l
   } finally {
     if (host1Id) await deleteTestUser(host1Id);
     if (host2Id) await deleteTestUser(host2Id);
+    if (marcId) await deleteTestUser(marcId);
   }
 });

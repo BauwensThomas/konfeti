@@ -61,8 +61,7 @@ test("edition du profil (vrai compte) : prerempli, sauvegarde, propagation live 
     // rsvps_public_data, voir EventChat.tsx).
     const guestContext = await browser.newContext();
     const guestPage = await guestContext.newPage();
-    await guestPage.goto(`/e/${event.short_code}`);
-    await guestPage.getByRole("button", { name: "Continuer sans compte" }).click();
+    await loginAs(guestPage, `marc-${Date.now()}@test.konfeti.local`, `/e/${event.short_code}`);
     await guestPage.getByPlaceholder("Julie").fill("Marc");
     await guestPage.getByPlaceholder("Dean").fill("Untel");
     await guestPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000199");
@@ -167,20 +166,19 @@ test("edition du profil (vrai compte) : prerempli, sauvegarde, propagation live 
   }
 });
 
-test("un invite anonyme peut modifier son profil, prerempli depuis sa participation", async ({ page, browser }) => {
-  const hostEmail = `e2e-profile-anon-host-${Date.now()}@example.com`;
+test("un invité peut modifier son profil, prerempli depuis sa participation", async ({ page, browser }) => {
+  const hostEmail = `e2e-profile-guest-host-${Date.now()}@example.com`;
   let hostId: string | null = null;
 
   try {
     const host = await loginAs(page, hostEmail);
     hostId = host.id;
-    const title = `E2E anon profile ${Date.now()}`;
+    const title = `E2E guest profile ${Date.now()}`;
     const event = await createTestEvent(page, title);
 
     const guestContext = await browser.newContext();
     const guestPage = await guestContext.newPage();
-    await guestPage.goto(`/e/${event.short_code}`);
-    await guestPage.getByRole("button", { name: "Continuer sans compte" }).click();
+    await loginAs(guestPage, `marc-${Date.now()}@test.konfeti.local`, `/e/${event.short_code}`);
     await guestPage.getByPlaceholder("Julie").fill("Marc");
     await guestPage.getByPlaceholder("Dean").fill("Untel");
     await guestPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000098");
@@ -212,109 +210,5 @@ test("un invite anonyme peut modifier son profil, prerempli depuis sa participat
     await guestContext.close();
   } finally {
     if (hostId) await deleteTestUser(hostId);
-  }
-});
-
-test("mise a niveau anonyme -> compte reel conserve le meme auth.uid() (mecanique cote base)", async () => {
-  // Verifie le mecanisme lui-meme (updateUser depuis une session anonyme),
-  // independamment de l'UI : reproduit exactement ce que fait `sendMagicLink`
-  // quand `user.is_anonymous` est vrai (voir src/app/[locale]/actions/auth.ts).
-  const supabaseAnon = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
-  const { data: anonSignIn, error: anonErr } = await supabaseAnon.auth.signInAnonymously();
-  if (anonErr || !anonSignIn.user) throw anonErr ?? new Error("signInAnonymously a echoue");
-  const anonUserId = anonSignIn.user.id;
-
-  try {
-    const email = `e2e-linking-${Date.now()}@example.com`;
-    const { error: updateErr } = await supabaseAnon.auth.updateUser(
-      { email },
-      { emailRedirectTo: "http://localhost:3000/auth/callback" },
-    );
-    if (updateErr) throw updateErr;
-
-    // La MÊME ligne auth.users (même id) doit porter la demande de
-    // changement d'email en attente -- preuve qu'aucun nouveau compte n'a
-    // été créé (retour Thomas : "ça va fusionner mon profil anonyme actuel ?").
-    const { data: userRow } = await supabaseAdmin
-      .schema("auth")
-      .from("users")
-      .select("id, email_change, is_anonymous")
-      .eq("id", anonUserId)
-      .maybeSingle();
-
-    expect(userRow?.is_anonymous).toBe(true);
-    expect(userRow?.email_change).toBe(email);
-  } finally {
-    await deleteTestUser(anonUserId);
-  }
-});
-
-test("mise a niveau anonyme -> compte reel : le formulaire de connexion reussit sans erreur", async ({
-  page,
-}) => {
-  // Etablit une vraie session anonyme via le parcours RSVP normal (pas un
-  // raccourci technique), puis emprunte le VRAI chemin UI (LoginForm) pour
-  // confirmer que `sendMagicLink` prend bien la branche `updateUser` sans
-  // provoquer d'erreur cote serveur.
-  const hostEmail = `e2e-linking-host-${Date.now()}@example.com`;
-  let hostId: string | null = null;
-  let guestId: string | null = null;
-
-  try {
-    const host = await loginAs(page, hostEmail);
-    hostId = host.id;
-    const title = `E2E linking ${Date.now()}`;
-    const event = await createTestEvent(page, title);
-
-    const guestContext = await page.context().browser()!.newContext();
-    const guestPage = await guestContext.newPage();
-    await guestPage.goto(`/e/${event.short_code}`);
-    await guestPage.getByRole("button", { name: "Continuer sans compte" }).click();
-    await guestPage.getByPlaceholder("Julie").fill("Julie");
-    await guestPage.getByPlaceholder("Dean").fill("Untel");
-    await guestPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000097");
-    await guestPage.getByLabel("Une femme").check();
-    await guestPage.getByRole("button", { name: "Avatar 3" }).click();
-    await guestPage.getByLabel("Je viens !").check();
-    await guestPage.getByRole("button", { name: "Envoyer ma réponse" }).click();
-    await expect(guestPage.getByText("Ta demande est chez l'organisateur !")).toBeVisible({
-      timeout: 10_000,
-    });
-
-    const { data: rsvp } = await supabaseAdmin
-      .from("rsvps")
-      .select("profile_id")
-      .eq("event_id", event.id)
-      .eq("first_name", "Julie")
-      .maybeSingle();
-    guestId = rsvp?.profile_id ?? null;
-
-    await guestPage.goto("/creer");
-    await expect(guestPage).toHaveURL(/\/connexion/);
-    const linkingEmail = `e2e-linking-guest-${Date.now()}@example.com`;
-    await guestPage.getByLabel("Ton adresse email").fill(linkingEmail);
-    await guestPage.getByRole("button", { name: "Recevoir le lien magique" }).click();
-    await expect(
-      guestPage.getByText("Vérifie ta boîte mail, on t'a envoyé un lien pour te connecter !"),
-    ).toBeVisible({ timeout: 10_000 });
-
-    if (guestId) {
-      const { data: userRow } = await supabaseAdmin
-        .schema("auth")
-        .from("users")
-        .select("id, email_change, is_anonymous")
-        .eq("id", guestId)
-        .maybeSingle();
-      expect(userRow?.is_anonymous).toBe(true);
-      expect(userRow?.email_change).toBe(linkingEmail);
-    }
-
-    await guestContext.close();
-  } finally {
-    if (hostId) await deleteTestUser(hostId);
-    if (guestId) await deleteTestUser(guestId);
   }
 });

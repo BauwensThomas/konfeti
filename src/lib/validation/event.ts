@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseDateOnlyLocal } from "@/lib/datetime";
 
 export const OCCASIONS = [
   "birthday",
@@ -89,6 +90,10 @@ const eventFieldsSchema = z.object({
           .array(z.object({ id: z.string().uuid().nullable(), label: z.string().trim().min(1).max(200) }))
           .min(2)
           .max(10),
+        // "Choix unique" (menu resto...) vs "choix multiple" (comportement
+        // historique, valeur par défaut) -- voir migration
+        // `polls_choice_mode_and_quantity`.
+        choiceMode: z.enum(["single", "multiple"]).default("multiple"),
       }),
     )
     .max(10)
@@ -166,10 +171,14 @@ function refineEventFields(
   // exact : `rsvpDeadline` est un champ `<input type="date">` (pas d'heure),
   // qui se parse à minuit — le comparer à l'heure exacte actuelle aurait
   // rejeté à tort la journée du jour même dès qu'il n'est plus minuit pile.
+  // `parseDateOnlyLocal` (pas `new Date(...)` direct) : bug réel, une chaîne
+  // date-only se parse toujours en UTC, jamais dans le fuseau local -- "hier"
+  // en UTC pendant les ~2 premières heures après minuit heure locale (été,
+  // Belgique UTC+2), rejetant à tort la date du jour même comme "passée".
   if (!skipPastDateCheck && data.rsvpDeadline) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    if (new Date(data.rsvpDeadline) < today) {
+    if (parseDateOnlyLocal(data.rsvpDeadline) < today) {
       ctx.addIssue({
         code: "custom",
         message: "rsvpDeadline ne peut pas être dans le passé",
@@ -188,7 +197,7 @@ function refineEventFields(
     data.dateMode === "fixed" &&
     data.startsAt &&
     data.rsvpDeadline &&
-    new Date(data.rsvpDeadline) > new Date(data.startsAt)
+    parseDateOnlyLocal(data.rsvpDeadline) > new Date(data.startsAt)
   ) {
     ctx.addIssue({
       code: "custom",

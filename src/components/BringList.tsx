@@ -27,11 +27,15 @@ export async function BringList({
   shortCode,
   viewerRsvpId,
   isAdmin,
+  readOnly = false,
 }: {
   eventId: string;
   shortCode: string;
   viewerRsvpId: string | null;
   isAdmin: boolean;
+  // Événement terminé (brief 4.11, retour Thomas) : garde la trace de qui a
+  // apporté quoi, mais plus aucune réclamation/proposition possible.
+  readOnly?: boolean;
 }) {
   const supabase = await createClient();
 
@@ -111,6 +115,7 @@ export async function BringList({
       viewerRsvpId={viewerRsvpId}
       isAdmin={isAdmin}
       initialItems={itemViews}
+      readOnly={readOnly}
     />
   );
 }

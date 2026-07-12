@@ -3,14 +3,14 @@ import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveAvatarUrl } from "@/lib/avatars";
 import { ProfileCompletionForm } from "@/components/ProfileCompletionForm";
-import { LoginForm } from "@/components/LoginForm";
+import { ReminderPreferenceToggle } from "@/components/ReminderPreferenceToggle";
+import { PushNotificationSettings } from "@/components/PushNotificationSettings";
+import { DeleteAccountButton } from "@/components/DeleteAccountButton";
 
 // Édition du profil, accessible à tout moment (bouton "Modifier mon profil"
-// du footer), y compris à une session anonyme "code d'accès" (retour
-// Thomas : elle a bien rempli nom/prénom/photo via le formulaire RSVP, elle
-// doit pouvoir les modifier) — `proxy.ts` ne protège plus que
-// `/profil/completer` (parcours de création de compte), pas cette page-ci.
-// Distincte de `/profil/completer` : jamais de redirection forcée.
+// du footer) — `proxy.ts` ne protège plus que `/profil/completer` (parcours
+// de création de compte), pas cette page-ci. Distincte de
+// `/profil/completer` : jamais de redirection forcée.
 export default async function ProfilePage() {
   const t = await getTranslations("ProfileCompletion");
   const supabase = await createClient();
@@ -23,14 +23,16 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("first_name, last_name, phone, gender, avatar_kind, avatar_value")
+    .select(
+      "first_name, last_name, phone, gender, avatar_kind, avatar_value, wants_reminders, push_notif_invitations, push_notif_chat, push_notif_organisation, push_notif_jourj",
+    )
     .eq("id", user.id)
     .maybeSingle();
 
-  // Un invité anonyme n'a jamais rempli `profiles` (le formulaire RSVP écrit
-  // directement dans `rsvps`, sans jamais passer par la complétion de
-  // profil) : ce champ resterait vide sans ce repli sur sa participation la
-  // plus récente, pourtant bien la seule vraie source de son identité connue.
+  // Un hôte (jamais passé par le formulaire RSVP, donc jamais par la
+  // complétion de profil) peut arriver ici sans `profiles` rempli : repli
+  // sur sa participation la plus récente, seule vraie source d'identité
+  // connue dans ce cas.
   const hasProfileIdentity = !!profile?.first_name;
   const { data: latestRsvp } = hasProfileIdentity
     ? { data: null }
@@ -71,27 +73,18 @@ export default async function ProfilePage() {
         }}
       />
 
-      {/* Retour Thomas : proposer de passer à un vrai compte directement
-          depuis le profil, sans perdre les infos déjà remplies -- possible
-          seulement parce que sendMagicLink/signInWithGoogle détectent déjà
-          une session anonyme et la MET À NIVEAU (updateUser/linkIdentity,
-          même auth.uid()) au lieu de créer un compte séparé (voir
-          actions/auth.ts) : rien à faire ici d'autre que réutiliser
-          LoginForm tel quel. */}
-      {user.is_anonymous && (
-        // `id` : cible du lien "Se connecter pour ne rien perdre" affiché
-        // sur la page événement et "Mes événements" (voir LinkAccountBanner),
-        // pour arriver directement sur cette section plutôt qu'en haut de page.
-        <div id="lien-compte" className="flex w-full max-w-sm scroll-mt-20 flex-col gap-4 border-t border-border pt-8">
-          <div className="flex flex-col gap-2">
-            <h2 className="font-display text-xl font-bold text-primary">
-              {t("linkAccountHeading")}
-            </h2>
-            <p className="text-sm text-foreground/80">{t("linkAccountSubheading")}</p>
-          </div>
-          <LoginForm />
-        </div>
-      )}
+      <ReminderPreferenceToggle initialValue={profile?.wants_reminders ?? false} />
+
+      <PushNotificationSettings
+        initialPreferences={{
+          invitations: profile?.push_notif_invitations ?? true,
+          chat: profile?.push_notif_chat ?? true,
+          organisation: profile?.push_notif_organisation ?? true,
+          jourj: profile?.push_notif_jourj ?? true,
+        }}
+      />
+
+      <DeleteAccountButton />
     </main>
   );
 }

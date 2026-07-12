@@ -34,8 +34,11 @@ async function submitGuestIdentity(
   firstName: string,
   answerLabel: "Je viens !" | "Peut-être" | "Je ne peux pas",
 ) {
-  await guestPage.goto(`/e/${shortCode}`);
-  await guestPage.getByRole("button", { name: "Continuer sans compte" }).click();
+  await loginAs(
+    guestPage,
+    `${firstName.toLowerCase()}-${Date.now()}@test.konfeti.local`,
+    `/e/${shortCode}`,
+  );
   await guestPage.getByPlaceholder("Julie").fill(firstName);
   await guestPage.getByPlaceholder("Dean").fill("Untel");
   await guestPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000095");
@@ -270,7 +273,11 @@ test("acces restreint (je peux pas), cagnotte masquee au beneficiaire, et retour
     await expect(guestPage.getByText("Cadeau surprise", { exact: false })).not.toBeVisible();
 
     // Elle change a nouveau d'avis vers "je peux pas" : redevient restreinte.
+    // Confirmation requise (retour Thomas : accompagnants/qui-apporte-quoi/
+    // sondages retires, identite anonymisee -- action destructive comme
+    // "Quitter").
     await guestPage.getByRole("button", { name: "Je ne peux pas" }).click();
+    await guestPage.getByRole("button", { name: "Oui, je ne peux pas venir" }).click();
     await expect
       .poll(async () => {
         const { data } = await supabaseAdmin.from("rsvps").select("status").eq("id", rsvp!.id).single();

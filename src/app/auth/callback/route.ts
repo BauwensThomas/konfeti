@@ -32,15 +32,14 @@ export async function GET(request: Request) {
         .maybeSingle();
 
       if (!profile?.phone || !profile?.first_name) {
-        // Ce compte vient peut-être d'être mis à niveau depuis une session
-        // anonyme (voir sendMagicLink/signInWithGoogle, updateUser/
-        // linkIdentity — même `auth.uid()` conservé) : il a alors déjà
-        // fourni son identité une fois en tant qu'invité, dans `rsvps`, pas
-        // dans `profiles`. La lui redemander serait redondant ("rien n'est
-        // perdu en créant un compte plus tard", brief 1.2) — on la reprend
-        // silencieusement depuis sa participation la plus récente plutôt que
-        // de forcer /profil/completer, uniquement si une identité complète y
-        // existe déjà.
+        // Ce compte a peut-être déjà fourni son identité une fois en tant
+        // qu'invité (dans `rsvps`), sans qu'elle soit encore dans `profiles`
+        // (`submitRsvp` synchronise `profiles` à chaque RSVP, mais un compte
+        // plus ancien peut avoir une ligne `rsvps` remplie avant cet ajout).
+        // La lui redemander serait redondant ("rien n'est perdu en créant un
+        // compte plus tard", brief 1.2) — on la reprend silencieusement
+        // depuis sa participation la plus récente plutôt que de forcer
+        // /profil/completer, uniquement si une identité complète y existe déjà.
         const { data: latestRsvp } = await supabase
           .from("rsvps")
           .select("first_name, last_name, phone, gender, avatar_kind, avatar_value")

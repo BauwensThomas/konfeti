@@ -60,7 +60,10 @@ export default async function EditEventPage({
   // Sondages : mêmes ids réels nécessaires pour que `syncPolls` diffe plutôt
   // que tout recréer (voir DECISIONS.md, même principe que `bringItemsRows`
   // ci-dessus). Options récupérées séparément puis groupées par sondage.
-  const { data: pollRows } = await supabase.from("polls").select("id, question").eq("event_id", event.id);
+  const { data: pollRows } = await supabase
+    .from("polls")
+    .select("id, question, choice_mode")
+    .eq("event_id", event.id);
   const pollIds = (pollRows ?? []).map((p) => p.id);
   const { data: pollOptionRows } =
     pollIds.length > 0
@@ -142,6 +145,7 @@ export default async function EditEventPage({
       options: (pollOptionRows ?? [])
         .filter((option) => option.poll_id === poll.id)
         .map((option) => ({ id: option.id, label: option.label })),
+      choiceMode: poll.choice_mode as "single" | "multiple",
     })),
     beneficiaryHiddenBlocks: event.beneficiary_hidden_blocks ?? [],
   };

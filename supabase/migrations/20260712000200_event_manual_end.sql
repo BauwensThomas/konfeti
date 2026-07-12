@@ -1,0 +1,12 @@
+-- Bouton "Terminer" (brief 4.11, proposé par Thomas) : un admin/organisateur
+-- peut clore manuellement le Mode Jour J plutôt que d'attendre la bascule
+-- automatique du lendemain -- utile pour une fête qui se termine bien avant
+-- minuit, ou à l'inverse pour ne PAS attendre le surlendemain sur un
+-- événement qui traîne. `ended_at` prime sur le calcul de date dans
+-- `isJourJ`/`isEventOver` (src/lib/event-status.ts).
+--
+-- Aucun grant dédié nécessaire : `events_update_by_admin` (migration
+-- 20260706101047) autorise déjà un admin à modifier N'IMPORTE QUELLE colonne
+-- de sa ligne événement (contrairement à `rsvps`, jamais restreint colonne
+-- par colonne jusqu'ici).
+alter table events add column ended_at timestamptz;

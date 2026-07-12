@@ -3,11 +3,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
-import { isEventFinished, sortEventsByDate } from "@/lib/event-status";
+import { isEventOver, isJourJ, sortEventsByDate } from "@/lib/event-status";
 import { computeUnreadCount } from "@/lib/chat/unread";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { LinkAccountBanner } from "@/components/LinkAccountBanner";
 
 type EventRow = {
   id: string;
@@ -16,6 +15,8 @@ type EventRow = {
   theme: string;
   starts_at: string | null;
   date_mode: string;
+  ends_at: string | null;
+  ended_at: string | null;
 };
 
 export default async function MyEventsPage() {
@@ -24,22 +25,20 @@ export default async function MyEventsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  // Accessible à une session anonyme désormais (voir proxy.ts) : seul le cas
-  // "aucune session du tout" reste à gérer explicitement ici.
   if (!user) {
     redirect("/connexion?next=/mes-evenements");
   }
 
   const { data: hostedData } = await supabase
     .from("events")
-    .select("id, short_code, title, theme, starts_at, date_mode")
+    .select("id, short_code, title, theme, starts_at, date_mode, ends_at, ended_at")
     .eq("host_id", user!.id)
     .neq("status", "cancelled");
   const hostedEvents = sortEventsByDate(hostedData ?? []);
   const hostedIds = new Set(hostedEvents.map((e) => e.id));
 
   // Événements où l'on participe simplement (pas l'hôte) : retour Thomas —
-  // "si un anonyme participe à plusieurs événements, il devrait pouvoir voir
+  // "si un invité participe à plusieurs événements, il devrait pouvoir voir
   // la liste de ses événements", pas seulement ceux qu'il organise. `events`
   // (table brute) est déjà lisible par tout participant approuvé (policy
   // `events_select_full_for_participants`), pas besoin de `events_public_data`
@@ -58,7 +57,7 @@ export default async function MyEventsPage() {
     attendingEventIds.length > 0
       ? await supabase
           .from("events")
-          .select("id, short_code, title, theme, starts_at, date_mode")
+          .select("id, short_code, title, theme, starts_at, date_mode, ends_at, ended_at")
           .in("id", attendingEventIds)
           .neq("status", "cancelled")
       : { data: [] as EventRow[] };
@@ -95,7 +94,12 @@ export default async function MyEventsPage() {
   }
 
   function EventCard({ event, isHosted }: { event: EventRow; isHosted: boolean }) {
-    const finished = isEventFinished(event.starts_at, event.date_mode);
+    const finished = isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at);
+    // Retour Thomas : "pourquoi je vois organisateur et pas en cours ?" --
+    // pendant le Mode Jour J (jour de la fête + fin + jours de grâce), le
+    // badge indique le statut temporel plutôt que le rôle, comme "Terminé"
+    // le fait déjà.
+    const ongoing = !finished && isJourJ(event.starts_at, event.date_mode, event.ends_at, event.ended_at);
     const unreadCount = unreadCountByEvent.get(event.id) ?? 0;
     return (
       <li key={event.id} className="relative">
@@ -125,6 +129,10 @@ export default async function MyEventsPage() {
               <span className="rounded-full bg-accent-coral/10 px-3 py-1 text-xs font-semibold text-accent-coral">
                 {t("finishedBadge")}
               </span>
+            ) : ongoing ? (
+              <span className="rounded-full bg-accent-mint/10 px-3 py-1 text-xs font-semibold text-accent-mint">
+                {t("ongoingBadge")}
+              </span>
             ) : (
               <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                 {isHosted ? t("hostBadge") : t("attendingBadge")}
@@ -138,7 +146,6 @@ export default async function MyEventsPage() {
 
   return (
     <main className="flex flex-1 flex-col items-center gap-8 px-6 py-12 sm:py-16">
-      {user.is_anonymous && <LinkAccountBanner />}
       <div className="flex w-full max-w-lg lg:max-w-2xl items-center justify-between">
         <h1 className="font-display text-2xl font-bold text-primary sm:text-3xl">
           {t("heading")}

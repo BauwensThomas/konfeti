@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
-import { redeemGuestCode } from "@/app/[locale]/actions/rsvp";
 import { GuestIdentityForm } from "@/components/GuestIdentityForm";
-import { Button } from "@/components/ui/Button";
 
 type InitialIdentity = {
   firstName: string;
@@ -16,12 +14,12 @@ type InitialIdentity = {
   avatarValue: string | null;
 };
 
-// Point d'entrée d'un visiteur pas encore participant (brief 1.2, double
-// porte). `hasSession` distingue deux cas : quelqu'un déjà "dans" une session
-// (compte réel connecté, ou anonyme d'un précédent événement Konfeti sur cet
-// appareil) passe directement au formulaire ; sinon on propose les deux
-// portes (compte, ou continuer sans compte — la session anonyme n'est créée
-// qu'au moment de l'envoi du formulaire, pas avant).
+// Point d'entrée d'un visiteur pas encore participant. Porte unique (retour
+// Thomas : "que les gens se connectent à leur compte directement" -- plus de
+// "continuer sans compte" ni de code de récupération, tout le monde doit
+// avoir un vrai compte).
+// `hasSession` : déjà connecté (compte réel) → formulaire d'identité
+// directement ; sinon un seul bouton vers `/connexion`.
 export function GuestParticipation({
   eventId,
   shortCode,
@@ -37,31 +35,7 @@ export function GuestParticipation({
 }) {
   const t = useTranslations("GuestIdentity");
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [view, setView] = useState<"doors" | "form" | "code">(
-    hasSession ? "form" : "doors",
-  );
-  const [code, setCode] = useState("");
-  const [codeError, setCodeError] = useState<string | null>(null);
-
-  function handleRedeemCode() {
-    setCodeError(null);
-    startTransition(async () => {
-      const result = await redeemGuestCode(code);
-      if (result.ok) {
-        router.push(`/e/${result.shortCode}`);
-        router.refresh();
-      } else {
-        setCodeError(
-          result.error === "conflict"
-            ? t("codeErrorConflict")
-            : result.error === "rate_limited"
-              ? t("errorRateLimited")
-              : t("codeErrorInvalid"),
-        );
-      }
-    });
-  }
+  const [view] = useState<"door" | "form">(hasSession ? "form" : "door");
 
   if (view === "form") {
     return (
@@ -75,35 +49,6 @@ export function GuestParticipation({
     );
   }
 
-  if (view === "code") {
-    return (
-      <div className="flex w-full max-w-sm lg:max-w-md flex-col gap-3">
-        <input
-          type="text"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder={t("codePlaceholder")}
-          className="w-full rounded-konfeti border border-border bg-surface px-4 py-2.5 text-center text-base uppercase text-foreground placeholder:normal-case placeholder:text-foreground/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-        />
-        {codeError && (
-          <p role="alert" className="text-center text-sm text-accent-coral">
-            {codeError}
-          </p>
-        )}
-        <Button onClick={handleRedeemCode} disabled={isPending || !code.trim()}>
-          {isPending ? t("codeSubmitting") : t("codeSubmit")}
-        </Button>
-        <button
-          type="button"
-          onClick={() => setView("doors")}
-          className="text-sm font-semibold text-primary underline"
-        >
-          {t("codeBack")}
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="flex w-full max-w-sm lg:max-w-md flex-col items-center gap-3">
       <Link
@@ -112,16 +57,6 @@ export function GuestParticipation({
       >
         {t("doorLogin")}
       </Link>
-      <Button variant="secondary" className="w-full" onClick={() => setView("form")}>
-        {t("doorGuest")}
-      </Button>
-      <button
-        type="button"
-        onClick={() => setView("code")}
-        className="text-sm font-semibold text-primary underline"
-      >
-        {t("doorCode")}
-      </button>
     </div>
   );
 }

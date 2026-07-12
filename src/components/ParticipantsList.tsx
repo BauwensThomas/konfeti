@@ -31,9 +31,10 @@ export type ParticipantRow = {
   companionsCount: number;
   potAccessGranted: boolean;
   wantsPotAccess: boolean;
-  // `null` : non calculé pour ce viewer (jamais montré à un non-admin, voir
-  // EventPersonnes.tsx -- `auth.users` n'est interrogée que côté admin).
-  isRealAccount: boolean | null;
+  // Mode Jour J (brief 4.11) : badges "Arrivé"/"Bien rentré", affichés
+  // uniquement le jour même (voir `isJourJ` sur `ParticipantsList`).
+  checkedInAt: string | null;
+  arrivedHomeAt: string | null;
 };
 
 export function ParticipantsList({
@@ -48,6 +49,7 @@ export function ParticipantsList({
   isBeneficiary,
   isParticipantsHidden,
   beneficiaryNames,
+  isJourJ,
 }: {
   eventId: string;
   shortCode: string;
@@ -60,6 +62,7 @@ export function ParticipantsList({
   isBeneficiary: boolean;
   isParticipantsHidden: boolean;
   beneficiaryNames: string[];
+  isJourJ: boolean;
 }) {
   const t = useTranslations("Participants");
   const router = useRouter();
@@ -88,6 +91,11 @@ export function ParticipantsList({
   // distinguer les venues confirmées des incertaines d'un coup d'œil.
   const approvedYes = rows.filter((r) => r.status === "approved" && r.answer !== "maybe");
   const approvedMaybe = rows.filter((r) => r.status === "approved" && r.answer === "maybe");
+  // Nombre de PERSONNES, pas de lignes rsvps (retour Thomas : le compte entre
+  // parenthèses doit inclure les accompagnants -- "chaises à placer" -- pas
+  // juste compter les inscriptions).
+  const approvedYesHeadcount = approvedYes.reduce((sum, r) => sum + 1 + r.companionsCount, 0);
+  const approvedMaybeHeadcount = approvedMaybe.reduce((sum, r) => sum + 1 + r.companionsCount, 0);
 
   // L'abonnement Realtime "rsvps" vit désormais dans EventTabs (toujours
   // monté, voir ce fichier) plutôt qu'ici : ce panneau se démonte avec le
@@ -143,13 +151,7 @@ export function ParticipantsList({
       const result = await transferEventHost(eventId, newHostProfileId, shortCode);
       setConfirmingTransferId(null);
       if (!result.ok) {
-        // "target_anonymous" ne devrait normalement jamais arriver ici (le
-        // bouton est déjà masqué pour un admin anonyme, voir
-        // ApprovedParticipantRow) -- filet de sécurité si l'état affiché
-        // était périmé.
-        setTransferError(
-          result.error === "target_anonymous" ? t("errorTransferAnonymous") : t("errorUnknown"),
-        );
+        setTransferError(t("errorUnknown"));
         return;
       }
       router.refresh();
@@ -330,7 +332,7 @@ export function ParticipantsList({
 
       <section className="flex flex-col gap-2">
         <h2 className="font-display text-lg font-bold text-foreground">
-          {t("approvedSectionTitle")} ({approvedYes.length})
+          {t("approvedSectionTitle")} ({approvedYesHeadcount})
         </h2>
         <ul className="flex flex-col gap-2">
           {approvedYes.map((row) => (
@@ -342,6 +344,7 @@ export function ParticipantsList({
               isHost={isHost}
               hostProfileId={hostProfileId}
               isPending={isPending}
+              isJourJ={isJourJ}
               t={t}
               onRoleChange={handleRoleChange}
               onRemove={setConfirmingRemoveId}
@@ -354,7 +357,7 @@ export function ParticipantsList({
       {approvedMaybe.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="font-display text-lg font-bold text-foreground">
-            {t("maybeSectionTitle")} ({approvedMaybe.length})
+            {t("maybeSectionTitle")} ({approvedMaybeHeadcount})
           </h2>
           <ul className="flex flex-col gap-2">
             {approvedMaybe.map((row) => (
@@ -366,6 +369,7 @@ export function ParticipantsList({
                 isHost={isHost}
                 hostProfileId={hostProfileId}
                 isPending={isPending}
+                isJourJ={isJourJ}
                 t={t}
                 onRoleChange={handleRoleChange}
                 onRemove={setConfirmingRemoveId}
@@ -423,6 +427,7 @@ function ApprovedParticipantRow({
   isHost,
   hostProfileId,
   isPending,
+  isJourJ,
   t,
   onRoleChange,
   onRemove,
@@ -434,6 +439,7 @@ function ApprovedParticipantRow({
   isHost: boolean;
   hostProfileId: string;
   isPending: boolean;
+  isJourJ: boolean;
   t: ReturnType<typeof useTranslations>;
   onRoleChange: (rsvpId: string, role: "guest" | "admin" | "beneficiary") => void;
   onRemove: (rsvpId: string) => void;
@@ -450,6 +456,7 @@ function ApprovedParticipantRow({
         row={row}
         companionsLabel={t("companionsCount", { count: row.companionsCount })}
         roleLabel={isAdmin ? roleLabel(row.role, isRowHost, t) : undefined}
+        isJourJ={isJourJ}
         t={t}
       />
       {isAdmin && !isSelf && (
@@ -488,18 +495,8 @@ function ApprovedParticipantRow({
           {/* Seul l'hôte ACTUEL (jamais un simple admin promu) peut transférer
               l'organisation, et uniquement vers un autre admin déjà approuvé
               (retour Thomas : possibilité de quitter son propre événement une
-              fois un autre admin en place). Jamais vers une session anonyme
-              (retour Thomas : risque réel de perdre l'accès à l'organisation
-              si la personne perd ses cookies -- voir DECISIONS.md) : affiché
-              en grisé/désactivé plutôt que masqué en silence, pour expliquer
-              pourquoi ce n'est pas possible plutôt que de le cacher sans dire
-              pourquoi. */}
-          {isHost && row.role === "admin" && row.isRealAccount === false && (
-            <span className="text-sm font-semibold text-foreground/40">
-              {t("transferHostRequiresAccount")}
-            </span>
-          )}
-          {isHost && row.role === "admin" && row.isRealAccount !== false && (
+              fois un autre admin en place). */}
+          {isHost && row.role === "admin" && (
             <button
               type="button"
               onClick={() => onTransferHost(row.id)}
@@ -519,12 +516,17 @@ function ParticipantIdentity({
   companionsLabel,
   roleLabel,
   answerLabel,
+  isJourJ = false,
   t,
 }: {
   row: ParticipantRow;
   companionsLabel: string;
   roleLabel?: string;
   answerLabel?: string;
+  // Mode Jour J (brief 4.11) : badges "Arrivé"/"Bien rentré" -- absent (donc
+  // `false` par défaut) pour la file d'attente/les restricted, qui n'ont pas
+  // ce concept avant d'être approuvés.
+  isJourJ?: boolean;
   t: ReturnType<typeof useTranslations>;
 }) {
   return (
@@ -541,26 +543,6 @@ function ParticipantIdentity({
         <span className="flex items-center gap-1 text-sm font-semibold text-foreground">
           {row.firstName} {row.lastName}
           {row.companionsCount > 0 ? ` ${companionsLabel}` : ""}
-          {/* Retour Thomas : symbole pour distinguer un vrai compte d'une
-              session anonyme -- jamais affiché pour un non-admin (voir
-              EventPersonnes.tsx, `isRealAccount` reste `null` dans ce cas). */}
-          {row.isRealAccount === true && (
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              className="h-4 w-4 shrink-0 text-accent-mint"
-              aria-label={t("realAccountBadge")}
-            >
-              <title>{t("realAccountBadge")}</title>
-              <path
-                d="M9 12l2 2 4-4m5 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          )}
         </span>
         {(roleLabel || answerLabel) && (
           <span className="text-xs text-foreground/60">{roleLabel ?? answerLabel}</span>
@@ -569,6 +551,15 @@ function ParticipantIdentity({
             n'est de toute facon jamais rempli cote serveur pour un non-admin
             (voir EventPersonnes.tsx), rien a re-verifier ici. */}
         {row.phone && <span className="text-xs text-foreground/60">{row.phone}</span>}
+        {/* Mode Jour J (brief 4.11) : "pratique pour savoir qui on attend
+            avant de lancer le gâteau" -- badges affichés seulement le jour
+            même, jamais avant/après. */}
+        {isJourJ && (row.checkedInAt || row.arrivedHomeAt) && (
+          <span className="flex gap-2 text-xs font-semibold text-accent-mint">
+            {row.checkedInAt && <span>{t("checkedInBadge")}</span>}
+            {row.arrivedHomeAt && <span>{t("arrivedHomeBadge")}</span>}
+          </span>
+        )}
       </div>
     </div>
   );

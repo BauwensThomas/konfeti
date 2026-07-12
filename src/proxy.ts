@@ -5,18 +5,11 @@ import { routing } from "./i18n/routing";
 
 const intlMiddleware = createIntlMiddleware(routing);
 
-// Routes qui exigent un compte réel (pas une session anonyme d'invité "code d'accès"),
-// voir brief 4.1 (création réservée aux comptes) et 1.3 (un admin doit avoir un compte).
-// `/profil` et `/mes-evenements` (hors de cette liste) restent accessibles à
-// une session anonyme : un invité "code d'accès" a lui aussi rempli une
-// identité et peut participer à plusieurs événements — il doit pouvoir la
-// modifier (retour Thomas : "j'ai dû rentrer un nom, prénom et une photo
-// donc je devrais pouvoir aussi modifier non ?") et retrouver la liste de
-// ses événements (retour Thomas : "il ne devrait pas avoir accès à... et
-// voir la liste de ses événements ?"). Seuls `/profil/completer` (création
-// de compte) et `/creer` (brief 4.1, création réservée aux comptes) restent
-// réservés à un vrai compte. Ces deux pages gèrent elles-mêmes le cas
-// "aucune session du tout" (redirection vers /connexion).
+// Routes qui exigent une session connectée, voir brief 4.1 (création
+// réservée aux comptes) et 1.3 (un admin doit avoir un compte). `/profil` et
+// `/mes-evenements` (hors de cette liste) gèrent elles-mêmes le cas "aucune
+// session du tout" (redirection vers /connexion), seuls `/profil/completer`
+// (complétion de profil) et `/creer` sont protégées ici.
 const PROTECTED_PREFIXES = ["/creer", "/profil/completer"];
 
 function isProtected(pathname: string) {
@@ -51,9 +44,7 @@ export default async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const hasRealAccount = !!user && !user.is_anonymous;
-
-  if (!hasRealAccount && isProtected(request.nextUrl.pathname)) {
+  if (!user && isProtected(request.nextUrl.pathname)) {
     const loginUrl = new URL("/connexion", request.url);
     loginUrl.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);

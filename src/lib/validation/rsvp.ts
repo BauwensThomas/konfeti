@@ -18,14 +18,10 @@ export const rsvpIdentitySchema = z.object({
   avatarValue: z.string().trim().min(1).optional(),
   answer: z.enum(["yes", "maybe", "no"]),
   companions: z.array(companionSchema).max(20).default([]),
+  // Consentement rappels par email (brief 4.7/section 9, RGPD) : JAMAIS
+  // pré-coché, opt-in explicite -- `.default(false)` ici est la valeur si le
+  // champ est absent du payload, pas une case cochée par défaut côté UI.
+  wantsReminders: z.boolean().default(false),
 });
 
 export type RsvpIdentityInput = z.infer<typeof rsvpIdentitySchema>;
-
-export const guestCodeSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z]+-[A-Z0-9]{6}$/, "guest_code_invalid"),
-});

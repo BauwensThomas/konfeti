@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guestCodeSchema, rsvpIdentitySchema } from "./rsvp";
+import { rsvpIdentitySchema } from "./rsvp";
 
 const VALID_INPUT = {
   firstName: "Julie",
@@ -46,26 +46,6 @@ describe("rsvpIdentitySchema", () => {
       ...VALID_INPUT,
       companions: [{ kind: "collegue" }],
     });
-    expect(result.success).toBe(false);
-  });
-});
-
-describe("guestCodeSchema", () => {
-  it("accepte un code au bon format, insensible à la casse", () => {
-    const result = guestCodeSchema.safeParse({ code: "invite-k3m9qz" });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.code).toBe("INVITE-K3M9QZ");
-    }
-  });
-
-  it("rejette un code mal formé", () => {
-    const result = guestCodeSchema.safeParse({ code: "pasuncode" });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejette l'ancien format à 4 chiffres (entropie insuffisante, plus généré)", () => {
-    const result = guestCodeSchema.safeParse({ code: "INVITE-4291" });
     expect(result.success).toBe(false);
   });
 });

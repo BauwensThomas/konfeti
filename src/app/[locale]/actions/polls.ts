@@ -2,26 +2,32 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { pollIdSchema, proposePollSchema, voteOptionSchema } from "@/lib/validation/polls";
+import { pollIdSchema, proposePollSchema, setPollVoteSchema } from "@/lib/validation/polls";
 import { isRateLimited } from "@/lib/rate-limit";
+import { getEventAdminUserIds } from "@/lib/push-recipients";
+import { sendPush } from "@/lib/push-send";
+import { pushMessages } from "@/lib/push-messages";
 
 export type PollActionResult =
   | { ok: true }
-  | { ok: false; error: "invalid" | "not_authenticated" | "rate_limited" | "unknown" };
+  | { ok: false; error: "invalid" | "not_authenticated" | "rate_limited" | "quota_exceeded" | "unknown" };
 
-// Vote sur une option de sondage (brief : "Sondage(s) optionnel(s)") --
-// quasi copie de `voteDateOption` (`date-poll.ts`) : plusieurs options
-// votables à la fois par sondage (contrainte unique en base sur
-// `(option_id, rsvp_id)`, pas `(poll_id, rsvp_id)`, confirmé avec Thomas).
-// `rsvpId` vient du client, la vraie frontière de sécurité reste la policy
-// RLS `poll_votes_write_own` (is_my_rsvp).
-export async function votePollOption(
+// Vote sur une option de sondage (brief : "Sondage(s) optionnel(s)"), en
+// quantité plutôt qu'une simple case à cocher (retour Thomas : sondage
+// "choix unique" type menu resto -- "j'ai thomas +3... je sais pas avoir 4
+// menus moules frites"). `quantity: 0` retire le vote. Toute la règle de
+// quota ("choix unique" = 1 + accompagnants à répartir entre les options,
+// "choix multiple" = quantité toujours 1) vit dans la fonction SQL
+// `set_poll_vote` (security definer) -- jamais fait confiance au client,
+// `rsvpId` n'est qu'un identifiant, la vraie frontière de sécurité est
+// `is_my_rsvp` vérifié À L'INTÉRIEUR de la fonction.
+export async function setPollVote(
   eventId: string,
   rsvpId: string,
   shortCode: string,
-  input: { optionId: string; checked: boolean },
+  input: { optionId: string; quantity: number },
 ): Promise<PollActionResult> {
-  const parsed = voteOptionSchema.safeParse(input);
+  const parsed = setPollVoteSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "invalid" };
   }
@@ -34,18 +40,22 @@ export async function votePollOption(
     return { ok: false, error: "not_authenticated" };
   }
 
-  if (parsed.data.checked) {
-    const { error } = await supabase
-      .from("poll_votes")
-      .upsert({ option_id: parsed.data.optionId, rsvp_id: rsvpId }, { onConflict: "option_id,rsvp_id" });
-    if (error) return { ok: false, error: "unknown" };
-  } else {
-    const { error } = await supabase
-      .from("poll_votes")
-      .delete()
-      .eq("option_id", parsed.data.optionId)
-      .eq("rsvp_id", rsvpId);
-    if (error) return { ok: false, error: "unknown" };
+  const { error } = await supabase.rpc("set_poll_vote", {
+    p_rsvp_id: rsvpId,
+    p_option_id: parsed.data.optionId,
+    p_quantity: parsed.data.quantity,
+  });
+
+  if (error) {
+    return {
+      ok: false,
+      error:
+        error.message.includes("not authorized")
+          ? "invalid"
+          : error.message.includes("quota exceeded")
+            ? "quota_exceeded"
+            : "unknown",
+    };
   }
 
   revalidatePath(`/e/${shortCode}`);
@@ -62,7 +72,7 @@ export async function proposePoll(
   eventId: string,
   shortCode: string,
   rsvpId: string,
-  input: { question: string; options: { label: string }[] },
+  input: { question: string; options: { label: string }[]; choiceMode?: "single" | "multiple" },
 ): Promise<PollActionResult> {
   const parsed = proposePollSchema.safeParse(input);
   if (!parsed.success) {
@@ -110,6 +120,7 @@ export async function proposePoll(
     question: parsed.data.question,
     status: isAdmin ? "approved" : "pending",
     proposed_by_rsvp_id: rsvpId,
+    choice_mode: parsed.data.choiceMode,
   });
 
   if (pollError) {
@@ -132,6 +143,19 @@ export async function proposePoll(
   }
 
   revalidatePath(`/e/${shortCode}`);
+
+  if (!isAdmin) {
+    try {
+      const { data: eventTitleRow } = await supabase.from("events").select("title").eq("id", eventId).single();
+      if (eventTitleRow) {
+        const adminUserIds = await getEventAdminUserIds(supabase, eventId);
+        void sendPush(adminUserIds, "organisation", pushMessages.newPollProposed(shortCode, eventTitleRow.title, parsed.data.question));
+      }
+    } catch {
+      // Best-effort.
+    }
+  }
+
   return { ok: true };
 }
 

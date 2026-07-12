@@ -50,6 +50,16 @@ export async function generateMetadata({
       title,
       description,
     },
+    // iOS ne respecte pas `manifest.ts`/`display: "standalone"` pour "Ajouter
+    // à l'écran d'accueil" (comportement Chrome/Android) : ces balises meta
+    // spécifiques sont nécessaires pour qu'un lancement depuis l'icône ouvre
+    // l'app en plein écran (repérable par `StandaloneRedirect.tsx`) plutôt
+    // qu'un onglet Safari classique.
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "default",
+      title: "Konfeti",
+    },
   };
 }
 
@@ -62,6 +72,7 @@ export function generateViewport(): Viewport {
     width: "device-width",
     initialScale: 1,
     viewportFit: "cover",
+    themeColor: "#7c3aed",
   };
 }
 

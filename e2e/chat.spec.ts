@@ -33,8 +33,11 @@ async function submitGuestIdentity(
   shortCode: string,
   firstName: string,
 ) {
-  await guestPage.goto(`/e/${shortCode}`);
-  await guestPage.getByRole("button", { name: "Continuer sans compte" }).click();
+  await loginAs(
+    guestPage,
+    `${firstName.toLowerCase()}-${Date.now()}@test.konfeti.local`,
+    `/e/${shortCode}`,
+  );
   await guestPage.getByPlaceholder("Julie").fill(firstName);
   await guestPage.getByPlaceholder("Dean").fill("Untel");
   await guestPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000094");

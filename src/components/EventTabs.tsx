@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -10,6 +10,20 @@ import { subscribeToEventChat } from "@/lib/chat/realtime";
 type TabKey = "accueil" | "chat" | "personnes" | "participer";
 
 const TABS: TabKey[] = ["accueil", "chat", "personnes", "participer"];
+
+// Mode Jour J (brief 4.11) : "Aller au chat"/"Voir qui a apporté quoi"
+// depuis JourJCard.tsx (rendu côté serveur, imbriqué DANS le prop `accueil`
+// déjà passé à ce composant) doivent pouvoir changer l'onglet actif ici,
+// alors qu'ils ne reçoivent aucune prop directe de ce composant. Un contexte
+// React est le seul pont possible dans ce sens (server → prop ReactNode →
+// petit sous-composant client qui, lui, peut consommer ce contexte).
+// `null` hors de ce provider (jamais utilisé ailleurs qu'ici, pas besoin de
+// lever une erreur).
+export const TabNavigationContext = createContext<{ setActive: (tab: TabKey) => void } | null>(null);
+
+export function useTabNavigation() {
+  return useContext(TabNavigationContext);
+}
 
 export function EventTabs({
   accueil,
@@ -418,17 +432,19 @@ export function EventTabs({
         ))}
       </div>
 
-      {active === "accueil" ? (
-        accueil
-      ) : active === "personnes" && personnes ? (
-        personnes
-      ) : active === "chat" && chat ? (
-        chat
-      ) : active === "participer" && participer ? (
-        participer
-      ) : (
-        <p className="py-16 text-center text-sm text-foreground/60">{t("comingSoon")}</p>
-      )}
+      <TabNavigationContext.Provider value={{ setActive }}>
+        {active === "accueil" ? (
+          accueil
+        ) : active === "personnes" && personnes ? (
+          personnes
+        ) : active === "chat" && chat ? (
+          chat
+        ) : active === "participer" && participer ? (
+          participer
+        ) : (
+          <p className="py-16 text-center text-sm text-foreground/60">{t("comingSoon")}</p>
+        )}
+      </TabNavigationContext.Provider>
     </div>
   );
 }

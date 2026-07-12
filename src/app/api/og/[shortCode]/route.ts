@@ -8,7 +8,7 @@ import { EVENT_THEMES } from "@/lib/themes";
 // Basée uniquement sur `events_public_data` (titre + thème), jamais sur des
 // données privées : un bot d'unfurl (WhatsApp, Messenger...) fetch cette
 // route sans session authentifiée, avec au mieux les droits d'un visiteur
-// anonyme (brief 1.3).
+// non connecté (brief 1.3).
 //
 // Implémentée en SVG + sharp (pas `next/og`/`ImageResponse`) : ImageResponse
 // embarque son propre sharp en interne, et le charger dans le même process

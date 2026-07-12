@@ -9,6 +9,59 @@ const CREAM = "#FFF7F5";
 
 mkdirSync("public", { recursive: true });
 
+// Rend transparent le blanc CONNECTÉ AU BORD d'une source opaque (flood fill
+// depuis les 4 côtés de l'image), sans toucher au blanc isolé à l'intérieur
+// du dessin (yeux, dents...) -- contrairement à un seuillage global naïf qui
+// percerait des trous dans le personnage. Recadre ensuite (trim) et exporte
+// en carré 400x400, padding transparent (voir mascotte Jour J, retour
+// Thomas : un simple fond blanc plein laissait un carré visible sur les
+// pages avec le motif de confettis discret).
+async function makeBackgroundTransparent(inputPath, outputPath, threshold = 245) {
+  const { data, info } = await sharp(inputPath)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const { width, height, channels } = info;
+
+  const visited = new Uint8Array(width * height);
+  const isBg = (i) => data[i] >= threshold && data[i + 1] >= threshold && data[i + 2] >= threshold;
+  const stack = [];
+  const pushIfBg = (x, y) => {
+    if (x < 0 || x >= width || y < 0 || y >= height) return;
+    const idx = y * width + x;
+    if (visited[idx]) return;
+    if (!isBg(idx * channels)) return;
+    visited[idx] = 1;
+    stack.push(idx);
+  };
+
+  for (let x = 0; x < width; x++) {
+    pushIfBg(x, 0);
+    pushIfBg(x, height - 1);
+  }
+  for (let y = 0; y < height; y++) {
+    pushIfBg(0, y);
+    pushIfBg(width - 1, y);
+  }
+
+  while (stack.length > 0) {
+    const idx = stack.pop();
+    const x = idx % width;
+    const y = Math.floor(idx / width);
+    data[idx * channels + 3] = 0;
+    pushIfBg(x + 1, y);
+    pushIfBg(x - 1, y);
+    pushIfBg(x, y + 1);
+    pushIfBg(x, y - 1);
+  }
+
+  await sharp(data, { raw: { width, height, channels } })
+    .trim()
+    .resize(400, 400, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .webp({ lossless: true })
+    .toFile(outputPath);
+}
+
 async function run() {
   // Mascotte recadrée (trim des marges transparentes), source pour tout le reste
   const mascotTrimmed = sharp("images/logo.png").trim();
@@ -99,6 +152,39 @@ async function run() {
     .webp({ lossless: true })
     .toFile("public/rdv.webp");
 
+  // Mode Jour J (brief 4.11) : mascotte "fêtarde" (bascule Accueil pendant
+  // la journée de l'événement) -- source optionnelle, générée par Thomas via
+  // Gemini, fond blanc opaque (pas de vraie transparence dans la source,
+  // contrairement à `images/logo.png` qui alimente `mascot.webp`). Un simple
+  // fond blanc PLEIN (comme attention.png/rdv.png, de petites icônes toujours
+  // vues sur fond blanc) laissait un carré bien visible ici, la mascotte
+  // étant affichée sur des fonds avec le motif de confettis discret du reste
+  // du site (retour Thomas, avec capture d'écran : "on voit encore les bords
+  // carrés de l'image"). Fond rendu réellement transparent par flood fill
+  // (pas un simple seuillage global, qui aurait aussi supprimé les yeux/dents
+  // blancs du personnage) : ne rend transparent que le blanc CONNECTÉ au bord
+  // de l'image, jamais un blanc isolé à l'intérieur du dessin.
+  const jourJSource = "images/mascot-jourj.png";
+  if (existsSync(jourJSource)) {
+    await makeBackgroundTransparent(jourJSource, "public/mascot-jourj.webp");
+    console.log("Mascotte Jour J générée : public/mascot-jourj.webp");
+  } else {
+    console.log("images/mascot-jourj.png absent : mascotte Jour J pas encore générée, étape ignorée.");
+  }
+
+  // Mascotte "FINISH" (carte "Événement terminé", brief 4.11) : d'abord
+  // abandonnée avec la première version de cette carte (voir DECISIONS.md),
+  // réintroduite une fois le bouton "Terminer" ajouté (déclencheur explicite,
+  // plus l'ambiguïté de la bascule automatique seule). Même traitement fond
+  // transparent que la mascotte Jour J ci-dessus.
+  const finishSource = "images/mascot-finish.png";
+  if (existsSync(finishSource)) {
+    await makeBackgroundTransparent(finishSource, "public/mascot-finish.webp");
+    console.log("Mascotte FINISH générée : public/mascot-finish.webp");
+  } else {
+    console.log("images/mascot-finish.png absent : mascotte FINISH pas encore générée, étape ignorée.");
+  }
+
   // Pack d'avatars "maison" (brief 1.1) : une grille 4x2 générée par Gemini
   // (voir doc/mascotte-style.md pour le prompt), une case par personnage.
   // On découpe chaque case, on la recadre (trim) sur son propre fond blanc
@@ -138,7 +224,38 @@ async function run() {
     console.log("images/avatars.png absent : pack d'avatars pas encore généré, étape ignorée.");
   }
 
-  console.log("Assets générés : src/app/[locale]/icon.png, src/app/[locale]/apple-icon.png, public/mascot.webp, public/logo-icon.webp, public/logo-texte.webp, public/photo-placeholder.webp, public/attention.webp, public/rdv.webp");
+  // Icônes PWA (manifest.ts, brief -- splash au lancement depuis l'icône
+  // ajoutée à l'écran d'accueil, retour Thomas). "any" : même traitement que
+  // icon.png (fond transparent) ; "maskable" : fond opaque (CREAM, l'OS
+  // découpe l'icône dans des formes variées -- cercle, squircle... -- donc
+  // le dessin doit rester dans une zone de sécurité centrale, ~70% du
+  // canevas ici, pour ne jamais être rogné aux bras/mains de la mascotte).
+  await mascotTrimmed
+    .clone()
+    .resize(192, 192, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png({ palette: true, compressionLevel: 9 })
+    .toFile("public/icon-192.png");
+  await mascotTrimmed
+    .clone()
+    .resize(512, 512, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png({ palette: true, compressionLevel: 9 })
+    .toFile("public/icon-512.png");
+  await sharp({
+    create: { width: 512, height: 512, channels: 4, background: CREAM },
+  })
+    .composite([
+      {
+        input: await mascotTrimmed
+          .clone()
+          .resize(358, 358, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+          .toBuffer(),
+        gravity: "center",
+      },
+    ])
+    .png({ palette: true, compressionLevel: 9 })
+    .toFile("public/icon-maskable-512.png");
+
+  console.log("Assets générés : src/app/[locale]/icon.png, src/app/[locale]/apple-icon.png, public/mascot.webp, public/logo-icon.webp, public/logo-texte.webp, public/photo-placeholder.webp, public/attention.webp, public/rdv.webp, public/icon-192.png, public/icon-512.png, public/icon-maskable-512.png");
 }
 
 run().catch((err) => {

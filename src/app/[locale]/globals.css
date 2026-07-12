@@ -34,6 +34,18 @@
      retour Thomas : contour orange clignotant quand on saute à un message
      cité (voir Chat, "Répondre"). */
   --color-highlight: #f97316;
+  /* Bleu ciel dédié à l'export PDF (retour Thomas : "export CSV doit être en
+     bleu clair"), distinct du violet/jaune/corail/menthe déjà tous pris. */
+  --color-accent-sky: #38bdf8;
+  /* Orange foncé dédié au bouton "Modifier" (retour Thomas, couleur exacte
+     donnée : #FF4A26), distinct de --color-highlight (orange plein, déjà
+     pris par "Je suis bien rentré"). */
+  --color-highlight-dark: #ff4a26;
+  /* Rouge dédié au bouton poubelle "Supprimer l'événement" (retour Thomas,
+     couleur exacte donnée : #F52727), distinct de --color-accent-coral
+     (utilisé largement ailleurs : erreurs, retrait d'accompagnant...) --
+     changer accent-coral aurait repeint 20 autres endroits non demandés. */
+  --color-danger-strong: #f52727;
 }
 
 @theme inline {
@@ -49,6 +61,9 @@
   --color-border: var(--color-border);
   --color-canvas: var(--color-canvas);
   --color-highlight: var(--color-highlight);
+  --color-accent-sky: var(--color-accent-sky);
+  --color-highlight-dark: var(--color-highlight-dark);
+  --color-danger-strong: var(--color-danger-strong);
   --font-display: var(--font-display);
   --font-body: var(--font-body);
   --radius-konfeti: 1.25rem;
@@ -71,6 +86,22 @@
   outline: 3px solid transparent;
   outline-offset: 2px;
   animation: highlight-blink 1s ease-in-out 5;
+}
+
+/* Feuille ancrée en bas d'écran (`Modal` avec `fromBottom`, retour Thomas :
+   "comme un menu qui se déroule mais inversé") -- glisse depuis le bas au
+   lieu d'apparaître centrée. */
+@keyframes slide-up-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.modal-slide-up {
+  animation: slide-up-in 220ms ease-out;
 }
 
 body {

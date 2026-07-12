@@ -139,3 +139,51 @@ test("header : accès au profil masqué sur la home même avec une session activ
     if (userId) await deleteTestUser(userId);
   }
 });
+
+test("header : le logo remonte d'un cran dans la hierarchie (evenement -> Mes evenements -> landing), toujours la landing si pas connecte", async ({
+  page,
+}) => {
+  // Retour Thomas : "quand je suis dans un evenement, si je clic sur le
+  // logo... je dois arriver sur ma page de mes evenements et pas sur la
+  // page d'accueil" -- puis, precise plus tot, sur "Mes evenements"
+  // lui-meme le logo ramene a la landing (rien de plus "haut" dans l'app a
+  // ce niveau).
+  const logo = page.getByRole("link", { name: "Aller à l'accueil Konfeti" });
+
+  // Pas connecte : toujours la landing.
+  await page.goto("/connexion");
+  await logo.click();
+  await expect(page).toHaveURL(/\/$/);
+
+  const email = `e2e-header-logo-hierarchy-${Date.now()}@example.com`;
+  let userId: string | null = null;
+
+  try {
+    const user = await loginAs(page, email);
+    userId = user.id;
+
+    await page.getByRole("link", { name: "Créer un événement" }).click();
+    const title = `E2E header logo ${Date.now()}`;
+    await page.getByPlaceholder("L'anniversaire de Julie").fill(title);
+    await page.locator('input[type="datetime-local"]').first().fill("2026-12-24T20:00");
+    await page.getByPlaceholder("Adresse et ville").fill("Rue de Test 7, 1000 Bruxelles");
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Créer l'événement" }).click();
+    await expect(page).toHaveURL(/\/mes-evenements$/);
+
+    // Depuis l'événement : le logo remonte à "Mes événements", pas la landing.
+    await page.getByText(title).click();
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    await logo.click();
+    await expect(page).toHaveURL(/\/mes-evenements$/);
+
+    // Depuis "Mes événements" lui-même : le logo redescend vers la landing.
+    await logo.click();
+    await expect(page).toHaveURL(/\/$/);
+  } finally {
+    if (userId) await deleteTestUser(userId);
+  }
+});

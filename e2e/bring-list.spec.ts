@@ -63,8 +63,7 @@ test("proposition d'item par un invite, moderation (approbation avec reclamation
     // Marc rejoint et est approuvé comme invité normal (pas bénéficiaire).
     const marcContext = await browser.newContext();
     const marcPage = await marcContext.newPage();
-    await marcPage.goto(`/e/${event.short_code}`);
-    await marcPage.getByRole("button", { name: "Continuer sans compte" }).click();
+    await loginAs(marcPage, `marc-${Date.now()}@test.konfeti.local`, `/e/${event.short_code}`);
     await marcPage.getByPlaceholder("Julie").fill("Marc");
     await marcPage.getByPlaceholder("Dean").fill("Untel");
     await marcPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000094");
@@ -283,8 +282,7 @@ test("dire 'je ne peux pas' retire automatiquement les réclamations déjà pris
 
     const marcContext = await browser.newContext();
     const marcPage = await marcContext.newPage();
-    await marcPage.goto(`/e/${event.short_code}`);
-    await marcPage.getByRole("button", { name: "Continuer sans compte" }).click();
+    await loginAs(marcPage, `marc-${Date.now()}@test.konfeti.local`, `/e/${event.short_code}`);
     await marcPage.getByPlaceholder("Julie").fill("Marc");
     await marcPage.getByPlaceholder("Dean").fill("Untel");
     await marcPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000093");
@@ -355,9 +353,10 @@ test("dire 'je ne peux pas' retire automatiquement les réclamations déjà pris
     expect(chipsItemBefore).not.toBeNull();
 
     // Marc change sa réponse : "Je ne peux pas" (contrôle affiché directement
-    // sur l'Accueil, voir MyParticipationCard.tsx).
+    // sur l'Accueil, voir MyParticipationCard.tsx) -- confirmation requise.
     await marcPage.goto(`/e/${event.short_code}`);
     await marcPage.getByRole("button", { name: "Je ne peux pas" }).click();
+    await marcPage.getByRole("button", { name: "Oui, je ne peux pas venir" }).click();
     await expect
       .poll(async () => {
         const { data } = await supabaseAdmin.from("rsvps").select("status").eq("id", marcRsvp!.id).single();

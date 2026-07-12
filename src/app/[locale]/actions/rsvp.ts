@@ -2,19 +2,23 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { ensureGuestSession } from "@/lib/supabase/guest-session";
-import { rsvpIdentitySchema, guestCodeSchema, type RsvpIdentityInput } from "@/lib/validation/rsvp";
+import { requireUser } from "@/lib/supabase/guest-session";
+import { rsvpIdentitySchema, type RsvpIdentityInput } from "@/lib/validation/rsvp";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
+import { getEventAdminUserIds } from "@/lib/push-recipients";
+import { sendPush } from "@/lib/push-send";
+import { pushMessages } from "@/lib/push-messages";
 
 export type SubmitRsvpResult =
   | { ok: true }
   | { ok: false; error: "invalid" | "already_rsvped" | "rate_limited" | "unknown" };
 
 // Crée la participation de l'appelant (statut "pending", brief 1.3 étape 3),
-// pour les deux portes (compte réel ou session anonyme créée à la volée).
-// `create_own_rsvp` (security definer) gère le statut/rôle/guest_code,
-// colonnes hors de portée du client (voir la migration dédiée) ; les
-// accompagnants restent un insert direct, autorisé par `companions_write_own`.
+// une fois connecté (retour Thomas : porte unique de connexion, plus de
+// session créée à la volée). `create_own_rsvp` (security definer) gère le
+// statut/rôle, colonnes hors de portée du client (voir la migration dédiée) ;
+// les accompagnants restent un insert direct, autorisé par
+// `companions_write_own`.
 export async function submitRsvp(
   eventId: string,
   shortCode: string,
@@ -32,13 +36,13 @@ export async function submitRsvp(
   }
 
   const supabase = await createClient();
-  const user = await ensureGuestSession(supabase);
+  const user = await requireUser(supabase);
   if (!user) {
     return { ok: false, error: "unknown" };
   }
 
-  // Se souvenir de l'identité sur cet appareil/ce compte pour la prochaine
-  // fois (brief 1.2 : "on ne redemande jamais deux fois").
+  // Se souvenir de l'identité sur ce compte pour la prochaine fois (brief
+  // 1.2 : "on ne redemande jamais deux fois").
   await supabase
     .from("profiles")
     .update({
@@ -51,70 +55,50 @@ export async function submitRsvp(
     })
     .eq("id", user.id);
 
-  const { data: rsvpResult, error: rpcError } = (await supabase
-    .rpc("create_own_rsvp", {
-      p_event_id: eventId,
-      p_first_name: data.firstName,
-      p_last_name: data.lastName,
-      p_phone: data.phone,
-      p_gender: data.gender,
-      p_avatar_kind: data.avatarKind,
-      p_avatar_value: data.avatarValue ?? null,
-      p_answer: data.answer,
-    })
-    .single()) as { data: { rsvp_id: string; guest_code: string } | null; error: { message: string } | null };
+  const { data: rsvpId, error: rpcError } = await supabase.rpc("create_own_rsvp", {
+    p_event_id: eventId,
+    p_first_name: data.firstName,
+    p_last_name: data.lastName,
+    p_phone: data.phone,
+    p_gender: data.gender,
+    p_avatar_kind: data.avatarKind,
+    p_avatar_value: data.avatarValue ?? null,
+    p_answer: data.answer,
+  });
 
-  if (rpcError || !rsvpResult) {
+  if (rpcError || !rsvpId) {
     return { ok: false, error: "already_rsvped" };
   }
 
   if (data.companions.length > 0) {
     await supabase.from("companions").insert(
       data.companions.map((companion) => ({
-        rsvp_id: rsvpResult.rsvp_id,
+        rsvp_id: rsvpId,
         kind: companion.kind,
         first_name: companion.firstName || null,
       })),
     );
   }
 
+  // Consentement rappels (brief 4.7) : `create_own_rsvp` ne connaît pas cette
+  // colonne (jamais touchée à la création dans la fonction SQL) -- mise à
+  // jour séparée, auto-service comme `wants_pot_access`/`checked_in_at`
+  // (`rsvps_update_own` + grant dédié suffisent).
+  if (data.wantsReminders) {
+    await supabase.from("rsvps").update({ wants_reminders: true }).eq("id", rsvpId);
+  }
+
   revalidatePath(`/e/${shortCode}`);
+
+  try {
+    const { data: event } = await supabase.from("events").select("title").eq("id", eventId).single();
+    if (event) {
+      const adminUserIds = await getEventAdminUserIds(supabase, eventId);
+      void sendPush(adminUserIds, "invitations", pushMessages.newRsvpRequest(shortCode, event.title, data.firstName));
+    }
+  } catch {
+    // Best-effort, ne doit jamais faire échouer l'inscription elle-même.
+  }
+
   return { ok: true };
-}
-
-export type RedeemGuestCodeResult =
-  | { ok: true; shortCode: string }
-  | { ok: false; error: "invalid" | "conflict" | "rate_limited" | "unknown" };
-
-// Récupération cross-device (brief 1.2) : rattache la participation
-// existante à la session courante (réelle ou anonyme créée à la volée).
-// Limite de débit particulièrement stricte ici : c'est la cible directe
-// d'une éventuelle attaque par force brute sur le guest_code (voir
-// DECISIONS.md, entropie déjà augmentée mais ce filet reste utile).
-export async function redeemGuestCode(code: string): Promise<RedeemGuestCodeResult> {
-  const ip = await getClientIp();
-  if (isRateLimited(`redeemGuestCode:${ip}`, 10, 15 * 60 * 1000)) {
-    return { ok: false, error: "rate_limited" };
-  }
-
-  const parsed = guestCodeSchema.safeParse({ code });
-  if (!parsed.success) {
-    return { ok: false, error: "invalid" };
-  }
-
-  const supabase = await createClient();
-  const user = await ensureGuestSession(supabase);
-  if (!user) {
-    return { ok: false, error: "unknown" };
-  }
-
-  const { data, error } = await supabase.rpc("redeem_guest_code", {
-    p_code: parsed.data.code,
-  });
-
-  if (error || !data) {
-    return { ok: false, error: error?.message.includes("deja") ? "conflict" : "invalid" };
-  }
-
-  return { ok: true, shortCode: data };
 }

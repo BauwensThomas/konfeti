@@ -3,6 +3,16 @@ import { createEventSchema, updateEventSchema } from "./event";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const isoDaysFromNow = (days: number) => new Date(Date.now() + days * DAY_MS).toISOString();
+// Pas `new Date().toISOString().slice(0, 10)` : une chaîne date-only se
+// compare en heure LOCALE côté validation (`parseDateOnlyLocal`), alors que
+// `toISOString()` convertit en UTC -- au tout début de la journée locale
+// (Belgique, UTC+2 l'été), cette conversion peut faire "reculer" d'un jour et
+// casser ce test selon l'heure exacte d'exécution (flake réel rencontré).
+const todayDateOnlyLocal = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 
 function baseInput(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -37,8 +47,7 @@ describe("createEventSchema", () => {
   });
 
   it("accepte une date limite de reponse aujourd'hui (comparaison en date civile, pas en horodatage exact)", () => {
-    const todayDateOnly = new Date().toISOString().slice(0, 10);
-    const result = createEventSchema.safeParse(baseInput({ rsvpDeadline: todayDateOnly }));
+    const result = createEventSchema.safeParse(baseInput({ rsvpDeadline: todayDateOnlyLocal() }));
     expect(result.success).toBe(true);
   });
 

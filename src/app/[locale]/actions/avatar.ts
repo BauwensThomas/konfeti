@@ -2,7 +2,7 @@
 
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
-import { ensureGuestSession } from "@/lib/supabase/guest-session";
+import { requireUser } from "@/lib/supabase/guest-session";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 export type UploadAvatarResult =
@@ -13,20 +13,17 @@ const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 Mo, avant redimensionnement
 const AVATAR_DIMENSION = 500; // px, côté le plus long
 
 // Contrairement à uploadEventPhoto (réservée à l'hôte), l'avatar est un
-// champ d'identité (brief 1.1) ouvert à tout participant, y compris un
-// invité "code d'accès" en session anonyme (porte 2) : pas de contrôle
-// `user.is_anonymous` ici.
+// champ d'identité (brief 1.1) ouvert à tout participant approuvé.
 export async function uploadAvatarPhoto(formData: FormData): Promise<UploadAvatarResult> {
   const supabase = await createClient();
-  const user = await ensureGuestSession(supabase);
+  const user = await requireUser(supabase);
 
   if (!user) {
     return { ok: false, error: "unknown" };
   }
 
-  // Limité par IP (pas seulement par utilisateur) : une session anonyme se
-  // recrée gratuitement à volonté (ensureGuestSession), donc une limite par
-  // user.id seule serait triviale à contourner ici.
+  // Limité par IP en plus de l'utilisateur : défense en profondeur contre un
+  // abus via plusieurs comptes créés depuis la même machine.
   const ip = await getClientIp();
   if (isRateLimited(`uploadAvatarPhoto:${ip}`, 20, 60 * 60 * 1000)) {
     return { ok: false, error: "rate_limited" };

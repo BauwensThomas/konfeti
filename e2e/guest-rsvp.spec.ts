@@ -7,14 +7,19 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-test("un visiteur sans compte (porte 2) renseigne son identite et voit l'ecran d'attente, puis recupere sa place depuis un autre appareil via son code", async ({
+// Retour Thomas : "que les gens se connectent a leur compte directement" --
+// un visiteur sans compte doit se connecter (porte unique) avant de repondre
+// a un evenement -- plus de code de recuperation : retrouver sa place depuis
+// un autre appareil se fait simplement en se reconnectant avec le meme
+// compte (email), comme partout ailleurs dans l'app.
+test("un visiteur sans compte se connecte, renseigne son identite et voit l'ecran d'attente, puis retrouve sa place depuis un autre appareil en se reconnectant", async ({
   page,
   browser,
 }) => {
   const hostEmail = `e2e-hote-invite-${Date.now()}@example.com`;
   const host = await loginAs(page, hostEmail);
-  let firstGuestUserId: string | null = null;
-  let secondGuestUserId: string | null = null;
+  const guestEmail = `e2e-invite-${Date.now()}@example.com`;
+  let guestUserId: string | null = null;
   let eventId: string | null = null;
 
   try {
@@ -48,15 +53,19 @@ test("un visiteur sans compte (porte 2) renseigne son identite et voit l'ecran d
     eventId = event.id;
 
     // Un premier visiteur, sans compte, ouvre le lien directement (contexte
-    // navigateur neuf, sans aucun cookie de session).
+    // navigateur neuf, sans aucun cookie de session) et voit la porte "Se
+    // connecter" avant de pouvoir repondre.
     const guestContext = await browser.newContext();
     const guestPage = await guestContext.newPage();
 
     try {
       await guestPage.goto(`/e/${event.short_code}`);
       await expect(guestPage.getByRole("heading", { name: title })).toBeVisible();
+      await expect(guestPage.getByRole("link", { name: "Se connecter" })).toBeVisible();
 
-      await guestPage.getByRole("button", { name: "Continuer sans compte" }).click();
+      const guest = await loginAs(guestPage, guestEmail, `/e/${event.short_code}`);
+      guestUserId = guest.id;
+
       await guestPage.getByPlaceholder("Julie").fill("Marc");
       await guestPage.getByPlaceholder("Dean").fill("Untel");
       await guestPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000096");
@@ -71,26 +80,22 @@ test("un visiteur sans compte (porte 2) renseigne son identite et voit l'ecran d
 
       const { data: rsvp } = await supabaseAdmin
         .from("rsvps")
-        .select("id, profile_id, status, guest_code, first_name, last_name")
+        .select("id, profile_id, status, first_name, last_name")
         .eq("event_id", event.id)
         .maybeSingle();
 
       expect(rsvp?.status).toBe("pending");
       expect(rsvp?.first_name).toBe("Marc");
       expect(rsvp?.last_name).toBe("Untel");
-      expect(rsvp?.guest_code).toMatch(/^[A-Z]+-[A-Z0-9]{6}$/);
-      firstGuestUserId = rsvp!.profile_id;
+      expect(rsvp?.profile_id).toBe(guestUserId);
 
-      // Récupération cross-device : un deuxième appareil (contexte neuf) saisit
-      // le code et récupère la même participation (brief 1.2).
+      // Retrouver sa place depuis un autre appareil : simplement se
+      // reconnecter avec le meme compte (email), pas un code a saisir.
       const recoveryContext = await browser.newContext();
       const recoveryPage = await recoveryContext.newPage();
 
       try {
-        await recoveryPage.goto(`/e/${event.short_code}`);
-        await recoveryPage.getByRole("button", { name: "J'ai déjà un code" }).click();
-        await recoveryPage.getByPlaceholder("MOT-XXXXXX").fill(rsvp!.guest_code!);
-        await recoveryPage.getByRole("button", { name: "Retrouver ma place" }).click();
+        await loginAs(recoveryPage, guestEmail, `/e/${event.short_code}`);
 
         await expect(
           recoveryPage.getByText("Ta demande est chez l'organisateur !"),
@@ -102,11 +107,9 @@ test("un visiteur sans compte (porte 2) renseigne son identite et voit l'ecran d
           .eq("event_id", event.id)
           .maybeSingle();
 
-        // Toujours la même ligne de participation, mais rattachée à la
-        // session du nouvel appareil.
+        // Toujours la même ligne de participation, rattachée au même compte.
         expect(rsvpAfter?.id).toBe(rsvp!.id);
-        expect(rsvpAfter?.profile_id).not.toBe(firstGuestUserId);
-        secondGuestUserId = rsvpAfter!.profile_id;
+        expect(rsvpAfter?.profile_id).toBe(guestUserId);
       } finally {
         await recoveryContext.close();
       }
@@ -117,8 +120,7 @@ test("un visiteur sans compte (porte 2) renseigne son identite et voit l'ecran d
     if (eventId) {
       await supabaseAdmin.from("events").delete().eq("id", eventId);
     }
-    if (firstGuestUserId) await deleteTestUser(firstGuestUserId);
-    if (secondGuestUserId) await deleteTestUser(secondGuestUserId);
+    if (guestUserId) await deleteTestUser(guestUserId);
     await deleteTestUser(host.id);
   }
 });

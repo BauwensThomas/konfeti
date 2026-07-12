@@ -2,21 +2,14 @@
 
 import { useTranslations } from "next-intl";
 import { StickerConfetti } from "@/components/stickers";
+import { formatQuantity, type BringUnit } from "@/lib/bring-units";
 
-export type BringUnit = "piece" | "liter" | "gram" | "kilogram";
-
-// Formatage compact : "3.5 L", "2 kg", "1 pièce"/"6 pièces" -- toujours avec
-// une unité explicite (retour Thomas : un simple "1" sans rien à côté ne
-// veut rien dire, même pour l'unité "pièce"). Un seul chiffre après la
-// virgule, jamais "3.50".
-export function formatQuantity(value: number, unit: BringUnit): string {
-  const rounded = Math.round(value * 10) / 10;
-  const number = Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1);
-  if (unit === "liter") return `${number} L`;
-  if (unit === "gram") return `${number} g`;
-  if (unit === "kilogram") return `${number} kg`;
-  return `${number} ${rounded <= 1 ? "pièce" : "pièces"}`;
-}
+// Réexportés depuis `src/lib/bring-units.ts` (pure, sans dépendance React) --
+// tous les imports existants (`import { formatQuantity, type BringUnit }
+// from "@/components/bring/BringGauge"`) continuent de fonctionner tels
+// quels ; l'export PDF (route.ts, pas un composant) importe directement
+// depuis le lib partagé plutôt que par ce fichier "use client".
+export { formatQuantity, type BringUnit };
 
 /**
  * Jauge "quantité reçue / quantité demandée" pour un item "qui apporte quoi"

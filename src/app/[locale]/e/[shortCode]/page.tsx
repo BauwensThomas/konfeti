@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { EVENT_THEMES } from "@/lib/themes";
-import { isEventFinished } from "@/lib/event-status";
+import { isEventOver, isJourJ } from "@/lib/event-status";
 import { EventTabs } from "@/components/EventTabs";
 import { EventPhotoEditor } from "@/components/EventPhotoEditor";
 import { CancelEventButton } from "@/components/CancelEventButton";
@@ -14,6 +14,7 @@ import { GuestParticipation } from "@/components/GuestParticipation";
 import { GuestPendingScreen } from "@/components/GuestPendingScreen";
 import { GuestRestrictedScreen } from "@/components/GuestRestrictedScreen";
 import { MyParticipationCard } from "@/components/MyParticipationCard";
+import { CompanionsEditor } from "@/components/CompanionsEditor";
 import { EventPersonnes } from "@/components/EventPersonnes";
 import { EventChat, getInitialUnreadCount } from "@/components/EventChat";
 import { BringList } from "@/components/BringList";
@@ -22,18 +23,23 @@ import { EventWeather } from "@/components/EventWeather";
 import { shouldShowWeather } from "@/lib/weather";
 import { BringAccueilGauges } from "@/components/bring/BringAccueilGauges";
 import { PollsAccueilSummary } from "@/components/polls/PollsAccueilSummary";
+import { PollsQuotaWarningSection } from "@/components/polls/PollsQuotaWarningSection";
+import { JourJCard } from "@/components/JourJCard";
+import { EndEventButton } from "@/components/EndEventButton";
+import { EventFinishedCard } from "@/components/EventFinishedCard";
+import { GoHomeCard } from "@/components/GoHomeCard";
 import { ShareEventButton } from "@/components/ShareEventButton";
-import { LinkAccountBanner } from "@/components/LinkAccountBanner";
 import { Card } from "@/components/ui/Card";
 import { buttonClassName } from "@/components/ui/Button";
 import { joinNames } from "@/lib/joinNames";
+import type { BringUnit } from "@/lib/bring-units";
 
 // Open Graph dynamique (brief 5.7/Phase 3) : le titre/aperçu de partage
 // reflète l'événement (titre réel), mais ne se base QUE sur `events_public_data`
 // (titre + thème seulement), jamais sur la ligne `events` complète : un lien
 // partagé peut être "unfurl" par un bot (WhatsApp, Messenger...) sans jamais
 // passer par une session authentifiée, donc sans plus de droits qu'un
-// visiteur anonyme (brief 1.3). `robots: noindex` : jamais indexé par un
+// visiteur non connecté (brief 1.3). `robots: noindex` : jamais indexé par un
 // moteur de recherche (le vrai `robots.txt`, Phase 6, le confirmera aussi).
 export async function generateMetadata({
   params,
@@ -112,10 +118,43 @@ export default async function EventPage({
     const { data: myRsvpRow } = user
       ? await supabase
           .from("rsvps")
-          .select("id, role, answer")
+          .select("id, role, answer, checked_in_at, arrived_home_at")
           .eq("event_id", event.id)
           .eq("profile_id", user.id)
           .maybeSingle()
+      : { data: null };
+
+    // Accompagnants de la propre ligne du viewer (retour Thomas : pouvoir en
+    // rajouter/retirer après l'inscription, pas seulement à l'inscription).
+    const { data: myCompanionRows } = myRsvpRow
+      ? await supabase.from("companions").select("id, kind, first_name").eq("rsvp_id", myRsvpRow.id).order("id")
+      : { data: null };
+
+    // Engagements déjà pris par le viewer (retour Thomas : "quand on clic sur
+    // supprimer un accompagnant, si l'utilisateur a rajouté des produits à
+    // ramener ou répondu à des sondages, qu'on demande qu'est-ce qu'il faut
+    // retirer") -- affichés dans `CompanionsEditor` au moment précis du
+    // retrait, pour ajuster en un geste plutôt que de laisser un
+    // dépassement de quota découvert plus tard.
+    const { data: myClaimRows } = myRsvpRow
+      ? await supabase
+          .from("bring_claims")
+          .select("id, item_id, quantity, bring_items(label, unit)")
+          .eq("rsvp_id", myRsvpRow.id)
+          .returns<{ id: string; item_id: string; quantity: number; bring_items: { label: string; unit: BringUnit } | null }[]>()
+      : { data: null };
+    const { data: myVoteRows } = myRsvpRow
+      ? await supabase
+          .from("poll_votes")
+          .select("option_id, quantity, poll_options(label, poll_id, polls(question))")
+          .eq("rsvp_id", myRsvpRow.id)
+          .returns<
+            {
+              option_id: string;
+              quantity: number;
+              poll_options: { label: string; poll_id: string; polls: { question: string } | null } | null;
+            }[]
+          >()
       : { data: null };
 
     const isAdmin = isHost || myRsvpRow?.role === "admin";
@@ -293,18 +332,35 @@ export default async function EventPage({
       <main className="flex flex-1 flex-col items-center gap-6 px-6 py-8 sm:py-12">
         {/* "Retour à mes événements" retiré (demande de Thomas) : la flèche
             retour du header global couvre désormais ce besoin pour tout
-            utilisateur connecté. Partager/Modifier/Supprimer regroupés dans
-            une seule rangée de bulles, chacune dans une couleur distincte
-            (Partager en jaune déjà via ShareEventButton, Modifier en violet,
-            Supprimer en corail, icône seule). */}
+            utilisateur connecté. Partager/Export/Modifier/Supprimer regroupés
+            dans une seule rangée de bulles, chacune dans une couleur
+            distincte (Partager en jaune déjà via ShareEventButton, Export PDF
+            en bleu ciel placé avant Modifier, Modifier en orange foncé,
+            Supprimer en corail, icône seule -- toutes les couleurs sur
+            retour Thomas). */}
         {(canShare || isAdmin) && (
           <div className="flex w-full max-w-lg lg:max-w-2xl flex-wrap items-center justify-center gap-3">
-            {canShare && <ShareEventButton title={event.title} url={shareUrl} />}
+            {canShare && (
+              <ShareEventButton title={event.title} url={shareUrl} shortCode={event.short_code} />
+            )}
             {isAdmin && (
               <>
+                {/* Export PDF (brief 4.13), réservé aux admins, généré à la
+                    volée (`/api/export/[shortCode]`) -- lien direct plutôt
+                    qu'un Server Action, pour laisser le navigateur gérer le
+                    téléchargement nativement (`content-disposition`). PDF
+                    plutôt que CSV (retour Thomas : tout le monde ne sait pas
+                    utiliser un CSV sur son téléphone). */}
+                <a
+                  href={`/api/export/${event.short_code}`}
+                  download={`participants-${event.short_code}.pdf`}
+                  className={buttonClassName({ variant: "sky", size: "sm", className: "h-11" })}
+                >
+                  {t("exportPdf")}
+                </a>
                 <Link
                   href={`/e/${event.short_code}/modifier`}
-                  className={buttonClassName({ variant: "primary", size: "sm", className: "h-11" })}
+                  className={buttonClassName({ variant: "highlightDark", size: "sm", className: "h-11" })}
                 >
                   {t("editEvent")}
                 </Link>
@@ -320,7 +376,6 @@ export default async function EventPage({
               isHost={isHost}
               isAdmin={isAdmin}
               isBeneficiary={isBeneficiary}
-              isAnonymous={!!user?.is_anonymous}
               dateOptions={dateOptions}
               coverPhotoUrl={coverPhotoUrl}
               beneficiaryNames={beneficiaryNames}
@@ -328,9 +383,44 @@ export default async function EventPage({
               isPollsListHidden={isPollsListHidden}
               myRsvp={
                 !isHost && myRsvpRow
-                  ? { id: myRsvpRow.id, answer: myRsvpRow.answer as "yes" | "maybe" | "no" }
+                  ? {
+                      id: myRsvpRow.id,
+                      answer: myRsvpRow.answer as "yes" | "maybe" | "no",
+                      checkedInAt: myRsvpRow.checked_in_at,
+                      arrivedHomeAt: myRsvpRow.arrived_home_at,
+                    }
                   : null
               }
+              viewerRsvpId={myRsvpRow?.id ?? null}
+              // Pas gaté par `!isHost` (contrairement à `myRsvp` ci-dessus) :
+              // l'hôte aussi peut vouloir rajouter ses propres accompagnants à
+              // sa ligne rsvps (créée par `ensure_own_rsvp`), même si l'écran
+              // "changer ma réponse"/"quitter" ne le concerne pas.
+              viewerCompanions={(myCompanionRows ?? []).map((c) => ({
+                id: c.id,
+                kind: c.kind as "partner" | "child" | "friend" | "family",
+                firstName: c.first_name,
+              }))}
+              // Même garde que `viewerCompanions` juste au-dessus (pas gaté
+              // par `!isHost`) : sert uniquement à alimenter le récapitulatif
+              // "qu'est-ce qu'il faut retirer" de `CompanionsEditor`.
+              viewerClaims={(myClaimRows ?? [])
+                .filter((c) => c.bring_items)
+                .map((c) => ({
+                  itemId: c.item_id,
+                  label: c.bring_items!.label,
+                  unit: c.bring_items!.unit,
+                  quantity: c.quantity,
+                }))}
+              viewerVotes={(myVoteRows ?? [])
+                .filter((v) => v.poll_options?.polls)
+                .map((v) => ({
+                  optionId: v.option_id,
+                  pollId: v.poll_options!.poll_id,
+                  pollQuestion: v.poll_options!.polls!.question,
+                  optionLabel: v.poll_options!.label,
+                  quantity: v.quantity,
+                }))}
             />
           }
           personnes={
@@ -350,6 +440,18 @@ export default async function EventPage({
                 isBeneficiary={isBeneficiary}
                 isParticipantsHidden={isParticipantsHiddenForBeneficiaries}
                 beneficiaryNames={beneficiaryNames}
+                // Retour Thomas : "j'ai eu bien rentré mais dans personnes je
+                // ne vois pas... avec un v vert" -- l'événement était déjà
+                // "Terminé" (isJourJ redevenu faux), donc les badges
+                // Arrivé/Bien rentré disparaissaient à tort. Même fenêtre
+                // élargie que `GoHomeCard` (isJourJ || isEventOver) : ces
+                // badges doivent rester visibles tant qu'on peut encore
+                // cocher "bien rentré" (GoHomeCard.tsx), pas seulement
+                // pendant le Mode Jour J strict.
+                isJourJ={
+                  isJourJ(event.starts_at, event.date_mode, event.ends_at, event.ended_at) ||
+                  isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)
+                }
               />
             )
           }
@@ -376,6 +478,7 @@ export default async function EventPage({
                   shortCode={event.short_code}
                   viewerRsvpId={myRsvpRow?.id ?? null}
                   isAdmin={isAdmin}
+                  readOnly={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
                 />
               )}
               {isBringListHidden ? (
@@ -386,6 +489,7 @@ export default async function EventPage({
                   shortCode={event.short_code}
                   viewerRsvpId={myRsvpRow?.id ?? null}
                   isAdmin={isAdmin}
+                  readOnly={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
                 />
               )}
             </div>
@@ -523,6 +627,7 @@ type EventRow = {
   date_mode: "fixed" | "poll";
   starts_at: string | null;
   ends_at: string | null;
+  ended_at: string | null;
   location_text: string | null;
   location_lat: number | null;
   location_lng: number | null;
@@ -539,6 +644,7 @@ type EventRow = {
   rsvp_deadline: string | null;
   kids_allowed: "yes" | "no" | "details" | null;
   pets_allowed: "yes" | "no" | "details" | null;
+  allow_companions: boolean;
   pot_enabled: boolean;
   pot_mode: "goal" | "open";
   pot_goal_cents: number | null;
@@ -553,19 +659,21 @@ async function EventAccueil({
   isHost,
   isAdmin,
   isBeneficiary,
-  isAnonymous,
   dateOptions,
   coverPhotoUrl,
   beneficiaryNames,
   myRsvp,
   isBringListHidden,
   isPollsListHidden,
+  viewerRsvpId,
+  viewerCompanions,
+  viewerClaims,
+  viewerVotes,
 }: {
   event: EventRow;
   isHost: boolean;
   isAdmin: boolean;
   isBeneficiary: boolean;
-  isAnonymous: boolean;
   dateOptions: {
     id: string;
     startsAt: string;
@@ -580,7 +688,12 @@ async function EventAccueil({
   // concerné, qui ne voit de toute façon jamais cette carte -- voir la garde
   // juste au-dessus).
   beneficiaryNames: string[];
-  myRsvp: { id: string; answer: "yes" | "maybe" | "no" } | null;
+  myRsvp: {
+    id: string;
+    answer: "yes" | "maybe" | "no";
+    checkedInAt: string | null;
+    arrivedHomeAt: string | null;
+  } | null;
   // "Qui apporte quoi" (brief 4.4, retour Thomas : "dès que quelqu'un a
   // rajouté un produit, on a un histogramme en barre à côté... sur la page
   // d'accueil") -- même garde-fou de masquage que le reste (jamais montré au
@@ -589,6 +702,19 @@ async function EventAccueil({
   // Sondages (retour Thomas : "il ne faut pas mettre les sondages sur
   // l'accueil ?") -- même principe que `isBringListHidden` juste au-dessus.
   isPollsListHidden: boolean;
+  // Mode Jour J (brief 4.11) : id de la propre ligne rsvps du viewer courant,
+  // y compris pour l'hôte (contrairement à `myRsvp` ci-dessus, `null` pour
+  // lui volontairement -- voir son commentaire) -- nécessaire pour que
+  // n'importe qui, hôte compris, puisse se check-in.
+  viewerRsvpId: string | null;
+  // Accompagnants de la propre ligne du viewer, y compris l'hôte -- même
+  // logique que `viewerRsvpId` juste au-dessus (retour Thomas : l'hôte doit
+  // aussi pouvoir rajouter ses propres +1 à sa fête).
+  viewerCompanions: { id: string; kind: "partner" | "child" | "friend" | "family"; firstName: string | null }[];
+  // Engagements du viewer (retour Thomas : "que faut-il retirer" au moment
+  // de retirer un accompagnant) -- voir `CompanionsEditor`.
+  viewerClaims: { itemId: string; label: string; unit: BringUnit; quantity: number }[];
+  viewerVotes: { optionId: string; pollId: string; pollQuestion: string; optionLabel: string; quantity: number }[];
 }) {
   const t = await getTranslations("EventPage");
   const tOccasions = await getTranslations("Occasions");
@@ -603,7 +729,6 @@ async function EventAccueil({
 
   return (
     <div className="flex flex-col gap-4">
-      {isAnonymous && <LinkAccountBanner />}
       <div
         className="flex items-center gap-4 rounded-konfeti p-6 text-white shadow-konfeti"
         style={{
@@ -626,10 +751,24 @@ async function EventAccueil({
                 {t("adminBadge")}
               </span>
             )}
-            {isEventFinished(event.starts_at, event.date_mode) && (
+            {/* Pas affiché tant que le Mode Jour J prolongé est encore actif
+                (retour Thomas : "il faut enlever le terminé dans la bannière
+                aussi non ?") -- contradictoire d'afficher "Terminé" alors que
+                la carte Jour J (arrivées, bien rentré) est encore utile. */}
+            {isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at) ? (
               <span className="w-fit rounded-full bg-accent-coral px-3 py-1 text-xs font-semibold text-white">
                 {t("finishedBadge")}
               </span>
+            ) : (
+              // Retour Thomas : "dans la bannière aussi il doit avoir mis en
+              // cours ou terminé selon le moment" -- même badge de statut
+              // temporel que "Mes événements", pendant le Mode Jour J
+              // (jour de la fête + fin + jours de grâce).
+              isJourJ(event.starts_at, event.date_mode, event.ends_at, event.ended_at) && (
+                <span className="w-fit rounded-full bg-accent-mint px-3 py-1 text-xs font-semibold text-white">
+                  {t("ongoingBadge")}
+                </span>
+              )
             )}
           </div>
           <h1 className="font-display text-2xl font-bold">{event.title}</h1>
@@ -639,13 +778,48 @@ async function EventAccueil({
         <EventPhotoEditor eventId={event.id} isHost={isHost} initialPhotoUrl={coverPhotoUrl} />
       </div>
 
-      {myRsvp && (
+      {/* Retour Thomas : "ça doit être en haut de la page d'accueil juste
+          après la bannière de l'événement" -- avant même la carte "changer
+          ma réponse" juste en dessous. */}
+      <PollsQuotaWarningSection eventId={event.id} viewerRsvpId={viewerRsvpId} />
+
+      {/* Retour Thomas : "si une personne coche je suis bien arrivé, il ne
+          doit plus voir le cadre je viens, peut-être, je ne peux pas" --
+          répondre à un événement où l'on est déjà arrivé (ou déjà rentré chez
+          soi, ou que l'événement est Terminé) n'a plus de sens. */}
+      {myRsvp &&
+        !myRsvp.checkedInAt &&
+        !myRsvp.arrivedHomeAt &&
+        !isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at) && (
         <Card>
           <MyParticipationCard
             rsvpId={myRsvp.id}
             shortCode={event.short_code}
             currentAnswer={myRsvp.answer}
             showLeaveButton={true}
+            isEventOver={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
+          />
+        </Card>
+      )}
+
+      {/* Accompagnants modifiables après l'inscription (retour Thomas :
+          "comment on pourrait faire pour remedier a ça" -- jusqu'ici
+          verrouillés à l'inscription). Pas gaté par `myRsvp` (donc visible de
+          l'hôte aussi, contrairement à la carte au-dessus) : `viewerRsvpId`
+          existe pour tout le monde, y compris l'hôte -- voir son commentaire
+          de type. `allow_companions` : l'hôte a peut-être désactivé les +1
+          pour cet événement. */}
+      {viewerRsvpId &&
+        event.allow_companions &&
+        !isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at) && (
+        <Card>
+          <CompanionsEditor
+            rsvpId={viewerRsvpId}
+            eventId={event.id}
+            shortCode={event.short_code}
+            initialCompanions={viewerCompanions}
+            viewerClaims={viewerClaims}
+            viewerVotes={viewerVotes}
           />
         </Card>
       )}
@@ -677,54 +851,94 @@ async function EventAccueil({
         </Card>
       )}
 
-      {/* Retour Thomas : "il faudrait mettre la même chose [le gras] pour les
-          titres de toutes les cases de la page d'accueil" -- titre
-          font-display en gras ajouté à chaque carte qui n'en avait pas
-          encore, cohérent avec "Qui apporte quoi" (BringAccueilGauges). */}
-      <Card className="flex flex-col gap-3">
-        <p className="font-display text-lg font-bold text-foreground">{t("dateLocationHeading")}</p>
-        {event.date_mode === "fixed" && event.starts_at ? (
-          <p className="text-base font-semibold text-foreground">
-            {formatDateTime(event.starts_at)}
-            {event.ends_at ? ` · ${t("endsAtLabel", { time: formatTime(event.ends_at) })}` : ""}
-          </p>
-        ) : dateOptions.length > 0 ? (
-          <DatePollVoting
-            eventId={event.id}
-            shortCode={event.short_code}
-            isAdmin={isAdmin}
-            options={dateOptions}
-          />
-        ) : (
-          <p className="text-base font-semibold text-foreground">{t("dateTBD")}</p>
-        )}
+      {/* Mode Jour J (brief 4.11) : bascule automatique de l'Accueil pendant
+          le jour de l'événement (+ sa fin réelle pour un événement
+          multi-jours, + 2 jours de grâce), ou clôturée plus tôt par un admin
+          via le bouton "Terminer" (retour Thomas). Le bloc "Rentrer"/"bien
+          rentré" (`GoHomeCard`, juste en dessous) reste affiché
+          indépendamment de cet état -- "les gens qui rentrent chez eux" ne
+          doivent jamais disparaître, même une fois l'événement "Terminé"
+          (bug réel corrigé, voir DECISIONS.md). */}
+      {isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at) ? (
+        <EventFinishedCard eventId={event.id} shortCode={event.short_code} title={event.title} isAdmin={isAdmin} />
+      ) : isJourJ(event.starts_at, event.date_mode, event.ends_at, event.ended_at) ? (
+        <JourJCard
+          eventId={event.id}
+          shortCode={event.short_code}
+          viewerRsvpId={viewerRsvpId}
+          isAdmin={isAdmin}
+          locationText={event.location_text}
+          showWeather={shouldShowWeather(event.starts_at, event.date_mode, event.location_lat !== null && event.location_lng !== null)}
+          lat={event.location_lat}
+          lng={event.location_lng}
+          dateISO={event.starts_at ? event.starts_at.slice(0, 10) : null}
+        />
+      ) : (
+        // Retour Thomas : "il faudrait mettre la même chose [le gras] pour
+        // les titres de toutes les cases de la page d'accueil" -- titre
+        // font-display en gras ajouté à chaque carte qui n'en avait pas
+        // encore, cohérent avec "Qui apporte quoi" (BringAccueilGauges).
+        <Card className="flex flex-col gap-3">
+          <p className="font-display text-lg font-bold text-foreground">{t("dateLocationHeading")}</p>
+          {event.date_mode === "fixed" && event.starts_at ? (
+            <p className="text-base font-semibold text-foreground">
+              {formatDateTime(event.starts_at)}
+              {event.ends_at ? ` · ${t("endsAtLabel", { time: formatTime(event.ends_at) })}` : ""}
+            </p>
+          ) : dateOptions.length > 0 ? (
+            <DatePollVoting
+              eventId={event.id}
+              shortCode={event.short_code}
+              isAdmin={isAdmin}
+              options={dateOptions}
+            />
+          ) : (
+            <p className="text-base font-semibold text-foreground">{t("dateTBD")}</p>
+          )}
 
-        {shouldShowWeather(event.starts_at, event.date_mode, event.location_lat !== null && event.location_lng !== null) && (
-          <EventWeather
-            lat={event.location_lat!}
-            lng={event.location_lng!}
-            dateISO={event.starts_at!.slice(0, 10)}
-          />
-        )}
+          {shouldShowWeather(event.starts_at, event.date_mode, event.location_lat !== null && event.location_lng !== null) && (
+            <EventWeather
+              lat={event.location_lat!}
+              lng={event.location_lng!}
+              dateISO={event.starts_at!.slice(0, 10)}
+            />
+          )}
 
-        {event.location_text && (
-          <div className="flex flex-col gap-1">
-            <p className="text-base text-foreground">{event.location_text}</p>
-            <div className="flex gap-4 text-sm font-semibold text-primary">
-              {mapsUrl && (
-                <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
-                  {t("mapsLink")}
-                </a>
-              )}
-              {wazeUrl && (
-                <a href={wazeUrl} target="_blank" rel="noopener noreferrer">
-                  {t("wazeLink")}
-                </a>
-              )}
+          {event.location_text && (
+            <div className="flex flex-col gap-1">
+              <p className="text-base text-foreground">{event.location_text}</p>
+              <div className="flex gap-4 text-sm font-semibold text-primary">
+                {mapsUrl && (
+                  <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
+                    {t("mapsLink")}
+                  </a>
+                )}
+                {wazeUrl && (
+                  <a href={wazeUrl} target="_blank" rel="noopener noreferrer">
+                    {t("wazeLink")}
+                  </a>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </Card>
+          )}
+        </Card>
+      )}
+
+      {/* Indépendant de la carte ci-dessus (Jour J/Terminé/normale) --
+          retour Thomas : "les gens qui rentrent chez eux" doivent toujours
+          pouvoir cocher "bien rentré", même une fois l'événement "Terminé". */}
+      {(isJourJ(event.starts_at, event.date_mode, event.ends_at, event.ended_at) ||
+        isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)) && (
+        <GoHomeCard
+          eventId={event.id}
+          shortCode={event.short_code}
+          title={event.title}
+          viewerRsvpId={viewerRsvpId}
+          locationText={event.location_text}
+          locationLat={event.location_lat}
+          locationLng={event.location_lng}
+        />
+      )}
 
       {event.description && (
         <Card className="flex flex-col gap-2">
@@ -815,6 +1029,14 @@ async function EventAccueil({
           (vote uniquement depuis l'onglet Participer) -- ne rend rien si
           aucun sondage n'existe. */}
       {!isPollsListHidden && <PollsAccueilSummary eventId={event.id} />}
+
+      {/* "Terminer" (brief 4.11, retour Thomas) : tout en bas de la page,
+          uniquement pendant le Mode Jour J -- invisible avant que la fête ne
+          commence, invisible aussi une fois déjà terminée (le bouton
+          "Rouvrir" de la carte FINISH le remplace alors). */}
+      {isAdmin && isJourJ(event.starts_at, event.date_mode, event.ends_at, event.ended_at) && (
+        <EndEventButton eventId={event.id} shortCode={event.short_code} />
+      )}
     </div>
   );
 }

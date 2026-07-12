@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
   createEventSchema,
@@ -9,6 +10,9 @@ import {
 } from "@/lib/validation/event";
 import { generateShortCode } from "@/lib/short-code";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
+import { getEventApprovedUserIds } from "@/lib/push-recipients";
+import { sendPush } from "@/lib/push-send";
+import { pushMessages } from "@/lib/push-messages";
 
 export type CreateEventResult =
   | { ok: true; shortCode: string }
@@ -142,7 +146,9 @@ async function syncPolls(
   if (toInsert.length > 0) {
     const { data: inserted, error } = await supabase
       .from("polls")
-      .insert(toInsert.map((p) => ({ event_id: eventId, question: p.question, status: "approved" })))
+      .insert(
+        toInsert.map((p) => ({ event_id: eventId, question: p.question, status: "approved", choice_mode: p.choiceMode })),
+      )
       .select("id, question");
     if (error || !inserted) return false;
     // `insert().select()` renvoie les lignes dans l'ordre d'insertion (même
@@ -155,7 +161,10 @@ async function syncPolls(
 
   const existingPolls = polls.filter((p) => p.id);
   for (const poll of existingPolls) {
-    const { error } = await supabase.from("polls").update({ question: poll.question }).eq("id", poll.id!);
+    const { error } = await supabase
+      .from("polls")
+      .update({ question: poll.question, choice_mode: poll.choiceMode })
+      .eq("id", poll.id!);
     if (error) return false;
   }
 
@@ -207,7 +216,7 @@ export async function createEvent(
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || user.is_anonymous) {
+  if (!user) {
     return { ok: false, error: "not_authenticated" };
   }
 
@@ -304,15 +313,11 @@ export async function updateEvent(
   }
   const data = parsed.data;
 
-  // Contrairement à createEvent (qui exige un vrai compte, l'hôte doit être
-  // identifiable durablement), modifier un événement est une action d'ADMIN
-  // ordinaire : un invité "code d'accès" promu admin par l'hôte a les mêmes
-  // droits que lui (retour Thomas : "il a les mêmes droits que celui qui a
-  // créé l'événement... modifier les infos"), donc pas de blocage
-  // `user.is_anonymous` ici — seule la policy RLS `events_update_by_admin`
-  // (is_event_admin) doit trancher. Bug réel trouvé en creusant "Oups,
-  // quelque chose s'est mal passé" pour un admin promu : ce blocage,
-  // pertinent pour createEvent, avait été copié ici sans être reconsidéré.
+  // Modifier un événement est une action d'ADMIN ordinaire : un participant
+  // promu admin par l'hôte a les mêmes droits que lui (retour Thomas : "il a
+  // les mêmes droits que celui qui a créé l'événement... modifier les
+  // infos") -- seule la policy RLS `events_update_by_admin` (is_event_admin)
+  // doit trancher, pas de restriction supplémentaire ici.
   if (!user) {
     return { ok: false, error: "not_authenticated" };
   }
@@ -372,8 +377,8 @@ export async function cancelEvent(eventId: string): Promise<{ ok: boolean }> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Même raison que updateEvent ci-dessus : un admin promu, même en session
-  // anonyme, a les mêmes droits que l'hôte.
+  // Même raison que updateEvent ci-dessus : un admin promu a les mêmes
+  // droits que l'hôte, aucune restriction supplémentaire ici.
   if (!user) {
     return { ok: false };
   }
@@ -387,7 +392,50 @@ export async function cancelEvent(eventId: string): Promise<{ ok: boolean }> {
     return { ok: false };
   }
 
+  try {
+    const { data: event } = await supabase.from("events").select("title, short_code").eq("id", eventId).single();
+    if (event) {
+      const recipientUserIds = (await getEventApprovedUserIds(supabase, eventId)).filter((id) => id !== user.id);
+      // `category: null` : toujours envoyé, ignore les préférences (retour
+      // Thomas : "trop important pour être raté").
+      void sendPush(recipientUserIds, null, pushMessages.eventCancelled(event.short_code, event.title));
+    }
+  } catch {
+    // Best-effort.
+  }
+
   redirect("/mes-evenements");
+}
+
+// Bouton "Terminer" (brief 4.11, proposé par Thomas) : un admin clôt
+// manuellement le Mode Jour J plutôt que d'attendre la bascule automatique
+// du surlendemain -- utile pour une fête finie bien avant minuit, ou pour ne
+// PAS attendre sur un événement qui traîne. Re-cliquable (`ended` vient du
+// client, même principe que `checkIn`/`markArrivedHome`) : un admin qui a
+// cliqué par erreur peut rouvrir. RLS `events_update_by_admin` est la vraie
+// frontière de sécurité, pas de vérification `isAdmin` ici (même principe que
+// `cancelEvent` juste au-dessus).
+export async function endEvent(eventId: string, shortCode: string, ended: boolean): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false };
+  }
+
+  const { error } = await supabase
+    .from("events")
+    .update({ ended_at: ended ? new Date().toISOString() : null })
+    .eq("id", eventId);
+
+  if (error) {
+    return { ok: false };
+  }
+
+  revalidatePath(`/e/${shortCode}`);
+  revalidatePath("/mes-evenements");
+  return { ok: true };
 }
 
 // Changer/supprimer la photo directement depuis la page événement (sans
@@ -404,8 +452,8 @@ export async function updateEventCoverPhoto(
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Même raison que updateEvent ci-dessus : un admin promu, même en session
-  // anonyme, a les mêmes droits que l'hôte.
+  // Même raison que updateEvent ci-dessus : un admin promu a les mêmes
+  // droits que l'hôte, aucune restriction supplémentaire ici.
   if (!user) {
     return { ok: false };
   }

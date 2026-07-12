@@ -13,8 +13,7 @@ async function joinAsBeneficiary(
   shortCode: string,
   firstName: string,
 ) {
-  await page.goto(`/e/${shortCode}`);
-  await page.getByRole("button", { name: "Continuer sans compte" }).click();
+  await loginAs(page, `${firstName.toLowerCase()}-${Date.now()}@test.konfeti.local`, `/e/${shortCode}`);
   await page.getByPlaceholder("Julie").fill(firstName);
   await page.getByPlaceholder("Dean").fill("Untel");
   await page.getByPlaceholder("+32 470 00 00 00").fill("+32470000091");

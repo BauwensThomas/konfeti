@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { AvatarPlaceholder } from "@/components/AvatarPlaceholder";
-import { toLocalDateTimeValue } from "@/lib/datetime";
+import { toLocalDateTimeValue, fromLocalDateTimeValue, parseDateOnlyLocal } from "@/lib/datetime";
 import { joinNames } from "@/lib/joinNames";
 import { UnitPickerButton, type BringUnit } from "@/components/bring/UnitPickerButton";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
@@ -81,7 +81,15 @@ export type BringItemRow = {
 // Sondages (brief : "Sondage(s) optionnel(s)") : même convention `id: null`
 // que `BringItemRow` -- une option sans id n'existe pas encore en base.
 export type PollOptionRow = { id: string | null; label: string };
-export type PollRow = { id: string | null; question: string; options: PollOptionRow[] };
+// "Choix unique" (menu resto...) vs "choix multiple" (comportement
+// historique, valeur par défaut) -- retour Thomas, voir migration
+// `polls_choice_mode_and_quantity`.
+export type PollRow = {
+  id: string | null;
+  question: string;
+  options: PollOptionRow[];
+  choiceMode: "single" | "multiple";
+};
 
 const INITIAL_DATA: WizardData = {
   title: "",
@@ -269,16 +277,20 @@ export function CreateEventWizard({
     data.dateMode === "fixed" &&
     !!data.startsAt &&
     !!data.rsvpDeadline &&
-    new Date(data.rsvpDeadline) > new Date(data.startsAt);
+    parseDateOnlyLocal(data.rsvpDeadline) > new Date(data.startsAt);
   // Comparaison en dates civiles, pas en horodatage exact : ce champ est un
   // `<input type="date">` (pas d'heure), qui se parse à minuit -- le comparer
   // à l'heure exacte actuelle rejetterait à tort la journée du jour même dès
   // qu'il n'est plus minuit pile (même raison que côté serveur).
+  // `parseDateOnlyLocal` (pas `new Date(...)` direct) : bug réel, une chaîne
+  // date-only se parse toujours en UTC, jamais dans le fuseau local -- "hier"
+  // en UTC pendant les ~2 premières heures après minuit heure locale (été,
+  // Belgique UTC+2), rejetant à tort la date du jour même comme "passée".
   const rsvpDeadlineInPast = (() => {
     if (originalAlreadyPast || !data.rsvpDeadline) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return new Date(data.rsvpDeadline) < today;
+    return parseDateOnlyLocal(data.rsvpDeadline) < today;
   })();
 
   function canAdvance() {
@@ -309,13 +321,13 @@ export function CreateEventWizard({
         title: data.title,
         theme: data.theme,
         dateMode: data.dateMode,
-        startsAt: data.dateMode === "fixed" ? data.startsAt : undefined,
-        endsAt: data.endsAt || undefined,
+        startsAt: data.dateMode === "fixed" ? fromLocalDateTimeValue(data.startsAt) : undefined,
+        endsAt: data.endsAt ? fromLocalDateTimeValue(data.endsAt) : undefined,
         dateOptions:
           data.dateMode === "poll"
             ? data.dateOptions
                 .filter((o) => o.startsAt)
-                .map((o) => ({ startsAt: o.startsAt, label: o.label || undefined }))
+                .map((o) => ({ startsAt: fromLocalDateTimeValue(o.startsAt), label: o.label || undefined }))
             : undefined,
         locationText: data.locationText,
         locationLat: data.locationLat,
@@ -366,6 +378,7 @@ export function CreateEventWizard({
             options: poll.options
               .filter((option) => option.label.trim())
               .map((option) => ({ id: option.id, label: option.label.trim() })),
+            choiceMode: poll.choiceMode,
           }))
           .filter((poll) => poll.question && poll.options.length >= 2),
         beneficiaryHiddenBlocks: data.beneficiaryHiddenBlocks,
@@ -1028,6 +1041,31 @@ export function CreateEventWizard({
                       aria-label={t("step4.pollQuestionAria", { index: pollIndex + 1 })}
                       className={inputClass}
                     />
+                    {/* "Choix unique" (menu resto...) vs "choix multiple"
+                        (retour Thomas : "je sais voter pour les 3... j'ai le
+                        droit qu'à un menu"). */}
+                    <div className="flex gap-2">
+                      <ToggleButton
+                        active={poll.choiceMode === "multiple"}
+                        onClick={() => {
+                          const next = [...data.polls];
+                          next[pollIndex] = { ...next[pollIndex], choiceMode: "multiple" };
+                          update("polls", next);
+                        }}
+                      >
+                        {t("step4.pollChoiceModeMultiple")}
+                      </ToggleButton>
+                      <ToggleButton
+                        active={poll.choiceMode === "single"}
+                        onClick={() => {
+                          const next = [...data.polls];
+                          next[pollIndex] = { ...next[pollIndex], choiceMode: "single" };
+                          update("polls", next);
+                        }}
+                      >
+                        {t("step4.pollChoiceModeSingle")}
+                      </ToggleButton>
+                    </div>
                     <div className="flex flex-col gap-2">
                       {poll.options.map((option, optionIndex) => (
                         <div key={optionIndex} className="flex items-center gap-2">
@@ -1102,6 +1140,7 @@ export function CreateEventWizard({
                           { id: null, label: "" },
                           { id: null, label: "" },
                         ],
+                        choiceMode: "multiple",
                       },
                     ])
                   }

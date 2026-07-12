@@ -23,3 +23,13 @@ export const transferEventHostSchema = z.object({
   eventId: z.string().uuid(),
   newHostProfileId: z.string().uuid(),
 });
+
+export const addCompanionSchema = z.object({
+  rsvpId: z.string().uuid(),
+  kind: z.enum(["partner", "child", "friend", "family"]),
+  firstName: z.string().trim().max(80).optional(),
+});
+
+export const companionIdSchema = z.object({
+  companionId: z.string().uuid(),
+});

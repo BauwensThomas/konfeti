@@ -1,20 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { pollIdSchema, proposePollSchema, voteOptionSchema } from "./polls";
+import { pollIdSchema, proposePollSchema, setPollVoteSchema } from "./polls";
 
 const uuid = "123e4567-e89b-12d3-a456-426614174000";
 
-describe("voteOptionSchema", () => {
-  it("accepte un vote coché ou décoché", () => {
-    expect(voteOptionSchema.safeParse({ optionId: uuid, checked: true }).success).toBe(true);
-    expect(voteOptionSchema.safeParse({ optionId: uuid, checked: false }).success).toBe(true);
+describe("setPollVoteSchema", () => {
+  it("accepte une quantité positive ou nulle (retrait du vote)", () => {
+    expect(setPollVoteSchema.safeParse({ optionId: uuid, quantity: 3 }).success).toBe(true);
+    expect(setPollVoteSchema.safeParse({ optionId: uuid, quantity: 0 }).success).toBe(true);
   });
 
   it("rejette un optionId qui n'est pas un uuid", () => {
-    expect(voteOptionSchema.safeParse({ optionId: "pas-un-uuid", checked: true }).success).toBe(false);
+    expect(setPollVoteSchema.safeParse({ optionId: "pas-un-uuid", quantity: 1 }).success).toBe(false);
   });
 
-  it("rejette une valeur checked non booléenne", () => {
-    expect(voteOptionSchema.safeParse({ optionId: uuid, checked: "oui" }).success).toBe(false);
+  it("rejette une quantité négative ou non entière", () => {
+    expect(setPollVoteSchema.safeParse({ optionId: uuid, quantity: -1 }).success).toBe(false);
+    expect(setPollVoteSchema.safeParse({ optionId: uuid, quantity: 1.5 }).success).toBe(false);
   });
 });
 
@@ -33,6 +34,23 @@ describe("proposePollSchema", () => {
     const result = proposePollSchema.safeParse({
       question: "Quelle activité ?",
       options: [{ label: "Pétanque" }, { label: "Piscine" }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("défaut choiceMode à 'multiple' si absent", () => {
+    const result = proposePollSchema.parse({
+      question: "Quelle activité ?",
+      options: [{ label: "Pétanque" }, { label: "Piscine" }],
+    });
+    expect(result.choiceMode).toBe("multiple");
+  });
+
+  it("accepte choiceMode 'single'", () => {
+    const result = proposePollSchema.safeParse({
+      question: "Quel menu ?",
+      options: [{ label: "Moules-frites" }, { label: "Spaghetti" }],
+      choiceMode: "single",
     });
     expect(result.success).toBe(true);
   });

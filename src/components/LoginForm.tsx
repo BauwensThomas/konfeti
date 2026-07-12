@@ -45,11 +45,7 @@ export function LoginForm() {
           />
           {state?.ok === false && (
             <p role="alert" className="mt-2 px-2 text-sm text-accent-coral">
-              {state.error === "invalid_email"
-                ? t("errorInvalidEmail")
-                : state.error === "email_taken"
-                  ? t("errorEmailTaken")
-                  : t("errorUnknown")}
+              {state.error === "invalid_email" ? t("errorInvalidEmail") : t("errorUnknown")}
             </p>
           )}
         </div>

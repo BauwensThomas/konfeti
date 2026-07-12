@@ -2,7 +2,7 @@
 
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
-import { ensureGuestSession } from "@/lib/supabase/guest-session";
+import { requireUser } from "@/lib/supabase/guest-session";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 export type UploadPhotoResult =
@@ -19,10 +19,8 @@ export async function uploadEventPhoto(formData: FormData): Promise<UploadPhotoR
   } = await supabase.auth.getUser();
 
   // Utilisée par le wizard (création ET modification) et par
-  // `EventPhotoEditor`. `/creer` bloque déjà les sessions anonymes en amont
-  // (proxy.ts), donc ce contrôle ne servait qu'à bloquer à tort un admin
-  // promu en session anonyme qui modifie la photo d'un événement existant
-  // (même bug que updateEvent, voir events.ts).
+  // `EventPhotoEditor` : simple filet de sécurité côté serveur, l'UI ne
+  // devrait de toute façon jamais atteindre cette action sans session.
   if (!user) {
     return { ok: false, error: "not_authenticated" };
   }
@@ -63,14 +61,13 @@ export async function uploadEventPhoto(formData: FormData): Promise<UploadPhotoR
   }
 }
 
-// Photo postée dans le chat (brief 4.3) : ouvert aux sessions anonymes,
-// comme uploadAvatarPhoto (aucun contrôle user.is_anonymous), même pipeline
-// sharp/bucket privé "event-photos". Limité par IP (pas par utilisateur) :
-// une session anonyme se recrée gratuitement, une limite par user.id seule
-// serait triviale à contourner.
+// Photo postée dans le chat (brief 4.3), même pipeline sharp/bucket privé
+// "event-photos" que uploadAvatarPhoto. Limité par IP en plus de
+// l'utilisateur : défense en profondeur contre un abus via plusieurs
+// comptes créés depuis la même machine.
 export async function uploadMessagePhoto(formData: FormData): Promise<UploadPhotoResult> {
   const supabase = await createClient();
-  const user = await ensureGuestSession(supabase);
+  const user = await requireUser(supabase);
 
   if (!user) {
     return { ok: false, error: "unknown" };

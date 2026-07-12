@@ -6,6 +6,7 @@ type RawPollRow = {
   question: string;
   status: "pending" | "approved";
   proposed_by_rsvp_id: string | null;
+  choice_mode: "single" | "multiple";
 };
 
 type RawOptionRow = {
@@ -18,6 +19,7 @@ type RawVoteRow = {
   id: string;
   option_id: string;
   rsvp_id: string;
+  quantity: number;
 };
 
 // Onglet Participer (brief : "Sondage(s) optionnel(s)") -- sondages définis
@@ -33,11 +35,15 @@ export async function PollsList({
   shortCode,
   viewerRsvpId,
   isAdmin,
+  readOnly = false,
 }: {
   eventId: string;
   shortCode: string;
   viewerRsvpId: string | null;
   isAdmin: boolean;
+  // Événement terminé (brief 4.11, retour Thomas) : garde les résultats,
+  // mais plus aucun vote/proposition possible.
+  readOnly?: boolean;
 }) {
   const supabase = await createClient();
 
@@ -46,7 +52,7 @@ export async function PollsList({
   // requête suffit, pas besoin de distinguer ici.
   const { data: pollRows } = await supabase
     .from("polls")
-    .select("id, question, status, proposed_by_rsvp_id")
+    .select("id, question, status, proposed_by_rsvp_id, choice_mode")
     .eq("event_id", eventId)
     .order("question")
     .returns<RawPollRow[]>();
@@ -69,10 +75,21 @@ export async function PollsList({
 
   const { data: voteRows } =
     optionIds.length > 0
-      ? await supabase.from("poll_votes").select("id, option_id, rsvp_id").in("option_id", optionIds).returns<RawVoteRow[]>()
+      ? await supabase
+          .from("poll_votes")
+          .select("id, option_id, rsvp_id, quantity")
+          .in("option_id", optionIds)
+          .returns<RawVoteRow[]>()
       : { data: [] as RawVoteRow[] };
 
   const votes = voteRows ?? [];
+
+  // Quota "choix unique" (retour Thomas) : budget du viewer = lui-même + ses
+  // accompagnants, à répartir entre les options d'un même sondage 'single'.
+  const { count: viewerCompanionsCount } = viewerRsvpId
+    ? await supabase.from("companions").select("id", { count: "exact", head: true }).eq("rsvp_id", viewerRsvpId)
+    : { count: 0 };
+  const viewerBudget = 1 + (viewerCompanionsCount ?? 0);
 
   // Prénoms des proposants de sondages en attente uniquement (même pattern
   // que `BringList.tsx`).
@@ -100,6 +117,7 @@ export async function PollsList({
     id: poll.id,
     question: poll.question,
     status: poll.status,
+    choiceMode: poll.choice_mode,
     proposedByName: poll.proposed_by_rsvp_id ? (nameByRsvpId.get(poll.proposed_by_rsvp_id) ?? "Anonyme") : null,
     options: options
       .filter((o) => o.poll_id === poll.id)
@@ -108,8 +126,8 @@ export async function PollsList({
         return {
           id: option.id,
           label: option.label,
-          voteCount: optionVotes.length,
-          votedByMe: optionVotes.some((v) => v.rsvp_id === viewerRsvpId),
+          totalQuantity: optionVotes.reduce((sum, v) => sum + v.quantity, 0),
+          myQuantity: optionVotes.find((v) => v.rsvp_id === viewerRsvpId)?.quantity ?? 0,
         };
       }),
   }));
@@ -119,8 +137,10 @@ export async function PollsList({
       eventId={eventId}
       shortCode={shortCode}
       viewerRsvpId={viewerRsvpId}
+      viewerBudget={viewerBudget}
       isAdmin={isAdmin}
       initialPolls={pollViews}
+      readOnly={readOnly}
     />
   );
 }

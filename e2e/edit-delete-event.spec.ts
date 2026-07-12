@@ -7,6 +7,17 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
+// Bug réel rencontré (pas un flake de charge, contrairement à ce qu'on
+// pensait au départ) : un numéro codé en dur, réutilisé par des dizaines
+// d'exécutions de ce fichier au fil d'une longue session, finit par entrer
+// en collision avec un profil de test déjà créé (souvent orphelin, un run
+// interrompu n'a pas toujours le temps de nettoyer) -- le formulaire "encore
+// une petite étape" reste bloqué en "Un instant..." sans jamais rediriger.
+// Un numéro unique par exécution, comme l'email juste en dessous, élimine le
+// problème à la racine plutôt que d'espérer qu'aucun run précédent n'ait pris
+// ce numéro.
+const uniquePhone = () => `+3247${Date.now().toString().slice(-7)}`;
+
 test("un organisateur modifie puis supprime son evenement", async ({ page }) => {
   const email = `e2e-organisateur-${Date.now()}@example.com`;
   const user = await loginAs(page, email);
@@ -15,7 +26,7 @@ test("un organisateur modifie puis supprime son evenement", async ({ page }) => 
     await page.goto("/profil/completer");
     await page.getByPlaceholder("Julie").fill("Hôte");
     await page.getByPlaceholder("Dean").fill("Test");
-    await page.getByLabel("Ton numéro de téléphone").fill("+32470000099");
+    await page.getByLabel("Ton numéro de téléphone").fill(uniquePhone());
     await page.getByLabel("Une femme").check();
     await page.getByRole("button", { name: "Avatar 1" }).click();
     await page.getByRole("button", { name: "Continuer" }).click();
@@ -96,7 +107,7 @@ test("la croix du wizard Modifier annule et revient à l'événement sans enregi
     await page.goto("/profil/completer");
     await page.getByPlaceholder("Julie").fill("Hôte");
     await page.getByPlaceholder("Dean").fill("Test");
-    await page.getByLabel("Ton numéro de téléphone").fill("+32470000099");
+    await page.getByLabel("Ton numéro de téléphone").fill(uniquePhone());
     await page.getByLabel("Une femme").check();
     await page.getByRole("button", { name: "Avatar 1" }).click();
     await page.getByRole("button", { name: "Continuer" }).click();
@@ -163,7 +174,7 @@ test("impossible de faire reculer un événement à venir vers le passé, ou de 
     await page.goto("/profil/completer");
     await page.getByPlaceholder("Julie").fill("Hôte");
     await page.getByPlaceholder("Dean").fill("Test");
-    await page.getByLabel("Ton numéro de téléphone").fill("+32470000099");
+    await page.getByLabel("Ton numéro de téléphone").fill(uniquePhone());
     await page.getByLabel("Une femme").check();
     await page.getByRole("button", { name: "Avatar 1" }).click();
     await page.getByRole("button", { name: "Continuer" }).click();
@@ -190,9 +201,20 @@ test("impossible de faire reculer un événement à venir vers le passé, ou de 
 
     // Tentative de reculer la date (encore à venir) vers le passé : bloqué.
     await page.goto(`/e/${event.short_code}/modifier`);
-    await page.locator('input[type="datetime-local"]').first().fill("2020-01-01T20:00");
-    // Flake intermittent observé (validation cliente pourtant synchrone, pas
-    // de debounce) sous forte charge de session -- marge un peu plus large.
+    // Flake intermittent identifié (pas juste "sous forte charge") : le TOUT
+    // PREMIER `.fill()` sur ce champ contrôlé après le chargement de page
+    // peut ne pas être capté par React (l'état interne de "value tracking"
+    // que React patche sur l'input n'est pas encore prêt), même après avoir
+    // confirmé que la valeur pré-remplie est bien affichée -- la valeur DOM
+    // change visuellement mais `data.startsAt` (et donc la validation) reste
+    // sur l'ancienne valeur. Un remplissage "à blanc" (même valeur qu'avant)
+    // avant le vrai remplissage force cette initialisation de façon fiable
+    // (vérifié : échoue de façon reproductible sans cette étape, passe à
+    // chaque fois avec).
+    const startsAtInput = page.locator('input[type="datetime-local"]').first();
+    await expect(startsAtInput).toHaveValue("2026-12-24T20:00");
+    await startsAtInput.fill("2026-12-24T20:00");
+    await startsAtInput.fill("2020-01-01T20:00");
     await expect(page.getByText("Cette date ne peut pas être dans le passé.")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("button", { name: "Suivant" })).toBeDisabled();
 
@@ -231,7 +253,7 @@ test("changer l'occasion d'un événement efface les infos de l'ancienne occasio
     await page.goto("/profil/completer");
     await page.getByPlaceholder("Julie").fill("Hôte");
     await page.getByPlaceholder("Dean").fill("Test");
-    await page.getByLabel("Ton numéro de téléphone").fill("+32470000198");
+    await page.getByLabel("Ton numéro de téléphone").fill(uniquePhone());
     await page.getByLabel("Une femme").check();
     await page.getByRole("button", { name: "Avatar 1" }).click();
     await page.getByRole("button", { name: "Continuer" }).click();
@@ -288,6 +310,89 @@ test("changer l'occasion d'un événement efface les infos de l'ancienne occasio
       .single();
     expect(eventAfter?.occasion).toBe("new_year");
     expect(eventAfter?.birthday_person).toBeNull();
+
+    await supabaseAdmin.from("events").delete().eq("id", event.id);
+  } finally {
+    await deleteTestUser(user.id);
+  }
+});
+
+// Bug réel signalé par Thomas : "j'essaie de modifier l'événement, à +1
+// minute que l'heure actuelle et ça me met d'office 2h plus tard". La valeur
+// brute de l'input datetime-local (heure locale, sans fuseau) partait telle
+// quelle vers Postgres, qui la réinterprétait dans le fuseau de sa session
+// (UTC) au lieu du fuseau du navigateur -- décalage égal à l'écart
+// CEST/UTC (2h en été). Corrigé via `fromLocalDateTimeValue` (voir
+// `src/lib/datetime.ts`) : ce test vérifie que l'heure locale ressaisie dans
+// le formulaire de modification ressort identique une fois relue en base.
+test("modifier la date d'un événement conserve l'heure locale exacte (pas de décalage de fuseau)", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const email = `e2e-date-tz-${Date.now()}@example.com`;
+  const user = await loginAs(page, email);
+
+  try {
+    await page.goto("/profil/completer");
+    await page.getByPlaceholder("Julie").fill("Hôte");
+    await page.getByPlaceholder("Dean").fill("Test");
+    await page.getByLabel("Ton numéro de téléphone").fill(uniquePhone());
+    await page.getByLabel("Une femme").check();
+    await page.getByRole("button", { name: "Avatar 1" }).click();
+    await page.getByRole("button", { name: "Continuer" }).click();
+    await expect(page).toHaveURL(/\/mes-evenements$/);
+
+    const title = `Fete fuseau ${Date.now()}`;
+    await page.getByRole("link", { name: "Créer un événement" }).click();
+    await page.getByPlaceholder("L'anniversaire de Julie").fill(title);
+    await page.locator('input[type="datetime-local"]').first().fill("2026-12-24T20:00");
+    await page.getByPlaceholder("Adresse et ville").fill("Rue de Test 11, 1000 Bruxelles");
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Créer l'événement" }).click();
+    await expect(page).toHaveURL(/\/mes-evenements$/);
+
+    const { data: event } = await supabaseAdmin
+      .from("events")
+      .select("id, short_code")
+      .eq("title", title)
+      .maybeSingle();
+    if (!event) throw new Error("evenement introuvable");
+
+    // Rescédule à un horaire précis, comme Thomas ("+1 minute que l'heure
+    // actuelle") -- ici une valeur fixe et déterministe équivalente.
+    const newValue = "2027-03-15T14:31";
+    await page.goto(`/e/${event.short_code}/modifier`);
+    // Le TOUT PREMIER `.fill()` sur ce champ contrôlé après le chargement de
+    // page peut ne pas être capté par React (voir le commentaire détaillé
+    // plus haut, même bug) -- un remplissage "à blanc" avant le vrai
+    // remplissage force l'initialisation de façon fiable.
+    const startsAtInput = page.locator('input[type="datetime-local"]').first();
+    await expect(startsAtInput).toHaveValue("2026-12-24T20:00");
+    await startsAtInput.fill("2026-12-24T20:00");
+    await startsAtInput.fill(newValue);
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Enregistrer les modifications" }).click();
+    await expect(page).toHaveURL(new RegExp(`/e/${event.short_code}$`));
+
+    const { data: eventAfter } = await supabaseAdmin
+      .from("events")
+      .select("starts_at")
+      .eq("id", event.id)
+      .single();
+
+    // Reconstruit la même valeur "YYYY-MM-DDTHH:mm" en heure locale que
+    // `toLocalDateTimeValue` (le pré-remplissage du formulaire) : doit
+    // retomber exactement sur ce qui a été saisi, pas décalé de 2h.
+    const stored = new Date(eventAfter!.starts_at!);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const roundTripped = `${stored.getFullYear()}-${pad(stored.getMonth() + 1)}-${pad(stored.getDate())}T${pad(stored.getHours())}:${pad(stored.getMinutes())}`;
+    expect(roundTripped).toBe(newValue);
 
     await supabaseAdmin.from("events").delete().eq("id", event.id);
   } finally {
