@@ -153,7 +153,7 @@ test("header : le logo remonte d'un cran dans la hierarchie (evenement -> Mes ev
   // Pas connecte : toujours la landing.
   await page.goto("/connexion");
   await logo.click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/fr$/);
 
   const email = `e2e-header-logo-hierarchy-${Date.now()}@example.com`;
   let userId: string | null = null;
@@ -182,7 +182,7 @@ test("header : le logo remonte d'un cran dans la hierarchie (evenement -> Mes ev
 
     // Depuis "Mes événements" lui-même : le logo redescend vers la landing.
     await logo.click();
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/fr$/);
   } finally {
     if (userId) await deleteTestUser(userId);
   }

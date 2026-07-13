@@ -15,9 +15,6 @@ test("le menu Informations du footer ouvre un popup avec les 4 pages legales + l
   await page.goto("/");
 
   await expect(page.getByRole("button", { name: "Informations" })).toBeVisible();
-  await page.getByRole("button", { name: "Informations" }).click();
-  const menu = page.getByRole("dialog");
-  await expect(menu.getByText("Informations", { exact: true })).toBeVisible();
 
   const links: { name: string; url: RegExp; heading: string; excerpt: string }[] = [
     {
@@ -48,7 +45,10 @@ test("le menu Informations du footer ouvre un popup avec les 4 pages legales + l
 
   for (const link of links) {
     await page.getByRole("button", { name: "Informations" }).click();
-    await page.getByRole("dialog").getByRole("link", { name: link.name }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByText("Informations", { exact: true })).toBeVisible();
+    await dialog.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+    await dialog.getByRole("link", { name: link.name }).click();
     await expect(page).toHaveURL(link.url);
     await expect(page.getByRole("heading", { name: link.heading })).toBeVisible();
     await expect(page.getByText(link.excerpt, { exact: false })).toBeVisible();
@@ -59,7 +59,9 @@ test("le menu Informations du footer ouvre un popup avec les 4 pages legales + l
 
   // Le lien vers le profil, lui aussi regroupé dans ce menu.
   await page.getByRole("button", { name: "Informations" }).click();
-  await page.getByRole("dialog").getByRole("link", { name: "Mon profil" }).click();
+  const profileDialog = page.getByRole("dialog");
+  await profileDialog.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  await profileDialog.getByRole("link", { name: "Mon profil" }).click();
   await expect(page).toHaveURL(/\/connexion/);
 });
 

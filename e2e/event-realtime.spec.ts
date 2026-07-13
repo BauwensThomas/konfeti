@@ -67,6 +67,21 @@ test("changer 'qui peut partager le lien' depuis Modifier se répercute en direc
     await page.getByRole("button", { name: "Personnes" }).click();
     await page.getByRole("button", { name: "Approuver comme invité" }).click();
 
+    // Attendre que l'approbation soit réellement en base avant de recharger
+    // la page de l'invité : sans ça, un reload trop rapide peut encore voir
+    // le statut "pending" (course entre le clic et l'écriture serveur).
+    await expect
+      .poll(async () => {
+        const { data } = await supabaseAdmin
+          .from("rsvps")
+          .select("status")
+          .eq("event_id", eventId)
+          .eq("first_name", "Marc")
+          .maybeSingle();
+        return data?.status;
+      })
+      .toBe("approved");
+
     await guestPage.reload();
     // Politique par défaut "tout le monde" : l'invité (non-admin) voit déjà
     // la bulle Partager.

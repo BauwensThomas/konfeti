@@ -158,7 +158,7 @@ test("suppression de compte : profil efface, messages anonymises, votes/qui-appo
     await marcPage.goto("/profil");
     await marcPage.getByRole("button", { name: "Supprimer mon compte" }).click();
     await marcPage.getByRole("button", { name: "Oui, supprimer mon compte" }).click();
-    await expect(marcPage).toHaveURL(/\/$/, { timeout: 15_000 });
+    await expect(marcPage).toHaveURL(/\/fr$/, { timeout: 15_000 });
 
     // Le compte n'existe plus du tout (pas juste déconnecté).
     const { data: userAfter, error: userAfterError } = await supabaseAdmin.auth.admin.getUserById(marcId);

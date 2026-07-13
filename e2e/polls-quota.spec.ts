@@ -85,7 +85,7 @@ test("sondage a choix unique : quota 1+accompagnants, budget qui grandit/retreci
 
     // Budget de 1 : un seul vote possible, réparti entre les options.
     await marcPage.goto(`/e/${event.short_code}`);
-    await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "Participer", exact: true }).click();
     await expect(marcPage.getByText("Il te reste 1 vote à répartir")).toBeVisible();
     await marcPage.getByRole("button", { name: "Ajouter un vote pour Poisson" }).click();
     await expect(marcPage.getByText("Tous tes votes sont utilisés")).toBeVisible({ timeout: 15_000 });
@@ -97,7 +97,7 @@ test("sondage a choix unique : quota 1+accompagnants, budget qui grandit/retreci
     await marcPage.getByRole("dialog").getByRole("button", { name: "+ Ajouter un accompagnant" }).click();
     await expect(marcPage.getByText("Conjoint")).toBeVisible({ timeout: 15_000 });
 
-    await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "Participer", exact: true }).click();
     await expect(marcPage.getByText("Il te reste 1 vote à répartir")).toBeVisible({ timeout: 15_000 });
     await marcPage.getByRole("button", { name: "Ajouter un vote pour Viande" }).click();
     await expect(marcPage.getByText("Tous tes votes sont utilisés")).toBeVisible({ timeout: 15_000 });

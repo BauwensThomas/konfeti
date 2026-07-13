@@ -128,7 +128,7 @@ test("ajout d'un accompagnant apres l'inscription, puis retrait avec ajustement 
     await glaconsAmount.fill("1.2");
     await removeDialog.getByRole("button", { name: "Confirmer le retrait" }).click();
 
-    await expect(marcPage.getByText("Conjoint")).not.toBeVisible({ timeout: 15_000 });
+    await expect(marcPage.getByText("Conjoint", { exact: true })).not.toBeVisible({ timeout: 15_000 });
 
     const { data: claimAfter } = await supabaseAdmin
       .from("bring_claims")
