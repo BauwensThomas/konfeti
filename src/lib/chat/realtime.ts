@@ -11,6 +11,10 @@ export type MessageRow = {
   is_system: boolean;
   deleted_by_admin: boolean;
   created_at: string;
+  // Retour Thomas : nom figé au moment de l'événement pour un message
+  // système ("joined"/"left"), jamais résolu en direct -- voir
+  // `types.ts` (`ChatMessageView.systemAuthorName`).
+  system_author_name: string | null;
 };
 
 export type ReactionRow = {

@@ -36,6 +36,7 @@ export async function PollsList({
   viewerRsvpId,
   isAdmin,
   readOnly = false,
+  hideApprovedList = false,
 }: {
   eventId: string;
   shortCode: string;
@@ -44,6 +45,9 @@ export async function PollsList({
   // Événement terminé (brief 4.11, retour Thomas) : garde les résultats,
   // mais plus aucun vote/proposition possible.
   readOnly?: boolean;
+  // Retour Thomas : organisateur/porteur de cagnotte ayant répondu "je ne
+  // peux pas" -- ne voit plus que la modération, jamais la liste approuvée.
+  hideApprovedList?: boolean;
 }) {
   const supabase = await createClient();
 
@@ -86,10 +90,17 @@ export async function PollsList({
 
   // Quota "choix unique" (retour Thomas) : budget du viewer = lui-même + ses
   // accompagnants, à répartir entre les options d'un même sondage 'single'.
+  // Retour Thomas : "j'ai dit que je ne venais pas... il me reste un vote à
+  // répartir" -- budget à 0 pour qui ne vient pas (organisateur/porteur de
+  // cagnotte répondant "non" tout en restant admin invisible), même bug que
+  // `PollsQuotaWarningSection.tsx`.
+  const { data: viewerRsvpRow } = viewerRsvpId
+    ? await supabase.from("rsvps").select("answer").eq("id", viewerRsvpId).maybeSingle()
+    : { data: null };
   const { count: viewerCompanionsCount } = viewerRsvpId
     ? await supabase.from("companions").select("id", { count: "exact", head: true }).eq("rsvp_id", viewerRsvpId)
     : { count: 0 };
-  const viewerBudget = 1 + (viewerCompanionsCount ?? 0);
+  const viewerBudget = viewerRsvpRow?.answer === "no" ? 0 : 1 + (viewerCompanionsCount ?? 0);
 
   // Prénoms des proposants de sondages en attente uniquement (même pattern
   // que `BringList.tsx`).
@@ -141,6 +152,7 @@ export async function PollsList({
       isAdmin={isAdmin}
       initialPolls={pollViews}
       readOnly={readOnly}
+      hideApprovedList={hideApprovedList}
     />
   );
 }

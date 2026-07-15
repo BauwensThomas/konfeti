@@ -28,6 +28,7 @@ export type ParticipantActionResult =
         | "last_admin"
         | "invalid_new_host"
         | "organizer_protected"
+        | "still_owns_pot"
         | "unknown";
     };
 
@@ -234,7 +235,9 @@ export async function removeParticipant(
         ? "unauthorized"
         : error.message.includes("organizer cannot")
           ? "organizer_protected"
-          : "unknown",
+          : error.message.includes("still owns an active pot")
+            ? "still_owns_pot"
+            : "unknown",
     };
   }
 
@@ -286,7 +289,9 @@ export async function leaveEvent(
         ? "unauthorized"
         : error.message.includes("organizer cannot")
           ? "organizer_protected"
-          : "unknown",
+          : error.message.includes("still owns an active pot")
+            ? "still_owns_pot"
+            : "unknown",
     };
   }
 

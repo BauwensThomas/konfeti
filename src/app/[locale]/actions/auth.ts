@@ -5,6 +5,7 @@ import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { magicLinkSchema } from "@/lib/validation/auth";
 import { isRateLimited } from "@/lib/rate-limit";
+import { stripe } from "@/lib/stripe";
 
 export type MagicLinkResult =
   | { ok: true }
@@ -60,7 +61,10 @@ export async function clearSession() {
 
 export type DeleteAccountResult =
   | { ok: true }
-  | { ok: false; error: "not_authenticated" | "still_hosting" | "rate_limited" | "unknown" };
+  | {
+      ok: false;
+      error: "not_authenticated" | "still_hosting" | "still_owns_pot" | "pending_stripe_balance" | "rate_limited" | "unknown";
+    };
 
 // Suppression de compte en libre-service (retour Thomas : "on doit pouvoir
 // supprimer son compte, et effacer toutes les données... retirer toutes les
@@ -85,11 +89,34 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
     return { ok: false, error: "rate_limited" };
   }
 
+  // Garde-fou cagnotte (brief 4.8) : "solde Stripe à zéro" ne peut pas être
+  // vérifié en SQL pur (il faut interroger l'API Stripe en direct) -- fait
+  // ICI, avant `delete_own_account` (qui, elle, bloque déjà la partie
+  // "aucune cagnotte active" en SQL). Un compte Stripe jamais créé ou sans
+  // solde ne bloque jamais la suppression.
+  const { data: profile } = await supabase.from("profiles").select("stripe_account_id").eq("id", user.id).maybeSingle();
+  if (profile?.stripe_account_id) {
+    try {
+      const balance = await stripe.balance.retrieve({}, { stripeAccount: profile.stripe_account_id });
+      const hasFunds = [...balance.available, ...balance.pending].some((b) => b.amount > 0);
+      if (hasFunds) {
+        return { ok: false, error: "pending_stripe_balance" };
+      }
+    } catch {
+      // Jamais bloquant si Stripe est injoignable -- le garde-fou SQL
+      // (cagnotte active) reste la vraie barrière de sécurité.
+    }
+  }
+
   const { error: cleanupError } = await supabase.rpc("delete_own_account");
   if (cleanupError) {
     return {
       ok: false,
-      error: cleanupError.message.includes("still hosting") ? "still_hosting" : "unknown",
+      error: cleanupError.message.includes("still hosting")
+        ? "still_hosting"
+        : cleanupError.message.includes("still owns an active pot")
+          ? "still_owns_pot"
+          : "unknown",
     };
   }
 

@@ -28,9 +28,13 @@ export function DeleteAccountButton() {
         setError(
           result.error === "still_hosting"
             ? t("deleteAccountErrorHosting")
-            : result.error === "rate_limited"
-              ? t("errorRateLimited")
-              : t("deleteAccountErrorUnknown"),
+            : result.error === "still_owns_pot"
+              ? t("deleteAccountErrorPot")
+              : result.error === "pending_stripe_balance"
+                ? t("deleteAccountErrorPotBalance")
+                : result.error === "rate_limited"
+                  ? t("errorRateLimited")
+                  : t("deleteAccountErrorUnknown"),
         );
       }
     });

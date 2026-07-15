@@ -47,6 +47,7 @@ export function PollsListClient({
   isAdmin,
   initialPolls,
   readOnly = false,
+  hideApprovedList = false,
 }: {
   eventId: string;
   shortCode: string;
@@ -60,6 +61,11 @@ export function PollsListClient({
   // Événement terminé (brief 4.11, retour Thomas) : garde les résultats,
   // mais plus aucun vote/proposition possible.
   readOnly?: boolean;
+  // Retour Thomas : organisateur/porteur de cagnotte ayant répondu "je ne
+  // peux pas" -- garde la modération (approuver/refuser, jamais concerné par
+  // ce flag) mais n'a plus besoin de voir la liste déjà approuvée (il ne
+  // vient pas, voter sur le menu du resto n'a plus de sens pour lui).
+  hideApprovedList?: boolean;
 }) {
   const t = useTranslations("Polls");
   const router = useRouter();
@@ -246,7 +252,7 @@ export function PollsListClient({
         </div>
       )}
 
-      {approvedPolls.length === 0 ? (
+      {hideApprovedList ? null : approvedPolls.length === 0 ? (
         <p className="text-center text-sm text-foreground/60">{t("empty")}</p>
       ) : (
         approvedPolls.map((poll) => {
@@ -352,7 +358,10 @@ export function PollsListClient({
           fois empilé avec "qui apporte quoi") -- visible à tout participant
           approuvé non masqué (même condition que le vote : `viewerRsvpId`
           n'existe que dans ce cas). */}
-      {!readOnly && viewerRsvpId && (
+      {/* Retour Thomas : "il peut juste accepter ou refuser les sondages" --
+          proposer un nouveau sondage n'a pas de sens pour qui ne vient pas
+          (même garde que la liste approuvée ci-dessus, `hideApprovedList`). */}
+      {!readOnly && viewerRsvpId && !hideApprovedList && (
         <Button variant="secondary" className="w-full" onClick={() => setIsProposeOpen(true)}>
           + {t("proposeHeading")}
         </Button>

@@ -59,6 +59,7 @@ export function BringListClient({
   isAdmin,
   initialItems,
   readOnly = false,
+  hideApprovedList = false,
 }: {
   eventId: string;
   shortCode: string;
@@ -69,6 +70,10 @@ export function BringListClient({
   // apporté quoi, mais plus aucun contrôle interactif (réclamer, proposer,
   // approuver, cocher "apporté"...).
   readOnly?: boolean;
+  // Retour Thomas : organisateur/porteur de cagnotte ayant répondu "je ne
+  // peux pas" -- garde la modération (approuver/refuser) mais n'a plus
+  // besoin de voir la liste déjà approuvée (il ne vient pas).
+  hideApprovedList?: boolean;
 }) {
   const t = useTranslations("Bring");
   const router = useRouter();
@@ -412,7 +417,7 @@ export function BringListClient({
         </div>
       )}
 
-      {approvedItems.length === 0 ? (
+      {hideApprovedList ? null : approvedItems.length === 0 ? (
         <p className="text-center text-sm text-foreground/60">{t("empty")}</p>
       ) : (
         approvedItems.map((item) => {
@@ -512,7 +517,7 @@ export function BringListClient({
           participant approuvé non masqué, SAUF un admin (retour Thomas :
           "pour les admin il faut juste un seul bouton, proposer/ajouter un
           item" -- l'admin n'a que le bouton juste en dessous). */}
-      {!readOnly && viewerRsvpId && !isAdmin && (
+      {!readOnly && viewerRsvpId && !isAdmin && !hideApprovedList && (
         <Button variant="secondary" className="w-full" onClick={() => setIsProposeOpen(true)}>
           + {t("proposeHeading")}
         </Button>
@@ -521,8 +526,10 @@ export function BringListClient({
       {/* Bouton unique pour l'admin (retour Thomas, voir plus haut) --
           toujours déjà approuvé, avec une quantité personnelle optionnelle
           ("s'il met pas de quantité à ce qu'il rapporte, ça créera l'item
-          avec 0 apporté pour le moment"). */}
-      {!readOnly && isAdmin && viewerRsvpId && (
+          avec 0 apporté pour le moment"). Retour Thomas : "il peut juste
+          accepter ou refuser... à apporter" -- masqué avec la liste
+          approuvée pour qui ne vient pas (`hideApprovedList`). */}
+      {!readOnly && isAdmin && viewerRsvpId && !hideApprovedList && (
         <Button variant="secondary" className="w-full" onClick={() => setIsAddItemOpen(true)}>
           + {t("addItemHeading")}
         </Button>

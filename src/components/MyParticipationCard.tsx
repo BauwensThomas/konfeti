@@ -12,19 +12,28 @@ type Answer = "yes" | "maybe" | "no";
 // Contrôle générique "changer ma réponse" (brief 1.3 : n'importe quel
 // participant peut passer de "je viens" à "peut-être" ou "je peux pas" à
 // tout moment, peu importe son statut actuel) + "quitter" (brief 1.5).
-// Réutilisé sur l'écran d'attente, l'écran restreint, et l'onglet Accueil
-// d'un participant approuvé (jamais affiché à l'hôte, voir page.tsx).
+// Réutilisé sur l'écran d'attente, l'écran restreint, et l'onglet Accueil --
+// y compris pour l'hôte désormais (retour Thomas : il doit pouvoir dire "je
+// ne peux pas" comme n'importe qui, voir `update_my_answer`), simplement
+// avec `showLeaveButton=false` pour lui (et pour le porteur de cagnotte
+// active), voir page.tsx.
 export function MyParticipationCard({
   rsvpId,
   shortCode,
   currentAnswer,
   showLeaveButton,
+  staysInEventReason = null,
   isEventOver = false,
 }: {
   rsvpId: string;
   shortCode: string;
   currentAnswer: Answer;
   showLeaveButton: boolean;
+  // Retour Thomas : "il faut dire qu'il reste dans l'événement car il est
+  // responsable de la cagnotte ou organisateur" -- message affiché dans la
+  // modale de confirmation "je ne peux pas", `null` pour un participant
+  // normal (aucun message spécial, il quitte réellement la vue "présents").
+  staysInEventReason?: "host" | "pot_owner" | null;
   // Retour Thomas : "quand c'est fini on ne doit plus pouvoir choisir je
   // viens, peut-être ou je viens pas" -- répondre à un événement déjà passé
   // n'a plus de sens.
@@ -78,7 +87,9 @@ export function MyParticipationCard({
             ? t("errorRateLimited")
             : result.error === "organizer_protected"
               ? t("errorOrganizerProtected")
-              : t("errorUnknown"),
+              : result.error === "still_owns_pot"
+                ? t("errorStillOwnsPot")
+                : t("errorUnknown"),
         );
       }
     });
@@ -142,6 +153,11 @@ export function MyParticipationCard({
         {/* eslint-disable-next-line @next/next/no-img-element -- asset local déjà optimisé, voir CancelEventButton */}
         <img src="/attention.webp" alt="" width={200} height={200} className="mx-auto" />
         <p className="text-center text-base text-foreground">{t("noConfirmTitle")}</p>
+        {staysInEventReason && (
+          <p className="text-center text-sm text-foreground/70">
+            {t(staysInEventReason === "host" ? "noConfirmStaysAsHost" : "noConfirmStaysAsPotOwner")}
+          </p>
+        )}
         <div className="flex justify-center gap-3">
           <Button variant="danger" disabled={isPending} onClick={() => submitAnswer("no")}>
             {t("noConfirmYes")}

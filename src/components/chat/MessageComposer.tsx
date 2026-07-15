@@ -121,6 +121,7 @@ export function MessageComposer({
       rsvpId,
       authorName: null,
       authorAvatarUrl: null,
+      systemAuthorName: null,
       status: "sending",
     });
 

@@ -28,6 +28,7 @@ export async function BringList({
   viewerRsvpId,
   isAdmin,
   readOnly = false,
+  hideApprovedList = false,
 }: {
   eventId: string;
   shortCode: string;
@@ -36,6 +37,9 @@ export async function BringList({
   // Événement terminé (brief 4.11, retour Thomas) : garde la trace de qui a
   // apporté quoi, mais plus aucune réclamation/proposition possible.
   readOnly?: boolean;
+  // Retour Thomas : organisateur/porteur de cagnotte ayant répondu "je ne
+  // peux pas" -- ne voit plus que la modération, jamais la liste approuvée.
+  hideApprovedList?: boolean;
 }) {
   const supabase = await createClient();
 
@@ -116,6 +120,7 @@ export async function BringList({
       isAdmin={isAdmin}
       initialItems={itemViews}
       readOnly={readOnly}
+      hideApprovedList={hideApprovedList}
     />
   );
 }

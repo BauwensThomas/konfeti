@@ -206,6 +206,22 @@ export function ChatRoom({
     });
   }, [eventId, viewerRsvpId]);
 
+  // Bug réel signalé par Thomas : "sa photo et son nom doivent devenir
+  // anonyme... ça le fait 1 microseconde puis ça revient le nom et la photo
+  // de la personne" -- `authorCacheRef` ne s'invalide JAMAIS une fois un
+  // rsvpId mis en cache, même après anonymisation (quitter/répondre "non") :
+  // un message reçu en direct APRÈS coup (ou une pagination) réutilisait
+  // alors le nom/avatar RÉELS déjà en cache, écrasant l'état anonyme
+  // correctement affiché entre-temps par le rafraîchissement serveur (voir
+  // l'effet de resynchro plus haut). Le message système "left" (voir
+  // `update_my_answer`/`leave_or_remove_participant`) est le signal fiable
+  // du moment exact où ce cache devient périmé pour ce rsvpId.
+  function invalidateAuthorCacheIfLeft(row: MessageRow) {
+    if (row.is_system && row.body === "left" && row.rsvp_id) {
+      authorCacheRef.current.delete(row.rsvp_id);
+    }
+  }
+
   // Extrait de l'effet Realtime pour être réutilisable par le rattrapage
   // ci-dessous (les deux ont besoin de résoudre l'auteur d'une ligne brute).
   const resolveAuthor = useCallback(
@@ -249,7 +265,7 @@ export function ChatRoom({
 
     const { data: rows } = await supabase
       .from("messages")
-      .select("id, rsvp_id, channel, body, photo_url, reply_to, is_system, deleted_by_admin, created_at")
+      .select("id, rsvp_id, channel, body, photo_url, reply_to, is_system, deleted_by_admin, created_at, system_author_name")
       .eq("event_id", eventId)
       .lt("created_at", oldest.createdAt)
       .order("created_at", { ascending: false })
@@ -268,6 +284,7 @@ export function ChatRoom({
         .slice()
         .reverse()
         .map(async (row) => {
+          invalidateAuthorCacheIfLeft(row);
           const [author, photoUrl] = await Promise.all([
             row.rsvp_id ? resolveAuthor(supabase, row.rsvp_id) : Promise.resolve({ name: null, avatarUrl: null }),
             resolveEventPhotoUrl(supabase, row.photo_url),
@@ -361,7 +378,7 @@ export function ChatRoom({
     (async () => {
       const { data: rows } = await supabase
         .from("messages")
-        .select("id, rsvp_id, channel, body, photo_url, reply_to, is_system, deleted_by_admin, created_at")
+        .select("id, rsvp_id, channel, body, photo_url, reply_to, is_system, deleted_by_admin, created_at, system_author_name")
         .eq("event_id", eventId)
         .order("created_at", { ascending: false })
         .limit(50)
@@ -373,6 +390,7 @@ export function ChatRoom({
           .slice()
           .reverse()
           .map(async (row) => {
+            invalidateAuthorCacheIfLeft(row);
             const [author, photoUrl] = await Promise.all([
               row.rsvp_id ? resolveAuthor(supabase, row.rsvp_id) : Promise.resolve({ name: null, avatarUrl: null }),
               resolveEventPhotoUrl(supabase, row.photo_url),
@@ -473,6 +491,7 @@ export function ChatRoom({
     const supabase = createClient();
 
     async function handleInsert(row: MessageRow) {
+      invalidateAuthorCacheIfLeft(row);
       const [author, photoUrl] = await Promise.all([
         row.rsvp_id ? resolveAuthor(supabase, row.rsvp_id) : Promise.resolve({ name: null, avatarUrl: null }),
         resolveEventPhotoUrl(supabase, row.photo_url),
@@ -996,6 +1015,7 @@ function rowToView(
     rsvpId: row.rsvp_id,
     authorName: author.name,
     authorAvatarUrl: author.avatarUrl,
+    systemAuthorName: row.system_author_name,
   };
 }
 

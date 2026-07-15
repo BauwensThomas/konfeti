@@ -1,3 +1,4 @@
+import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { resolveAvatarUrl } from "@/lib/avatars";
 import { ParticipantsList, type ParticipantRow } from "@/components/ParticipantsList";
@@ -47,6 +48,8 @@ export async function EventPersonnes({
   isParticipantsHidden,
   beneficiaryNames,
   isJourJ,
+  viewerIsPotOwner,
+  potOwnerStripeConnected,
 }: {
   eventId: string;
   shortCode: string;
@@ -67,6 +70,12 @@ export async function EventPersonnes({
   // ce jour-là, jamais avant (répond à "pratique pour savoir qui on attend
   // avant de lancer le gâteau").
   isJourJ: boolean;
+  // Retour Thomas : "stripe ne doit être visible que par l'organisateur
+  // (celui qui a fait son compte stripe)" -- même garde que la bannière
+  // Accueil (`PotConnectionBannerSection.tsx`), calculée une seule fois dans
+  // page.tsx plutôt que refaite ici.
+  viewerIsPotOwner: boolean;
+  potOwnerStripeConnected: boolean;
 }) {
   const supabase = await createClient();
 
@@ -95,23 +104,55 @@ export async function EventPersonnes({
       companionsCountByRsvp.set(c.rsvp_id, (companionsCountByRsvp.get(c.rsvp_id) ?? 0) + 1);
     }
 
+    // Bug réel signalé par Thomas : "je vois une autre image que la
+    // personne, je ne vois pas son nom ni son numéro" -- répondre "non"
+    // anonymise la ligne rsvps (voir `update_my_answer`). Décision explicite
+    // de Thomas (question posée directement) : un admin doit TOUJOURS voir
+    // la vraie identité dans "Ne peuvent pas venir", pas seulement en cas de
+    // demande d'accès cagnotte -- `profile_id` n'est lui jamais effacé,
+    // seule source d'identité encore disponible. `profiles_select_own`
+    // (RLS) n'autorise à lire que son PROPRE profil : client service-role
+    // ici, même pattern déjà rencontré pour le statut d'onboarding Stripe.
+    const restrictedProfileIds = rsvpRows.filter((r) => r.status === "restricted").map((r) => r.profile_id);
+    const realIdentityByProfileId = new Map<
+      string,
+      { first_name: string | null; last_name: string | null; phone: string | null; avatar_kind: "preset" | "photo"; avatar_value: string | null }
+    >();
+    if (restrictedProfileIds.length > 0) {
+      const admin = createServiceRoleClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+      const { data: realProfiles } = await admin
+        .from("profiles")
+        .select("id, first_name, last_name, phone, avatar_kind, avatar_value")
+        .in("id", restrictedProfileIds);
+      for (const p of realProfiles ?? []) {
+        realIdentityByProfileId.set(p.id, p);
+      }
+    }
+
     rows = await Promise.all(
-      rsvpRows.map(async (r) => ({
-        id: r.id,
-        profileId: r.profile_id,
-        firstName: r.first_name,
-        lastName: r.last_name,
-        phone: r.phone,
-        avatarUrl: await resolveAvatarUrl(supabase, r.avatar_kind, r.avatar_value),
-        status: r.status,
-        role: r.role,
-        answer: r.answer,
-        companionsCount: companionsCountByRsvp.get(r.id) ?? 0,
-        potAccessGranted: r.pot_access_granted,
-        wantsPotAccess: r.wants_pot_access,
-        checkedInAt: r.checked_in_at,
-        arrivedHomeAt: r.arrived_home_at,
-      })),
+      rsvpRows.map(async (r) => {
+        const realIdentity = r.status === "restricted" ? realIdentityByProfileId.get(r.profile_id) : undefined;
+        return {
+          id: r.id,
+          profileId: r.profile_id,
+          firstName: realIdentity?.first_name ?? r.first_name,
+          lastName: realIdentity?.last_name ?? r.last_name,
+          phone: realIdentity?.phone ?? r.phone,
+          avatarUrl: await resolveAvatarUrl(
+            supabase,
+            realIdentity?.avatar_kind ?? r.avatar_kind,
+            realIdentity?.avatar_value ?? r.avatar_value,
+          ),
+          status: r.status,
+          role: r.role,
+          answer: r.answer,
+          companionsCount: companionsCountByRsvp.get(r.id) ?? 0,
+          potAccessGranted: r.pot_access_granted,
+          wantsPotAccess: r.wants_pot_access,
+          checkedInAt: r.checked_in_at,
+          arrivedHomeAt: r.arrived_home_at,
+        };
+      }),
     );
   } else {
     // rsvps_public_data_select (RLS) inclut aussi désormais removed/left
@@ -162,6 +203,8 @@ export async function EventPersonnes({
       isParticipantsHidden={isParticipantsHidden}
       beneficiaryNames={beneficiaryNames}
       isJourJ={isJourJ}
+      viewerIsPotOwner={viewerIsPotOwner}
+      potOwnerStripeConnected={potOwnerStripeConnected}
     />
   );
 }

@@ -54,6 +54,7 @@ export type WizardData = {
   potMode: "goal" | "open";
   potGoalEuros: string;
   potLabel: string;
+  potCloseAtGoal: boolean;
   bringItems: BringItemRow[];
   polls: PollRow[];
   beneficiaryHiddenBlocks: BeneficiaryBlock[];
@@ -126,6 +127,7 @@ const INITIAL_DATA: WizardData = {
   potMode: "goal",
   potGoalEuros: "",
   potLabel: "",
+  potCloseAtGoal: false,
   bringItems: [],
   polls: [],
   // Cagnotte + Coulisses masquées par défaut (préserve le comportement
@@ -360,6 +362,7 @@ export function CreateEventWizard({
             ? Math.round(Number(data.potGoalEuros) * 100)
             : undefined,
         potLabel: data.potLabel || undefined,
+        potCloseAtGoal: data.potEnabled && data.potMode === "goal" ? data.potCloseAtGoal : false,
         bringItems: data.bringItems
           .filter((item) => item.label.trim() && item.quantityNeeded && item.unit)
           .map((item) => ({
@@ -917,15 +920,25 @@ export function CreateEventWizard({
                   </div>
                 </Field>
                 {data.potMode === "goal" && (
-                  <Field label={t("step4.potGoalLabel")}>
-                    <input
-                      type="number"
-                      min={1}
-                      value={data.potGoalEuros}
-                      onChange={(e) => update("potGoalEuros", e.target.value)}
-                      className={inputClass}
-                    />
-                  </Field>
+                  <>
+                    <Field label={t("step4.potGoalLabel")}>
+                      <input
+                        type="number"
+                        min={1}
+                        value={data.potGoalEuros}
+                        onChange={(e) => update("potGoalEuros", e.target.value)}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <label className="flex items-center gap-2 text-base text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={data.potCloseAtGoal}
+                        onChange={(e) => update("potCloseAtGoal", e.target.checked)}
+                      />
+                      {t("step4.potCloseAtGoalLabel")}
+                    </label>
+                  </>
                 )}
                 <Field label={t("step4.potLabelLabel")}>
                   <input

@@ -10,6 +10,12 @@ export type ChatMessageView = {
   rsvpId: string | null;
   authorName: string | null;
   authorAvatarUrl: string | null;
+  // Retour Thomas : "je veux juste 1x elle a rejoint et si elle quitte X a
+  // quitté" -- pour un message système ("joined"/"left") uniquement, le nom
+  // FIGÉ au moment de l'événement (jamais résolu en direct comme
+  // `authorName`, qui lui doit rester à jour pour les VRAIS messages).
+  // `null` pour un message normal.
+  systemAuthorName: string | null;
   // Absent (`undefined`) pour un message déjà confirmé par le serveur (le cas
   // normal, chargé depuis la base ou reçu par Realtime). "sending" ne
   // concerne que la bulle optimiste ajoutée localement avant la réponse du

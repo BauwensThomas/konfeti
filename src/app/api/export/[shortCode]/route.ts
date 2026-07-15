@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
+import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { formatQuantity, type BringUnit } from "@/lib/bring-units";
 import { fetchPeriodForecasts, describeWeatherCode, shouldShowWeather, type WeatherLabelKey } from "@/lib/weather";
@@ -141,19 +142,86 @@ export async function GET(
     return polls.filter((p) => byPoll.has(p.id)).map((p) => `${p.question} : ${byPoll.get(p.id)!.join(", ")}`);
   }
 
+  // Retour Thomas : le PDF est réservé aux admins (voir vérification
+  // `isAdmin` plus haut) -- "contribuer anonymement" protège l'identité vis-
+  // à-vis des AUTRES participants, jamais vis-à-vis de l'organisateur qui
+  // gère la cagnotte. Le PDF doit donc toujours montrer le montant réel en
+  // face de la bonne personne, jamais de ligne "anonyme" ici.
+  //
+  // Retour Thomas (bug suivant) : "si une personne a donné pour la cagnotte
+  // et qu'elle met je ne peux pas venir ou quitte le groupe, son nom doit
+  // toujours rester pour voir qui a payé quoi, et dans le PDF" -- une
+  // contribution ne doit JAMAIS être scopée aux seuls `rsvpIds` (approuvés) :
+  // toutes les contributions réussies de l'événement sont récupérées ici,
+  // y compris celles d'un participant parti/restreint entre-temps.
   const contributionsByRsvp = new Map<string, number>();
+  // Contributeurs qui ne sont PAS dans le tableau principal (rsvpIds
+  // approuvés) : parti/retiré/restreint depuis -- ce groupe n'a même plus de
+  // ligne `first_name` lisible, il faut son identité via `profiles` (voir
+  // `profile_id`, jamais effacé). Le cas "répond non mais reste admin
+  // invisible" (rsvp toujours "approved") reste lui géré plus bas, via
+  // `rsvps`/`contributionsByRsvp` directement, pas ici.
+  const departedContributionsByRsvp = new Map<string, number>();
   if (event.pot_enabled) {
-    const { data: contribRows } =
-      rsvpIds.length > 0
-        ? await supabase
-            .from("pot_contributions")
-            .select("rsvp_id, amount_cents")
-            .in("rsvp_id", rsvpIds)
-            .eq("status", "succeeded")
-        : { data: [] as { rsvp_id: string | null; amount_cents: number }[] };
+    // Bug réel signalé par Thomas (chiffres recalculés à la main à partir du
+    // PDF) : `amount_cents` est le BRUT facturé au contributeur (frais Stripe
+    // + commission Konfeti inclus), jamais ce qui arrive réellement dans la
+    // cagnotte -- `net_cents` est la seule colonne cohérente avec le reste de
+    // l'app (tableau de bord admin, écran de contribution).
+    const { data: contribRows } = await supabase
+      .from("pot_contributions")
+      .select("rsvp_id, net_cents")
+      .eq("event_id", event.id)
+      .eq("status", "succeeded");
+    const rsvpIdSet = new Set(rsvpIds);
     for (const c of contribRows ?? []) {
       if (!c.rsvp_id) continue;
-      contributionsByRsvp.set(c.rsvp_id, (contributionsByRsvp.get(c.rsvp_id) ?? 0) + c.amount_cents);
+      if (rsvpIdSet.has(c.rsvp_id)) {
+        contributionsByRsvp.set(c.rsvp_id, (contributionsByRsvp.get(c.rsvp_id) ?? 0) + c.net_cents);
+      } else {
+        departedContributionsByRsvp.set(c.rsvp_id, (departedContributionsByRsvp.get(c.rsvp_id) ?? 0) + c.net_cents);
+      }
+    }
+  }
+
+  // Identité des contributeurs partis/restreints -- lue directement sur
+  // `rsvps` (peu importe le statut, contrairement à la requête principale
+  // filtrée sur "approved" plus haut) : `first_name` peut déjà être
+  // anonymisé, `profile_id`, lui, ne l'est jamais tant que le compte n'est
+  // pas supprimé -- repli sur `profiles` (service-role, `profiles_select_
+  // own` interdirait sinon la lecture du profil de quelqu'un d'autre).
+  const departedContributorsByRsvp = new Map<
+    string,
+    { first_name: string | null; last_name: string | null; phone: string | null; gender: string | null }
+  >();
+  if (departedContributionsByRsvp.size > 0) {
+    const admin = createServiceRoleClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    const departedRsvpIds = [...departedContributionsByRsvp.keys()];
+    const { data: departedRsvpRows } = await admin
+      .from("rsvps")
+      .select("id, profile_id, first_name, last_name, phone, gender")
+      .in("id", departedRsvpIds);
+    const missingProfileIds = (departedRsvpRows ?? [])
+      .filter((r) => !r.first_name && r.profile_id)
+      .map((r) => r.profile_id as string);
+    const realProfileById = new Map<string, { first_name: string | null; last_name: string | null; phone: string | null }>();
+    if (missingProfileIds.length > 0) {
+      const { data: realProfiles } = await admin
+        .from("profiles")
+        .select("id, first_name, last_name, phone")
+        .in("id", missingProfileIds);
+      for (const p of realProfiles ?? []) {
+        realProfileById.set(p.id, p);
+      }
+    }
+    for (const r of departedRsvpRows ?? []) {
+      const real = r.profile_id ? realProfileById.get(r.profile_id) : undefined;
+      departedContributorsByRsvp.set(r.id, {
+        first_name: r.first_name ?? real?.first_name ?? null,
+        last_name: r.last_name ?? real?.last_name ?? null,
+        phone: r.phone ?? real?.phone ?? null,
+        gender: r.gender,
+      });
     }
   }
 
@@ -176,11 +244,17 @@ export async function GET(
     "Bien rentré",
   ];
 
+  // Retour Thomas : un organisateur/porteur de cagnotte répondant "je ne
+  // peux pas" reste "approved" (voir `update_my_answer`) tout en ne venant
+  // pas -- le tableau principal ("Je viens"/"Peut-être") ne doit plus le
+  // lister, il a son propre tableau plus bas.
+  const attendingRsvps = rsvps.filter((r) => r.answer !== "no");
+
   // `string[]` pour les colonnes à items multiples (chaque entrée devient sa
   // propre ligne dans le PDF -- retour Thomas : "sur plusieurs lignes selon
   // le nombre de choses qu'il rapporte", pas tout collé sur une seule ligne
   // qui se contente de retourner à la ligne une fois trop large).
-  const rows: CellValue[][] = rsvps.map((r) => [
+  const rows: CellValue[][] = attendingRsvps.map((r) => [
     "",
     r.first_name ?? "",
     r.last_name ?? "",
@@ -194,6 +268,49 @@ export async function GET(
     r.checked_in_at ? "Oui" : "Non",
     r.arrived_home_at ? "Oui" : "Non",
   ]);
+
+  // Retour Thomas : "un tableau en dessous de l'autre avec ceux qui ne
+  // viennent pas mais qui ont donné pour la cagnotte" + "il faut aussi
+  // marquer le montant de la cagnotte" + "il doit avoir le numéro de
+  // téléphone aussi et le sexe" -- pas les colonnes de présence
+  // (Accompagnants/Qui apporte quoi/Arrivé...) qui n'ont pas de sens ici.
+  // Deux origines fusionnées ici : répondu "non" en restant admin visible
+  // (toujours dans `rsvps`/`contributionsByRsvp`), ET parti/retiré/restreint
+  // depuis (`departedContributionsByRsvp`/`departedContributorsByRsvp`,
+  // identité repêchée via `profiles`) -- retour Thomas : "son nom doit
+  // toujours rester... dans le PDF" même après un départ.
+  const nonAttendingContributorRows: CellValue[][] = [];
+  if (event.pot_enabled) {
+    for (const r of rsvps) {
+      if (r.answer === "no" && (contributionsByRsvp.get(r.id) ?? 0) > 0) {
+        nonAttendingContributorRows.push([
+          r.first_name ?? "",
+          r.last_name ?? "",
+          r.phone ?? "",
+          r.gender === "female" ? "Femme" : r.gender === "male" ? "Homme" : "",
+          ((contributionsByRsvp.get(r.id) ?? 0) / 100).toFixed(2),
+        ]);
+      }
+    }
+    for (const [rsvpId, netCents] of departedContributionsByRsvp) {
+      const identity = departedContributorsByRsvp.get(rsvpId);
+      nonAttendingContributorRows.push([
+        identity?.first_name ?? "",
+        identity?.last_name ?? "",
+        identity?.phone ?? "",
+        identity?.gender === "female" ? "Femme" : identity?.gender === "male" ? "Homme" : "",
+        (netCents / 100).toFixed(2),
+      ]);
+    }
+  }
+  const secondTable =
+    nonAttendingContributorRows.length > 0
+      ? {
+          title: "Ne viennent pas, mais ont contribué à la cagnotte",
+          headers: ["Prénom", "Nom", "Téléphone", "Sexe", "Cagnotte (€)"],
+          rows: nonAttendingContributorRows,
+        }
+      : null;
 
   // Date/adresse "quand ça a été fixé" (retour Thomas) : uniquement si une
   // date ferme existe déjà -- un événement encore en sondage de dates
@@ -265,6 +382,7 @@ export async function GET(
     mascotBuffer,
     headers,
     rows,
+    secondTable,
   );
 
   return new Response(Buffer.from(pdfBytes), {
@@ -407,6 +525,14 @@ async function buildParticipantsPdf(
   mascotBuffer: Buffer,
   headers: string[],
   rows: CellValue[][],
+  // Retour Thomas : "un tableau en dessous de l'autre avec ceux qui ne
+  // viennent pas mais qui ont donné pour la cagnotte" -- un organisateur/
+  // porteur de cagnotte répondant "je ne peux pas" (voir `update_my_answer`)
+  // reste admin mais n'a plus sa place dans le tableau principal (compteur
+  // "je viens"/"peut-être", colonnes d'accompagnement...). Second tableau
+  // minimal (juste nom + montant), affiché seulement s'il y a au moins une
+  // ligne, `null` sinon (jamais de second tableau vide).
+  secondTable: { title: string; headers: string[]; rows: CellValue[][] } | null,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -483,34 +609,6 @@ async function buildParticipantsPdf(
     const width = tokens.reduce((max, token) => Math.max(max, f.widthOfTextAtSize(token, size)), 0);
     return Math.min(cap, width + WIDTH_SAFETY_MARGIN);
   }
-
-  const columnWidths = headers.map((header, i) => {
-    const noSplit = NO_WRAP_COLUMNS.has(header);
-    const maxW = COLUMN_MAX_WIDTHS[header] ?? DEFAULT_COLUMN_MAX_WIDTH;
-    const cap = maxW - CELL_PAD_X * 2;
-    let minWidth = longestTokenWidth(header, bold, HEADER_FONT_SIZE, false, cap) + CELL_PAD_X * 2;
-    for (const row of rows) {
-      const values = Array.isArray(row[i]) ? (row[i] as string[]) : [row[i] as string];
-      for (const value of values) {
-        minWidth = Math.max(minWidth, longestTokenWidth(value, font, BODY_FONT_SIZE, noSplit, cap) + CELL_PAD_X * 2);
-      }
-    }
-    return Math.min(maxW, Math.max(COLUMN_WIDTHS[header] ?? 60, minWidth));
-  });
-  const tableWidth = columnWidths.reduce((a, b) => a + b, 0);
-  // Centré si le contenu tient dans les marges habituelles, sinon on réduit
-  // juste la marge visuelle plutôt que de laisser le tableau déborder de la
-  // page (garde-fou résiduel : `COLUMN_MAX_WIDTHS` limite déjà chaque
-  // colonne individuellement).
-  const tableLeft = Math.max(15, (PAGE_WIDTH - tableWidth) / 2);
-
-  const boundaries: number[] = [];
-  let x = tableLeft;
-  for (const w of columnWidths) {
-    boundaries.push(x);
-    x += w;
-  }
-  boundaries.push(x);
 
   // Une entrée de liste = un paragraphe qui commence toujours sur sa propre
   // ligne (jamais fusionnée avec la précédente), avec un retour à la ligne
@@ -592,113 +690,161 @@ async function buildParticipantsPdf(
     return y;
   }
 
-  // Colonnes étroites ("Sexe", "Arrivé (Jour J)"...) : l'intitulé peut être
-  // plus large que la colonne -- même retour à la ligne manuel que les
-  // cellules du corps (pas le `maxWidth` auto de pdf-lib, dont le nombre de
-  // lignes ne serait pas connu à l'avance pour dimensionner le bandeau).
-  function drawHeaderRow(page: PDFPage, y: number): number {
-    const headerLines = headers.map((h, i) => wrapText(h, columnWidths[i] - CELL_PAD_X * 2, bold, HEADER_FONT_SIZE));
-    const maxLines = Math.max(...headerLines.map((lines) => lines.length));
-    const rowHeight = maxLines * (LINE_HEIGHT - 1) + ROW_PAD_Y * 2;
-    page.drawRectangle({ x: tableLeft, y: y - rowHeight, width: tableWidth, height: rowHeight, color: SKY });
-    let cx = tableLeft;
-    headerLines.forEach((lines, i) => {
-      lines.forEach((line, li) => {
-        page.drawText(line, {
-          x: cx + CELL_PAD_X,
-          y: y - ROW_PAD_Y - HEADER_FONT_SIZE + 1 - li * (LINE_HEIGHT - 1),
-          size: HEADER_FONT_SIZE,
-          font: bold,
-          color: rgb(1, 1, 1),
-        });
-      });
-      cx += columnWidths[i];
-    });
-    return y - rowHeight;
-  }
-
   let page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   const allPages = [page];
   let y = drawPageChrome(page, true);
-  let tableTop = y;
-  y = drawHeaderRow(page, y);
 
-  function newPage() {
-    // Grille verticale de la page précédente, du haut du tableau jusqu'à la
-    // dernière ligne dessinée -- avant de passer à la page suivante. Le
-    // pied de page ("page X sur Y") est dessiné après coup, une fois le
-    // nombre total de pages connu.
-    drawColumnGrid(page, boundaries, tableTop, y);
-    page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    allPages.push(page);
-    y = drawPageChrome(page, false);
-    tableTop = y;
-    y = drawHeaderRow(page, y);
-  }
-
-  if (rows.length === 0) {
-    page.drawText("Aucun participant pour le moment.", {
-      x: tableLeft,
-      y: y - 16,
-      size: 10,
-      font,
-      color: MUTED,
+  // Généralisé pour dessiner N'IMPORTE QUEL tableau (colonnes/lignes
+  // propres à lui, recalculées ici) -- retour Thomas : un second tableau
+  // "ne viennent pas mais ont contribué à la cagnotte" doit s'afficher EN
+  // DESSOUS du premier, avec ses propres colonnes (juste nom + montant, pas
+  // les colonnes de présence qui n'ont pas de sens pour eux). Reste
+  // qu'UNE seule fonction de rendu, appelée une fois par tableau, plutôt que
+  // de dupliquer toute la logique de pagination/dessin.
+  function renderTable(tableHeaders: string[], tableRows: CellValue[][], startY: number, emptyMessage: string): number {
+    const columnWidths = tableHeaders.map((header, i) => {
+      const noSplit = NO_WRAP_COLUMNS.has(header);
+      const maxW = COLUMN_MAX_WIDTHS[header] ?? DEFAULT_COLUMN_MAX_WIDTH;
+      const cap = maxW - CELL_PAD_X * 2;
+      let minWidth = longestTokenWidth(header, bold, HEADER_FONT_SIZE, false, cap) + CELL_PAD_X * 2;
+      for (const row of tableRows) {
+        const values = Array.isArray(row[i]) ? (row[i] as string[]) : [row[i] as string];
+        for (const value of values) {
+          minWidth = Math.max(minWidth, longestTokenWidth(value, font, BODY_FONT_SIZE, noSplit, cap) + CELL_PAD_X * 2);
+        }
+      }
+      return Math.min(maxW, Math.max(COLUMN_WIDTHS[header] ?? 60, minWidth));
     });
-    y -= 24;
-  }
+    const tableWidth = columnWidths.reduce((a, b) => a + b, 0);
+    const tableLeft = Math.max(15, (PAGE_WIDTH - tableWidth) / 2);
 
-  rows.forEach((row, rowIndex) => {
-    const cellLines = row.map((cell, i) => cellToLines(cell, headers[i], columnWidths[i] - CELL_PAD_X * 2, font, BODY_FONT_SIZE));
-    const maxLines = Math.max(...cellLines.map((lines) => lines.length));
-    const rowHeight = maxLines * LINE_HEIGHT + ROW_PAD_Y * 2;
-
-    if (y - rowHeight < MARGIN + 20) {
-      newPage();
+    const boundaries: number[] = [];
+    let bx = tableLeft;
+    for (const w of columnWidths) {
+      boundaries.push(bx);
+      bx += w;
     }
+    boundaries.push(bx);
 
-    if (rowIndex % 2 === 1) {
-      page.drawRectangle({ x: tableLeft, y: y - rowHeight, width: tableWidth, height: rowHeight, color: STRIPE });
-    }
-
-    let cx = tableLeft;
-    cellLines.forEach((lines, i) => {
-      if (headers[i] === CHECKBOX_COLUMN) {
-        // Case vide dessinée, jamais du texte (retour Thomas : "une colonne
-        // pour pouvoir cocher au bic") -- centrée dans la colonne/la ligne.
-        page.drawRectangle({
-          x: cx + (columnWidths[i] - CHECKBOX_SIZE) / 2,
-          y: y - rowHeight / 2 - CHECKBOX_SIZE / 2,
-          width: CHECKBOX_SIZE,
-          height: CHECKBOX_SIZE,
-          borderColor: INK,
-          borderWidth: 0.75,
+    // Colonnes étroites ("Sexe", "Arrivé (Jour J)"...) : l'intitulé peut être
+    // plus large que la colonne -- même retour à la ligne manuel que les
+    // cellules du corps (pas le `maxWidth` auto de pdf-lib, dont le nombre de
+    // lignes ne serait pas connu à l'avance pour dimensionner le bandeau).
+    function drawHeaderRow(yy: number): number {
+      const headerLines = tableHeaders.map((h, i) => wrapText(h, columnWidths[i] - CELL_PAD_X * 2, bold, HEADER_FONT_SIZE));
+      const maxLines = Math.max(...headerLines.map((lines) => lines.length));
+      const rowHeight = maxLines * (LINE_HEIGHT - 1) + ROW_PAD_Y * 2;
+      page.drawRectangle({ x: tableLeft, y: yy - rowHeight, width: tableWidth, height: rowHeight, color: SKY });
+      let cx = tableLeft;
+      headerLines.forEach((lines, i) => {
+        lines.forEach((line, li) => {
+          page.drawText(line, {
+            x: cx + CELL_PAD_X,
+            y: yy - ROW_PAD_Y - HEADER_FONT_SIZE + 1 - li * (LINE_HEIGHT - 1),
+            size: HEADER_FONT_SIZE,
+            font: bold,
+            color: rgb(1, 1, 1),
+          });
         });
         cx += columnWidths[i];
-        return;
-      }
-      lines.forEach((line, li) => {
-        page.drawText(line, {
-          x: cx + CELL_PAD_X,
-          y: y - ROW_PAD_Y - BODY_FONT_SIZE - li * LINE_HEIGHT + 1,
-          size: BODY_FONT_SIZE,
-          font,
-          color: INK,
-        });
       });
-      cx += columnWidths[i];
+      return yy - rowHeight;
+    }
+
+    let tableTop = startY;
+    let yy = drawHeaderRow(startY);
+
+    function newPage() {
+      // Grille verticale de la page précédente, du haut du tableau jusqu'à la
+      // dernière ligne dessinée -- avant de passer à la page suivante. Le
+      // pied de page ("page X sur Y") est dessiné après coup, une fois le
+      // nombre total de pages connu.
+      drawColumnGrid(page, boundaries, tableTop, yy);
+      page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      allPages.push(page);
+      yy = drawPageChrome(page, false);
+      tableTop = yy;
+      yy = drawHeaderRow(yy);
+    }
+
+    if (tableRows.length === 0) {
+      page.drawText(emptyMessage, { x: tableLeft, y: yy - 16, size: 10, font, color: MUTED });
+      yy -= 24;
+    }
+
+    tableRows.forEach((row, rowIndex) => {
+      const cellLines = row.map((cell, i) =>
+        cellToLines(cell, tableHeaders[i], columnWidths[i] - CELL_PAD_X * 2, font, BODY_FONT_SIZE),
+      );
+      const maxLines = Math.max(...cellLines.map((lines) => lines.length));
+      const rowHeight = maxLines * LINE_HEIGHT + ROW_PAD_Y * 2;
+
+      if (yy - rowHeight < MARGIN + 20) {
+        newPage();
+      }
+
+      if (rowIndex % 2 === 1) {
+        page.drawRectangle({ x: tableLeft, y: yy - rowHeight, width: tableWidth, height: rowHeight, color: STRIPE });
+      }
+
+      let cx = tableLeft;
+      cellLines.forEach((lines, i) => {
+        if (tableHeaders[i] === CHECKBOX_COLUMN) {
+          // Case vide dessinée, jamais du texte (retour Thomas : "une colonne
+          // pour pouvoir cocher au bic") -- centrée dans la colonne/la ligne.
+          page.drawRectangle({
+            x: cx + (columnWidths[i] - CHECKBOX_SIZE) / 2,
+            y: yy - rowHeight / 2 - CHECKBOX_SIZE / 2,
+            width: CHECKBOX_SIZE,
+            height: CHECKBOX_SIZE,
+            borderColor: INK,
+            borderWidth: 0.75,
+          });
+          cx += columnWidths[i];
+          return;
+        }
+        lines.forEach((line, li) => {
+          page.drawText(line, {
+            x: cx + CELL_PAD_X,
+            y: yy - ROW_PAD_Y - BODY_FONT_SIZE - li * LINE_HEIGHT + 1,
+            size: BODY_FONT_SIZE,
+            font,
+            color: INK,
+          });
+        });
+        cx += columnWidths[i];
+      });
+
+      page.drawLine({
+        start: { x: tableLeft, y: yy - rowHeight },
+        end: { x: tableLeft + tableWidth, y: yy - rowHeight },
+        thickness: 0.5,
+        color: GRID,
+      });
+
+      yy -= rowHeight;
     });
 
-    page.drawLine({
-      start: { x: tableLeft, y: y - rowHeight },
-      end: { x: tableLeft + tableWidth, y: y - rowHeight },
-      thickness: 0.5,
-      color: GRID,
-    });
+    drawColumnGrid(page, boundaries, tableTop, yy);
+    return yy;
+  }
 
-    y -= rowHeight;
-  });
+  y = renderTable(headers, rows, y, "Aucun participant pour le moment.");
 
-  drawColumnGrid(page, boundaries, tableTop, y);
+  // Retour Thomas : second tableau "ne viennent pas mais ont contribué à la
+  // cagnotte" -- seulement s'il y a au moins une ligne (jamais de tableau
+  // vide), avec un espace + un titre de section entre les deux.
+  if (secondTable && secondTable.rows.length > 0) {
+    y -= 24;
+    if (y < MARGIN + 80) {
+      page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      allPages.push(page);
+      y = drawPageChrome(page, false);
+    }
+    page.drawText(secondTable.title, { x: MARGIN, y, size: 12, font: bold, color: INK });
+    y -= 18;
+    y = renderTable(secondTable.headers, secondTable.rows, y, "");
+  }
 
   const generatedAt = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
   allPages.forEach((p, i) => {

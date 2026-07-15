@@ -60,6 +60,7 @@ function eventRowFromInput(data: CreateEventInput) {
     pot_mode: data.potMode,
     pot_goal_cents: data.potEnabled && data.potMode === "goal" ? data.potGoalCents : null,
     pot_label: data.potLabel || null,
+    pot_close_at_goal: data.potEnabled && data.potMode === "goal" ? data.potCloseAtGoal : false,
     beneficiary_hidden_blocks: data.beneficiaryHiddenBlocks,
   };
 }
@@ -244,6 +245,10 @@ export async function createEvent(
         id,
         short_code: shortCode,
         host_id: user.id,
+        // Cagnotte activée dès la création : l'hôte en devient le porteur par
+        // défaut (compte Stripe Connect à onboarder), transférable ensuite à
+        // un autre admin via `transfer_pot_ownership` (brief 4.8).
+        pot_owner: data.potEnabled ? user.id : null,
         ...eventRowFromInput(data),
       });
 
@@ -299,7 +304,7 @@ export async function updateEvent(
   // ACTUELLEMENT enregistrée, pas celle du formulaire en cours de saisie.
   const { data: currentEvent } = await supabase
     .from("events")
-    .select("date_mode, starts_at")
+    .select("date_mode, starts_at, pot_owner, host_id, pot_closed_at")
     .eq("id", eventId)
     .maybeSingle();
   const alreadyPast =
@@ -326,13 +331,53 @@ export async function updateEvent(
     return { ok: false, error: "rate_limited" };
   }
 
+  // Cagnotte activée pour la première fois sur un événement qui n'en avait
+  // pas encore (jamais de porteur) : l'hôte en devient le porteur par
+  // défaut, même règle qu'à la création -- jamais réattribué si un porteur
+  // existe déjà (un transfert délibéré passe uniquement par
+  // `transfer_pot_ownership`, jamais réécrit ici en modifiant l'événement).
+  const potOwnerUpdate =
+    data.potEnabled && !currentEvent?.pot_owner ? { pot_owner: currentEvent?.host_id ?? user.id } : {};
+
   const { error } = await supabase
     .from("events")
-    .update(eventRowFromInput(data))
+    .update({ ...eventRowFromInput(data), ...potOwnerUpdate })
     .eq("id", eventId);
 
   if (error) {
     return { ok: false, error: "unknown" };
+  }
+
+  // Bug réel signalé par Thomas, en deux temps :
+  // 1. "j'ai mis la cagnotte à un montant fixe, qui est le prix actuel...
+  //    mais je ne vois pas de blocage" -- la fermeture automatique
+  //    (`maybeCloseCompletedPot`, webhook Stripe) ne se vérifie qu'au moment
+  //    d'un NOUVEAU paiement, jamais quand l'objectif est modifié ici.
+  // 2. "j'ai repassé la cagnotte en montant libre... et ça reste toujours
+  //    montant atteint" -- `pot_closed_at` n'était alors jamais REMIS à
+  //    zéro, rien ne l'effaçait une fois posé.
+  // Recalcul complet dans les deux sens à chaque modification : fermée si
+  // (et seulement si) le mode "objectif" + fermeture auto sont actifs ET
+  // déjà atteints par ce qui est collecté, rouverte sinon (mode "libre",
+  // fermeture auto désactivée, ou objectif relevé au-dessus du collecté).
+  if (data.potEnabled) {
+    let shouldBeClosed = false;
+    if (data.potMode === "goal" && data.potCloseAtGoal && data.potGoalCents) {
+      const { data: succeeded } = await supabase
+        .from("pot_contributions")
+        .select("net_cents")
+        .eq("event_id", eventId)
+        .eq("status", "succeeded");
+      const totalNetCents = (succeeded ?? []).reduce((sum, c) => sum + (c.net_cents ?? 0), 0);
+      shouldBeClosed = totalNetCents >= data.potGoalCents;
+    }
+    const isCurrentlyClosed = !!currentEvent?.pot_closed_at;
+    if (shouldBeClosed !== isCurrentlyClosed) {
+      await supabase
+        .from("events")
+        .update({ pot_closed_at: shouldBeClosed ? new Date().toISOString() : null })
+        .eq("id", eventId);
+    }
   }
 
   // Les options de date sont entièrement remplacées plutôt que fusionnées :

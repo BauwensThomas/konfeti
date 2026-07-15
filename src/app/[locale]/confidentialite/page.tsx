@@ -56,6 +56,7 @@ export default async function ConfidentialitePage() {
           <li>{t("sharingItem2")}</li>
           <li>{t("sharingItem3")}</li>
           <li>{t("sharingItem4")}</li>
+          <li>{t("sharingItem5")}</li>
         </ul>
         <p>{t("sharingBody")}</p>
       </LegalSection>

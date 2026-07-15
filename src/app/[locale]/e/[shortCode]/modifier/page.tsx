@@ -133,6 +133,7 @@ export default async function EditEventPage({
     potMode: event.pot_mode,
     potGoalEuros: event.pot_goal_cents ? (event.pot_goal_cents / 100).toString() : "",
     potLabel: event.pot_label ?? "",
+    potCloseAtGoal: event.pot_close_at_goal ?? false,
     bringItems: (bringItemsRows ?? []).map((item) => ({
       id: item.id,
       label: item.label,

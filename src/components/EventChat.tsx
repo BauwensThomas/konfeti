@@ -14,6 +14,7 @@ type RawMessageRow = {
   is_system: boolean;
   deleted_by_admin: boolean;
   created_at: string;
+  system_author_name: string | null;
 };
 
 // Onglet Chat (brief 4.3) : charge les 50 derniers messages du/des
@@ -138,7 +139,7 @@ export async function EventChat({
 
   const { data: messageRows } = await supabase
     .from("messages")
-    .select("id, rsvp_id, channel, body, photo_url, reply_to, is_system, deleted_by_admin, created_at")
+    .select("id, rsvp_id, channel, body, photo_url, reply_to, is_system, deleted_by_admin, created_at, system_author_name")
     .eq("event_id", eventId)
     .in("channel", visibleChannels)
     .order("created_at", { ascending: false })
@@ -191,6 +192,7 @@ export async function EventChat({
         rsvpId: r.rsvp_id,
         authorName: author.name,
         authorAvatarUrl: author.avatarUrl,
+        systemAuthorName: r.system_author_name,
       };
     }),
   );

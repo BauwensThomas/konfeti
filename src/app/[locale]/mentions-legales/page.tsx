@@ -21,6 +21,10 @@ export default async function MentionsLegalesPage() {
         <p>{t("hostingBody")}</p>
       </LegalSection>
 
+      <LegalSection heading={t("paymentHeading")}>
+        <p>{t("paymentBody")}</p>
+      </LegalSection>
+
       <LegalSection heading={t("ipHeading")}>
         <p>{t("ipBody")}</p>
       </LegalSection>

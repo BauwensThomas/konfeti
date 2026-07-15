@@ -17,6 +17,15 @@ export async function PollsQuotaWarningSection({
   if (!viewerRsvpId) return null;
   const supabase = await createClient();
 
+  // Retour Thomas : "j'ai dit que je ne venais pas... il me dit qu'il me
+  // reste un vote à répartir" -- le budget (soi + accompagnants) ne doit
+  // jamais s'appliquer à quelqu'un qui ne vient pas (organisateur/porteur de
+  // cagnotte répondant "non" tout en restant admin invisible, voir
+  // `update_my_answer`) : demander de répartir un vote pour une personne
+  // absente n'a pas de sens.
+  const { data: viewerRsvp } = await supabase.from("rsvps").select("answer").eq("id", viewerRsvpId).maybeSingle();
+  if (viewerRsvp?.answer === "no") return null;
+
   const { data: pollRows } = await supabase
     .from("polls")
     .select("id, choice_mode")

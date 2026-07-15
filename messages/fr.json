@@ -97,6 +97,8 @@
     "deleteAccountConfirmNo": "Annuler",
     "deleteAccountDeleting": "Suppression...",
     "deleteAccountErrorHosting": "Tu organises encore au moins un événement : transfère l'organisation à quelqu'un d'autre avant de supprimer ton compte.",
+    "deleteAccountErrorPot": "Tu portes encore une cagnotte active : ferme-la ou transfère-la à un autre admin avant de supprimer ton compte.",
+    "deleteAccountErrorPotBalance": "Il reste des fonds non versés sur ton compte Stripe lié à une cagnotte : attends le versement ou contacte-nous avant de supprimer ton compte.",
     "deleteAccountErrorUnknown": "Une erreur est survenue, réessaie."
   },
   "MyEvents": {
@@ -216,6 +218,7 @@
       "potGoalLabel": "Objectif (en euros)",
       "potLabelLabel": "Nom de la cagnotte",
       "potLabelPlaceholder": "Cadeau collectif pour Julie",
+      "potCloseAtGoalLabel": "Fermer automatiquement la cagnotte une fois l'objectif atteint",
       "bringItemsLabel": "Qui apporte quoi",
       "bringItemLabelPlaceholder": "Ex. Bouteilles de soda, gâteau, glaçons...",
       "bringItemLabelAria": "Nom de l'item {index}",
@@ -299,10 +302,16 @@
       "personnes": "Personnes",
       "participer": "Participer"
     },
+    "participerTabs": {
+      "sondages": "Sondages",
+      "bring": "À apporter",
+      "cagnotte": "Cagnotte"
+    },
     "comingSoon": "Bientôt disponible.",
     "participantsListHidden": "L'organisateur a masqué la liste des participants pour toi.",
     "bringListHidden": "L'organisateur a masqué \"qui apporte quoi\" pour toi.",
     "pollsListHidden": "L'organisateur a masqué les sondages pour toi.",
+    "chatHiddenNotAttending": "Le chat n'est pas disponible : tu as indiqué ne pas venir à cet événement.",
     "editEvent": "Modifier",
     "exportPdf": "Export PDF",
     "shareButton": "Partager",
@@ -370,6 +379,8 @@
     "kidsAllowedLabel": "Enfants",
     "petsAllowedLabel": "Animaux",
     "potLabel": "Cagnotte : {label}",
+    "potClosedTitle": "Montant atteint !",
+    "lastContribution": "+{amount}€ le {date}",
     "potGoal": "Objectif : {amount} €",
     "potOpen": "Montant libre",
     "beneficiaryAccessNote": "{count, plural, =1 {{names} a accès à la cagnotte.} other {{names} ont accès à la cagnotte.}}",
@@ -423,6 +434,7 @@
     "errorUnknown": "Une erreur est survenue, réessaie.",
     "errorRateLimited": "Trop de tentatives, réessaie dans un instant.",
     "errorOrganizerProtected": "L'organisateur ne peut pas être retiré ni changer de rôle. Utilise le transfert d'organisation.",
+    "errorStillOwnsPot": "Tu portes encore une cagnotte active pour cet événement -- transfère-la ou attends qu'elle se ferme avant de changer ta réponse ou de quitter.",
     "pendingTitle": "Ta demande est chez l'organisateur !",
     "pendingBody": "Dès qu'il ou elle t'aura validé, tu découvriras tous les détails de l'événement.",
     "restrictedTitle": "Pas de souci !",
@@ -438,6 +450,8 @@
     "leaveConfirmYes": "Oui, quitter",
     "leaveConfirmNo": "Annuler",
     "noConfirmTitle": "Es-tu sûr ? Tes accompagnants, tes engagements \"qui apporte quoi\" et tes votes aux sondages seront retirés.",
+    "noConfirmStaysAsHost": "Tu restes dans l'événement en tant qu'organisateur -- tu disparais juste de la liste des présents, tu gardes tous tes droits d'administration.",
+    "noConfirmStaysAsPotOwner": "Tu restes dans l'événement en tant que responsable de la cagnotte -- tu disparais juste de la liste des présents, tu gardes tous tes droits d'administration.",
     "noConfirmYes": "Oui, je ne peux pas venir"
   },
   "Participants": {
@@ -471,12 +485,14 @@
     "companionsCount": "{count, plural, =0 {} one {+1} other {+#}}",
     "checkedInBadge": "✓ Arrivé",
     "arrivedHomeBadge": "✓ Bien rentré",
+    "stripeConnectedBadge": "✓ Stripe connecté",
     "beneficiaryAccessNote": "{count, plural, =1 {{names} a accès à la liste des participants.} other {{names} ont accès à la liste des participants.}}",
     "beneficiaryNoAccessNote": "{count, plural, =1 {{names} n'a pas accès à la liste des participants.} other {{names} n'ont pas accès à la liste des participants.}}",
     "errorRateLimited": "Trop de tentatives, réessaie dans un instant.",
     "errorUnauthorized": "Tu n'as pas les droits pour faire ça.",
     "errorLastAdmin": "Il doit toujours rester au moins un administrateur pour cet événement.",
     "errorOrganizerProtected": "L'organisateur ne peut pas être retiré ni changer de rôle. Utilise le transfert d'organisation.",
+    "errorStillOwnsPot": "Cette personne porte encore une cagnotte active pour cet événement -- elle doit la transférer ou attendre qu'elle se ferme avant de partir.",
     "errorUnknown": "Une erreur est survenue, réessaie."
   },
   "Chat": {
@@ -514,7 +530,8 @@
     "addReaction": "Ajouter une réaction",
     "moreActions": "Plus d'actions",
     "systemMessages": {
-      "joined": "{name} a rejoint la fête !"
+      "joined": "{name} a rejoint la fête !",
+      "left": "{name} a quitté la fête."
     },
     "reactions": {
       "thumbsUp": "Pouce levé",
@@ -601,6 +618,40 @@
     "addProposeOption": "Ajouter une option",
     "proposeSubmit": "Proposer"
   },
+  "Pot": {
+    "heading": "Cagnotte",
+    "connectionBannerConnected": "Stripe cagnotte connecté",
+    "connectionBannerNotConnected": "Stripe cagnotte non connecté",
+    "progressGoal": "{collected}€ collectés sur {goal}€",
+    "closedTitle": "Montant atteint !",
+    "amountLabel": "Montant que tu veux voir arriver dans la cagnotte (net)",
+    "feeBreakdownTotal": "Tu payes",
+    "feeBreakdownFees": "dont frais estimés",
+    "feeBreakdownNet": "Arrive dans la cagnotte",
+    "finalNotice": "Les contributions sont définitives, elles ne sont jamais remboursées.",
+    "contributeButton": "Contribuer",
+    "contributing": "Un instant...",
+    "error": {
+      "invalid": "Vérifie le montant saisi.",
+      "not_authenticated": "Reconnecte-toi pour contribuer.",
+      "rate_limited": "Trop de tentatives, réessaie dans un instant.",
+      "pot_unavailable": "La cagnotte n'est pas disponible pour le moment.",
+      "unknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant."
+    },
+    "adminHeading": "Tableau de bord cagnotte",
+    "adminTotalCollected": "{total}€ collectés au total",
+    "adminKonfetiCommission": "dont {commission}€ de commission Konfeti",
+    "adminContributor": "Un invité",
+    "adminPayoutDelay": "L'argent est transféré sur ton compte Stripe immédiatement, puis versé sur ton compte bancaire sous 2 à 7 jours (délai standard de Stripe).",
+    "adminPayoutsHeading": "Versements",
+    "adminPayoutStatus": {
+      "pending": "En attente",
+      "paid": "Versé",
+      "failed": "Échoué"
+    },
+    "onboardingButton": "Configurer les paiements",
+    "onboardingStarting": "Un instant..."
+  },
   "JourJ": {
     "heading": "C'est le jour J !",
     "arrivedCount": "{arrived}/{total} arrivés",
@@ -631,7 +682,7 @@
     "dataItem3": "Vos réponses à un événement (je viens / peut-être / je ne peux pas), vos votes aux sondages",
     "dataItem4": "Vos engagements « qui apporte quoi »",
     "dataItem5": "Les messages que vous envoyez dans le chat d'un événement",
-    "dataItem6": "Si vous participez à une cagnotte : le montant de votre contribution",
+    "dataItem6": "Si vous participez à une cagnotte : le montant de votre contribution. Vos coordonnées bancaires ne sont jamais transmises à Konfeti : elles sont saisies directement chez notre prestataire de paiement, Stripe",
     "dataItem7": "Des informations techniques minimales (adresse IP, journaux d'erreurs) pour assurer le bon fonctionnement du service",
     "whyHeading": "Pourquoi collectons-nous ces données ?",
     "whyIntro": "Uniquement pour faire fonctionner Konfeti :",
@@ -650,7 +701,8 @@
     "sharingItem2": "Vercel (hébergement de l'application)",
     "sharingItem3": "Brevo (envoi des e-mails de rappel, si vous y avez consenti)",
     "sharingItem4": "Open-Meteo et Komoot Photon (météo et recherche d'adresse, sans donnée personnelle transmise au-delà de l'adresse de l'événement)",
-    "sharingBody": "Si Konfeti ajoute un jour un moyen de paiement pour les cagnottes, cette page sera mise à jour pour nommer le prestataire de paiement utilisé.",
+    "sharingItem5": "Stripe (traitement des paiements d'une cagnotte et versement des fonds à l'organisateur), en tant que responsable de traitement pour les données bancaires qu'il collecte lui-même",
+    "sharingBody": "Konfeti n'a jamais accès à vos coordonnées bancaires : seul Stripe les reçoit, directement.",
     "rightsHeading": "Vos droits",
     "rightsIntro": "Conformément au RGPD, vous disposez d'un droit d'accès, de rectification et de suppression de vos données :",
     "rightsItem1": "Vous pouvez modifier votre profil directement depuis l'application",
@@ -673,7 +725,7 @@
     "rulesItem4": "Les organisateurs sont responsables de la modération de leur propre événement",
     "rulesBody": "Konfeti se réserve le droit de retirer tout contenu manifestement illicite et, en cas d'abus répété, de suspendre un compte.",
     "potHeading": "Cagnotte et contributions",
-    "potBody": "Lorsqu'une cagnotte est activée sur un événement, les contributions versées par les participants sont définitives et ne peuvent pas être remboursées via Konfeti, sauf disposition contraire indiquée au moment du paiement. L'organisateur reste seul responsable de l'usage des fonds collectés.",
+    "potBody": "Lorsqu'une cagnotte est activée sur un événement, les paiements sont traités par notre prestataire Stripe et versés directement sur le compte bancaire de l'organisateur, jamais sur un compte Konfeti. Konfeti prélève automatiquement une commission de service sur chaque contribution, dont le montant est affiché avant la validation du paiement. Les contributions versées sont définitives et ne peuvent pas être remboursées via Konfeti, sauf disposition contraire indiquée au moment du paiement. L'organisateur reste seul responsable de l'usage des fonds collectés.",
     "liabilityHeading": "Responsabilité",
     "liabilityBody1": "Konfeti met à disposition un outil d'organisation, mais n'est pas partie prenante des événements organisés par ses utilisateurs. Konfeti ne pourra être tenu responsable des conséquences liées à l'organisation ou au déroulement d'un événement, ni du contenu publié par les organisateurs et invités.",
     "liabilityBody2": "Konfeti s'efforce d'assurer la disponibilité du service, sans garantie d'absence totale d'interruption ou d'erreur.",
@@ -708,6 +760,8 @@
     "publisherBody": "Konfeti est un projet BelgaCai. Pour toute question, contactez-nous à l'adresse <a>konfeti@belgacai.com</a>.",
     "hostingHeading": "Hébergement",
     "hostingBody": "Le site et l'application sont hébergés par Vercel Inc. et les données par Supabase, dans des infrastructures situées dans l'Union européenne.",
+    "paymentHeading": "Paiement",
+    "paymentBody": "Les paiements des cagnottes sont traités par Stripe. Konfeti ne collecte ni ne conserve aucune coordonnée bancaire : elles sont saisies directement chez Stripe, qui verse les fonds à l'organisateur de l'événement.",
     "ipHeading": "Propriété intellectuelle",
     "ipBody": "Les textes, illustrations, la mascotte et les éléments graphiques de Konfeti sont la propriété de BelgaCai, sauf mention contraire. Toute reproduction sans autorisation est interdite.",
     "liabilityHeading": "Responsabilité",

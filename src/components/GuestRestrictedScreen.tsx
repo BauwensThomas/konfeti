@@ -7,6 +7,7 @@ import { requestPotAccess } from "@/app/[locale]/actions/participants";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { MyParticipationCard } from "@/components/MyParticipationCard";
+import { PotContribution } from "@/components/PotContribution";
 import { useLiveRsvpRefresh } from "@/lib/supabase/use-live-rsvp-refresh";
 
 type PotInfo = {
@@ -14,6 +15,8 @@ type PotInfo = {
   pot_mode: "goal" | "open";
   pot_goal_cents: number | null;
   pot_label: string | null;
+  pot_owner: string | null;
+  pot_closed_at: string | null;
 } | null;
 
 // Accès restreint "cagnotte seule" (brief 1.3, réponse "je peux pas") : ni
@@ -26,20 +29,30 @@ type PotInfo = {
 // d'attente), ou autorisé (infos cagnotte visibles).
 export function GuestRestrictedScreen({
   rsvpId,
+  eventId,
   shortCode,
   currentAnswer,
   potEnabled,
   wantsPotAccess,
   potAccessGranted,
   pot,
+  potFeatureEnabled,
+  potCollectedCents,
 }: {
   rsvpId: string;
+  eventId: string;
   shortCode: string;
   currentAnswer: "yes" | "maybe" | "no";
   potEnabled: boolean;
   wantsPotAccess: boolean;
   potAccessGranted: boolean;
   pot: PotInfo;
+  // Retour Thomas : "aucun moyen de faire un paiement" -- gate déjà utilisée
+  // partout ailleurs (`feature_flags`, clé 'pot'), calculée une fois dans
+  // page.tsx. `potCollectedCents` : total déjà collecté, pour l'affichage
+  // "X€ collectés sur Y€" du vrai formulaire (`PotContribution.tsx`).
+  potFeatureEnabled: boolean;
+  potCollectedCents: number;
 }) {
   const t = useTranslations("GuestIdentity");
   const router = useRouter();
@@ -66,7 +79,24 @@ export function GuestRestrictedScreen({
       <h1 className="font-display text-xl font-bold text-foreground">{t("restrictedTitle")}</h1>
       <p className="text-sm text-foreground/70">{t("restrictedBody")}</p>
 
-      {potEnabled && pot?.pot_enabled && potAccessGranted && (
+      {/* Retour Thomas : "aucun moyen de faire un paiement" -- l'accès
+          "cagnotte seule" ne montrait que le libellé/l'objectif (construit
+          bien avant le vrai paiement, Phase 7), jamais le formulaire réel.
+          Vrai composant de contribution ici, identique à celui utilisé pour
+          un participant approuvé (voir page.tsx). */}
+      {potEnabled && pot?.pot_enabled && potAccessGranted && potFeatureEnabled && (
+        <div className="w-full">
+          <PotContribution
+            eventId={eventId}
+            label={pot.pot_label}
+            mode={pot.pot_mode}
+            goalCents={pot.pot_goal_cents}
+            collectedCents={potCollectedCents}
+            closedAt={pot.pot_closed_at}
+          />
+        </div>
+      )}
+      {potEnabled && pot?.pot_enabled && potAccessGranted && !potFeatureEnabled && (
         <Card className="w-full">
           <p className="text-base text-foreground">
             {t("restrictedPotLabel", { label: pot.pot_label || "" })}

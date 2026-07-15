@@ -50,6 +50,8 @@ export function ParticipantsList({
   isParticipantsHidden,
   beneficiaryNames,
   isJourJ,
+  viewerIsPotOwner,
+  potOwnerStripeConnected,
 }: {
   eventId: string;
   shortCode: string;
@@ -63,6 +65,12 @@ export function ParticipantsList({
   isParticipantsHidden: boolean;
   beneficiaryNames: string[];
   isJourJ: boolean;
+  // Retour Thomas : "stripe ne doit être visible que par l'organisateur
+  // (celui qui a fait son compte stripe)" -- badge affiché uniquement sur SA
+  // PROPRE ligne (voir `isSelf` sur `ApprovedParticipantRow`), jamais sur
+  // celle d'un autre admin même s'il consulte la même liste.
+  viewerIsPotOwner: boolean;
+  potOwnerStripeConnected: boolean;
 }) {
   const t = useTranslations("Participants");
   const router = useRouter();
@@ -84,12 +92,14 @@ export function ParticipantsList({
   // informatif (retour Thomas : "il a accès à rien", pas besoin de le retirer).
   const pending = rows.filter((r) => r.status === "pending");
   const restricted = rows.filter((r) => r.status === "restricted");
-  // Répondre "non" fait toujours sortir un participant du statut "approved"
-  // (update_my_answer bascule immédiatement en "restricted", quel que soit le
-  // statut de départ) : parmi les approuvés, seuls "yes"/"maybe" existent
-  // encore. Séparés en deux sections distinctes (retour Thomas) pour
-  // distinguer les venues confirmées des incertaines d'un coup d'œil.
-  const approvedYes = rows.filter((r) => r.status === "approved" && r.answer !== "maybe");
+  // Répondre "non" fait normalement toujours sortir un participant du statut
+  // "approved" (update_my_answer bascule en "restricted") -- SAUF pour
+  // l'organisateur ou le porteur d'une cagnotte active (retour Thomas :
+  // "il reste juste dans l'event mais invisible"), qui reste "approved" avec
+  // answer="no" pour ne jamais perdre son accès admin. Filtre explicite sur
+  // "yes" (jamais juste "!== maybe") : un tel invisible ne doit apparaître
+  // dans AUCUNE des deux sections visibles ci-dessous.
+  const approvedYes = rows.filter((r) => r.status === "approved" && r.answer === "yes");
   const approvedMaybe = rows.filter((r) => r.status === "approved" && r.answer === "maybe");
   // Nombre de PERSONNES, pas de lignes rsvps (retour Thomas : le compte entre
   // parenthèses doit inclure les accompagnants -- "chaises à placer" -- pas
@@ -120,7 +130,13 @@ export function ParticipantsList({
       // mais autant afficher l'erreur plutôt que l'ignorer en silence si un
       // état affiché était périmé.
       if (!result.ok) {
-        setRoleError(result.error === "organizer_protected" ? t("errorOrganizerProtected") : t("errorUnknown"));
+        setRoleError(
+          result.error === "organizer_protected"
+            ? t("errorOrganizerProtected")
+            : result.error === "still_owns_pot"
+              ? t("errorStillOwnsPot")
+              : t("errorUnknown"),
+        );
         return;
       }
       router.refresh();
@@ -345,6 +361,7 @@ export function ParticipantsList({
               hostProfileId={hostProfileId}
               isPending={isPending}
               isJourJ={isJourJ}
+              showStripeBadge={viewerIsPotOwner && potOwnerStripeConnected}
               t={t}
               onRoleChange={handleRoleChange}
               onRemove={setConfirmingRemoveId}
@@ -370,6 +387,7 @@ export function ParticipantsList({
                 hostProfileId={hostProfileId}
                 isPending={isPending}
                 isJourJ={isJourJ}
+                showStripeBadge={viewerIsPotOwner && potOwnerStripeConnected}
                 t={t}
                 onRoleChange={handleRoleChange}
                 onRemove={setConfirmingRemoveId}
@@ -428,6 +446,7 @@ function ApprovedParticipantRow({
   hostProfileId,
   isPending,
   isJourJ,
+  showStripeBadge,
   t,
   onRoleChange,
   onRemove,
@@ -440,6 +459,9 @@ function ApprovedParticipantRow({
   hostProfileId: string;
   isPending: boolean;
   isJourJ: boolean;
+  // Retour Thomas : badge "Stripe connecté" réservé au porteur de la
+  // cagnotte, sur SA PROPRE ligne uniquement (voir `isSelf` ci-dessous).
+  showStripeBadge: boolean;
   t: ReturnType<typeof useTranslations>;
   onRoleChange: (rsvpId: string, role: "guest" | "admin" | "beneficiary") => void;
   onRemove: (rsvpId: string) => void;
@@ -454,6 +476,7 @@ function ApprovedParticipantRow({
     <li className="flex flex-col gap-2 rounded-konfeti border border-border p-3">
       <ParticipantIdentity
         row={row}
+        stripeConnected={isSelf && showStripeBadge}
         companionsLabel={t("companionsCount", { count: row.companionsCount })}
         roleLabel={isAdmin ? roleLabel(row.role, isRowHost, t) : undefined}
         isJourJ={isJourJ}
@@ -517,6 +540,7 @@ function ParticipantIdentity({
   roleLabel,
   answerLabel,
   isJourJ = false,
+  stripeConnected = false,
   t,
 }: {
   row: ParticipantRow;
@@ -527,6 +551,9 @@ function ParticipantIdentity({
   // `false` par défaut) pour la file d'attente/les restricted, qui n'ont pas
   // ce concept avant d'être approuvés.
   isJourJ?: boolean;
+  // Retour Thomas : badge "Stripe connecté", réservé au porteur de la
+  // cagnotte sur sa propre ligne (calculé par l'appelant, jamais ici).
+  stripeConnected?: boolean;
   t: ReturnType<typeof useTranslations>;
 }) {
   return (
@@ -559,6 +586,9 @@ function ParticipantIdentity({
             {row.checkedInAt && <span>{t("checkedInBadge")}</span>}
             {row.arrivedHomeAt && <span>{t("arrivedHomeBadge")}</span>}
           </span>
+        )}
+        {stripeConnected && (
+          <span className="text-xs font-semibold text-accent-mint">{t("stripeConnectedBadge")}</span>
         )}
       </div>
     </div>

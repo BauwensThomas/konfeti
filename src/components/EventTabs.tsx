@@ -19,7 +19,21 @@ const TABS: TabKey[] = ["accueil", "chat", "personnes", "participer"];
 // petit sous-composant client qui, lui, peut consommer ce contexte).
 // `null` hors de ce provider (jamais utilisé ailleurs qu'ici, pas besoin de
 // lever une erreur).
-export const TabNavigationContext = createContext<{ setActive: (tab: TabKey) => void } | null>(null);
+//
+// Retour Thomas : cliquer sur la bannière Stripe (`PotConnectionBanner.tsx`,
+// dans `accueil`) doit ouvrir directement le sous-onglet Cagnotte de
+// `ParticiperTabs.tsx` (dans `participer`), pas juste l'onglet Participer
+// tel quel (qui retombe sinon toujours sur Sondages par défaut). Ces deux
+// composants sont des enfants FRÈRES de ce contexte, jamais l'un de l'autre
+// -- `participerSubTab` transite par une ref (pas un state, pour ne
+// provoquer aucun re-render ici) consommée une seule fois au montage de
+// `ParticiperTabs` via `consumeParticiperSubTab` puis aussitôt effacée : un
+// retour ultérieur sur Participer par le bouton du HAUT (pas la bannière)
+// retombe alors normalement sur Sondages, jamais bloqué sur Cagnotte.
+export const TabNavigationContext = createContext<{
+  setActive: (tab: TabKey, participerSubTab?: string) => void;
+  consumeParticiperSubTab: () => string | null;
+} | null>(null);
 
 export function useTabNavigation() {
   return useContext(TabNavigationContext);
@@ -62,6 +76,18 @@ export function EventTabs({
   const t = useTranslations("EventPage");
   const router = useRouter();
   const [active, setActive] = useState<TabKey>("accueil");
+  // Voir le commentaire de `TabNavigationContext` plus haut : simple ref (pas
+  // de state) puisque rien ici n'a besoin de re-render quand elle change.
+  const participerSubTabRef = useRef<string | null>(null);
+  function setActiveWithSubTab(tab: TabKey, participerSubTab?: string) {
+    if (participerSubTab) participerSubTabRef.current = participerSubTab;
+    setActive(tab);
+  }
+  function consumeParticiperSubTab() {
+    const value = participerSubTabRef.current;
+    participerSubTabRef.current = null;
+    return value;
+  }
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   // Suivi des messages ayant contribué au compteur non-lus DEPUIS le montage
   // de ce composant (jamais ceux déjà comptés côté serveur dans
@@ -277,6 +303,34 @@ export function EventTabs({
     };
   }, [eventId, router]);
 
+  // Cagnotte : canal Realtime SÉPARÉ, même précaution que "qui apporte quoi"/
+  // sondages ci-dessus. Bug réel signalé par Thomas ("pas de refresh
+  // automatiquement sur mon site" après une contribution payée) : le webhook
+  // Stripe met bien `pot_contributions.status` à jour en base, mais sans cet
+  // abonnement personne ne le voyait sans rafraîchir la page à la main.
+  // `pot_payouts` sur le même canal (même table events_id, pas de piège
+  // "pas de colonne event_id" ici contrairement à bring_claims/poll_votes).
+  useEffect(() => {
+    if (!eventId) return;
+    let cancelled = false;
+    const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    ensureRealtimeAuth(supabase).then(() => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`event-${eventId}-pot`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "pot_contributions" }, () => router.refresh())
+        .on("postgres_changes", { event: "*", schema: "public", table: "pot_payouts" }, () => router.refresh())
+        .subscribe();
+    });
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [eventId, router]);
+
   // Réf plutôt qu'une dépendance directe de l'effet Realtime ci-dessous (même
   // pattern qu'`activeRef`) : `chatAllowedChannels` est un tableau littéral
   // recréé à chaque rendu par l'appelant, l'ajouter aux dépendances
@@ -408,14 +462,13 @@ export function EventTabs({
                 {pendingCount}
               </span>
             )}
-            {/* Un seul chiffre pour l'onglet Participer (qui apporte quoi +
-                sondages additionnés) -- une fois l'onglet ouvert, les deux
-                sections de modération restent clairement séparées et
-                libellées, pas besoin de deux pastilles distinctes ici. */}
+            {/* Retour Thomas : plus de chiffre agrégé ici depuis l'ajout des
+                sous-onglets internes (Sondages/Qui apporte quoi/Cagnotte,
+                voir `ParticiperTabs.tsx`) -- chacun garde son propre chiffre
+                précis une fois l'onglet ouvert, ce niveau-ci se contente
+                d'un simple point (même traitement que Chat ci-dessous). */}
             {tab === "participer" && pendingBringCount + pendingPollsCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-coral px-1 text-xs font-bold text-white">
-                {pendingBringCount + pendingPollsCount}
-              </span>
+              <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-accent-coral" />
             )}
             {/* Simple pastille (pas de chiffre) sur l'onglet Chat au niveau
                 page -- retour Thomas : "mettre juste une boule rouge à côté
@@ -432,7 +485,7 @@ export function EventTabs({
         ))}
       </div>
 
-      <TabNavigationContext.Provider value={{ setActive }}>
+      <TabNavigationContext.Provider value={{ setActive: setActiveWithSubTab, consumeParticiperSubTab }}>
         {active === "accueil" ? (
           accueil
         ) : active === "personnes" && personnes ? (

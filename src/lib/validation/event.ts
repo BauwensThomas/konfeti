@@ -58,6 +58,10 @@ const eventFieldsSchema = z.object({
   potMode: z.enum(["goal", "open"]).default("goal"),
   potGoalCents: z.coerce.number().int().positive().optional(),
   potLabel: z.string().trim().max(200).optional(),
+  // Phase 7 : ferme automatiquement la cagnotte une fois l'objectif atteint
+  // (webhook Stripe, voir api/webhooks/stripe/route.ts) -- n'a de sens qu'en
+  // mode `goal`, sans effet en mode `open` (pas d'objectif à atteindre).
+  potCloseAtGoal: z.boolean().default(false),
 
   // "Qui apporte quoi" (brief 4.4, Phase 6) : `id` vaut `null` pour un item
   // pas encore créé (nouvelle ligne ajoutée dans le wizard), sinon l'id réel

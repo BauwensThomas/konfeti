@@ -8,6 +8,7 @@ import { EVENT_THEMES } from "@/lib/themes";
 import { isEventOver, isJourJ } from "@/lib/event-status";
 import { EventTabs } from "@/components/EventTabs";
 import { EventPhotoEditor } from "@/components/EventPhotoEditor";
+import { StickerConfetti } from "@/components/stickers";
 import { CancelEventButton } from "@/components/CancelEventButton";
 import { DatePollVoting } from "@/components/DatePollVoting";
 import { GuestParticipation } from "@/components/GuestParticipation";
@@ -19,6 +20,10 @@ import { EventPersonnes } from "@/components/EventPersonnes";
 import { EventChat, getInitialUnreadCount } from "@/components/EventChat";
 import { BringList } from "@/components/BringList";
 import { PollsList } from "@/components/PollsList";
+import { ParticiperTabs } from "@/components/ParticiperTabs";
+import { PotContribution } from "@/components/PotContribution";
+import { PotAdminDashboard } from "@/components/pot/PotAdminDashboard";
+import { PotConnectionBanner } from "@/components/pot/PotConnectionBanner";
 import { EventWeather } from "@/components/EventWeather";
 import { shouldShowWeather } from "@/lib/weather";
 import { BringAccueilGauges } from "@/components/bring/BringAccueilGauges";
@@ -197,15 +202,32 @@ export default async function EventPage({
     const arePollsHiddenForBeneficiaries = hiddenBlocks.includes("polls");
     const isPollsListHidden = isBeneficiary && arePollsHiddenForBeneficiaries;
 
+    // Retour Thomas : l'organisateur ou le porteur d'une cagnotte active qui
+    // répond "je ne peux pas" reste admin invisible (voir `update_my_answer`)
+    // -- mais ne doit alors plus pouvoir ajouter d'accompagnants (il ne
+    // participe pas), ni voir les 2 canaux de chat (aucune raison de suivre
+    // une discussion pour un événement où il ne vient pas). Il garde en
+    // revanche ses droits de modération (sondages/qui apporte quoi), gérés
+    // par `isAdmin` ailleurs, jamais touché ici.
+    const isPotOwnerOfActivePot = event.pot_owner === (user?.id ?? null) && event.pot_enabled && !event.pot_closed_at;
+    const viewerAnsweredNoStillAdmin = (isHost || isPotOwnerOfActivePot) && myRsvpRow?.answer === "no";
+    // Pour le message affiché AVANT confirmation (donc indépendant de la
+    // réponse actuelle, contrairement à `viewerAnsweredNoStillAdmin`
+    // ci-dessus) : lequel des deux motifs s'applique à ce viewer.
+    const staysInEventReason: "host" | "pot_owner" | null = isHost ? "host" : isPotOwnerOfActivePot ? "pot_owner" : null;
+
     // Canaux de chat réellement accessibles à CE viewer (retour Thomas :
     // pastille non-lus par canal, sans jamais notifier un bénéficiaire
     // bloqué d'une activité qu'il ne peut pas voir) -- même formule que
     // `EventChat.tsx` (isBeneficiary && le bloc concerné est masqué), utilisée
     // ici pour le compteur initial ET le filtre Realtime de `EventTabs`.
-    const chatAllowedChannels: ("main" | "backstage")[] = [
-      ...(isBeneficiary && isChatHiddenForBeneficiaries ? [] : (["main"] as const)),
-      ...(isBeneficiary && isBackstageHiddenForBeneficiaries ? [] : (["backstage"] as const)),
-    ];
+    // Jamais aucun canal pour qui a répondu "non" tout en restant admin.
+    const chatAllowedChannels: ("main" | "backstage")[] = viewerAnsweredNoStillAdmin
+      ? []
+      : [
+          ...(isBeneficiary && isChatHiddenForBeneficiaries ? [] : (["main"] as const)),
+          ...(isBeneficiary && isBackstageHiddenForBeneficiaries ? [] : (["backstage"] as const)),
+        ];
 
     // Prénoms des bénéficiaires approuvés (retour Thomas : "X a accès ou X
     // n'a pas accès, ça sera plus simple" -- même principe partout où un
@@ -250,6 +272,62 @@ export default async function EventPage({
         .eq("event_id", event.id)
         .eq("status", "pending");
       pendingBringCount = count ?? 0;
+    }
+
+    // Cagnotte (Phase 7, brief 4.5) : derrière le feature flag `pot` (pas
+    // encore activé en général, Thomas pourra le faire depuis /admin une
+    // fois prêt à tester) ET jamais montrée à un bénéficiaire (brief 1.4 :
+    // "toujours masquée... ni montant, ni contributeurs, ni existence" --
+    // contrairement à bring/polls/chat, aucun mode "masqué mais visible
+    // qu'il y a quelque chose").
+    let potFeatureEnabled = false;
+    let potCollectedCents = 0;
+    // Retour Thomas : plutôt que le total cumulé (trop d'infos d'un coup,
+    // pression sociale sur l'Accueil que tout le monde voit en premier), un
+    // simple "+X€ le JJ/MM" sur le DERNIER paiement reçu -- crée un peu de
+    // dynamisme sans exposer ni le total ni qui a donné (jamais de nom ici).
+    let lastContributionNetCents: number | null = null;
+    let lastContributionAt: string | null = null;
+    if (event.pot_enabled && !isBeneficiary) {
+      const { data: flag } = await supabase.from("feature_flags").select("enabled").eq("key", "pot").maybeSingle();
+      potFeatureEnabled = !!flag?.enabled;
+
+      if (potFeatureEnabled) {
+        const { data: succeededContributions } = await supabase
+          .from("pot_contributions")
+          .select("net_cents")
+          .eq("event_id", event.id)
+          .eq("status", "succeeded");
+        potCollectedCents = (succeededContributions ?? []).reduce((sum, c) => sum + (c.net_cents ?? 0), 0);
+
+        const { data: lastContribution } = await supabase
+          .from("pot_contributions")
+          .select("net_cents, created_at")
+          .eq("event_id", event.id)
+          .eq("status", "succeeded")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        lastContributionNetCents = lastContribution?.net_cents ?? null;
+        lastContributionAt = lastContribution?.created_at ?? null;
+      }
+    }
+
+    // Statut de connexion Stripe (retour Thomas : bannière Accueil + badge
+    // Personnes) -- réservé au porteur de la cagnotte lui-même, jamais aux
+    // autres admins (ni le statut connecté/non connecté, ni même le fait
+    // qu'on regarde sa ligne différemment). Calculé une seule fois ici,
+    // partagé entre `EventAccueil` et `EventPersonnes` plutôt que refait dans
+    // chacun.
+    const viewerIsPotOwner = potFeatureEnabled && !!user && event.pot_owner === user.id;
+    let potOwnerStripeConnected = false;
+    if (viewerIsPotOwner) {
+      const { data: ownerProfile } = await supabase
+        .from("profiles")
+        .select("stripe_onboarding_complete")
+        .eq("id", event.pot_owner)
+        .maybeSingle();
+      potOwnerStripeConnected = !!ownerProfile?.stripe_onboarding_complete;
     }
 
     // Sondages proposés par un invité, en attente de validation admin --
@@ -376,13 +454,27 @@ export default async function EventPage({
               isHost={isHost}
               isAdmin={isAdmin}
               isBeneficiary={isBeneficiary}
+              viewerIsPotOwner={viewerIsPotOwner}
+              potOwnerStripeConnected={potOwnerStripeConnected}
+              viewerAnsweredNoStillAdmin={viewerAnsweredNoStillAdmin}
+              staysInEventReason={staysInEventReason}
+              potCollectedCents={potCollectedCents}
+              lastContributionNetCents={lastContributionNetCents}
+              lastContributionAt={lastContributionAt}
               dateOptions={dateOptions}
               coverPhotoUrl={coverPhotoUrl}
               beneficiaryNames={beneficiaryNames}
               isBringListHidden={isBringListHidden}
               isPollsListHidden={isPollsListHidden}
+              // Retour Thomas : "pourquoi je ne vois pas le choix dans la
+              // page d'accueil ?" -- `!isHost` excluait auparavant l'hôte de
+              // cette carte (on supposait l'organisateur "évidemment
+              // présent"), mais ça bloque désormais la vraie fonctionnalité
+              // "je ne peux pas" tout en restant admin invisible (voir
+              // `update_my_answer`/`MyParticipationCard.tsx`) -- l'hôte doit
+              // pouvoir choisir sa réponse comme n'importe qui d'autre.
               myRsvp={
-                !isHost && myRsvpRow
+                myRsvpRow
                   ? {
                       id: myRsvpRow.id,
                       answer: myRsvpRow.answer as "yes" | "maybe" | "no",
@@ -392,10 +484,6 @@ export default async function EventPage({
                   : null
               }
               viewerRsvpId={myRsvpRow?.id ?? null}
-              // Pas gaté par `!isHost` (contrairement à `myRsvp` ci-dessus) :
-              // l'hôte aussi peut vouloir rajouter ses propres accompagnants à
-              // sa ligne rsvps (créée par `ensure_own_rsvp`), même si l'écran
-              // "changer ma réponse"/"quitter" ne le concerne pas.
               viewerCompanions={(myCompanionRows ?? []).map((c) => ({
                 id: c.id,
                 kind: c.kind as "partner" | "child" | "friend" | "family",
@@ -452,6 +540,8 @@ export default async function EventPage({
                   isJourJ(event.starts_at, event.date_mode, event.ends_at, event.ended_at) ||
                   isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)
                 }
+                viewerIsPotOwner={viewerIsPotOwner}
+                potOwnerStripeConnected={potOwnerStripeConnected}
               />
             )
           }
@@ -459,40 +549,72 @@ export default async function EventPage({
           pendingBringCount={pendingBringCount}
           pendingPollsCount={pendingPollsCount}
           chat={
-            <EventChat
-              eventId={event.id}
-              viewerRsvpId={myRsvpRow?.id ?? null}
-              isAdmin={isAdmin}
-              isBeneficiary={isBeneficiary}
-              isBackstageHidden={isBackstageHiddenForBeneficiaries}
-              isChatHidden={isChatHiddenForBeneficiaries}
-            />
+            // Retour Thomas : quelqu'un qui a dit "je ne peux pas" (tout en
+            // restant admin invisible) n'a aucune raison de suivre une
+            // discussion pour un événement où il ne vient pas.
+            viewerAnsweredNoStillAdmin ? (
+              <Card className="text-center text-sm text-foreground/60">{t("chatHiddenNotAttending")}</Card>
+            ) : (
+              <EventChat
+                eventId={event.id}
+                viewerRsvpId={myRsvpRow?.id ?? null}
+                isAdmin={isAdmin}
+                isBeneficiary={isBeneficiary}
+                isBackstageHidden={isBackstageHiddenForBeneficiaries}
+                isChatHidden={isChatHiddenForBeneficiaries}
+              />
+            )
           }
           participer={
-            <div className="flex flex-col gap-4">
-              {isPollsListHidden ? (
-                <Card className="text-center text-sm text-foreground/60">{t("pollsListHidden")}</Card>
-              ) : (
-                <PollsList
-                  eventId={event.id}
-                  shortCode={event.short_code}
-                  viewerRsvpId={myRsvpRow?.id ?? null}
-                  isAdmin={isAdmin}
-                  readOnly={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
-                />
-              )}
-              {isBringListHidden ? (
-                <Card className="text-center text-sm text-foreground/60">{t("bringListHidden")}</Card>
-              ) : (
-                <BringList
-                  eventId={event.id}
-                  shortCode={event.short_code}
-                  viewerRsvpId={myRsvpRow?.id ?? null}
-                  isAdmin={isAdmin}
-                  readOnly={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
-                />
-              )}
-            </div>
+            <ParticiperTabs
+              pendingPollsCount={pendingPollsCount}
+              pendingBringCount={pendingBringCount}
+              sondages={
+                isPollsListHidden ? (
+                  <Card className="text-center text-sm text-foreground/60">{t("pollsListHidden")}</Card>
+                ) : (
+                  <PollsList
+                    eventId={event.id}
+                    shortCode={event.short_code}
+                    viewerRsvpId={myRsvpRow?.id ?? null}
+                    isAdmin={isAdmin}
+                    readOnly={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
+                    hideApprovedList={viewerAnsweredNoStillAdmin}
+                  />
+                )
+              }
+              bring={
+                isBringListHidden ? (
+                  <Card className="text-center text-sm text-foreground/60">{t("bringListHidden")}</Card>
+                ) : (
+                  <BringList
+                    eventId={event.id}
+                    shortCode={event.short_code}
+                    viewerRsvpId={myRsvpRow?.id ?? null}
+                    isAdmin={isAdmin}
+                    readOnly={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
+                    hideApprovedList={viewerAnsweredNoStillAdmin}
+                  />
+                )
+              }
+              cagnotte={
+                potFeatureEnabled ? (
+                  <div className="flex flex-col gap-4">
+                    <PotContribution
+                      eventId={event.id}
+                      label={event.pot_label}
+                      mode={event.pot_mode as "goal" | "open"}
+                      goalCents={event.pot_goal_cents}
+                      collectedCents={potCollectedCents}
+                      closedAt={event.pot_closed_at}
+                    />
+                    {isAdmin && (
+                      <PotAdminDashboard eventId={event.id} potOwnerId={event.pot_owner} viewerId={user?.id ?? null} />
+                    )}
+                  </div>
+                ) : null
+              }
+            />
           }
           eventId={event.id}
           viewerRsvpId={myRsvpRow?.id ?? null}
@@ -535,14 +657,32 @@ export default async function EventPage({
   // durci : ne s'affiche désormais qu'après que l'admin ait explicitement
   // autorisé cet accès (`grant_pot_access`), la policy RLS l'exige aussi
   // (`private.has_pot_access`), pas seulement ce filtre applicatif.
+  // Retour Thomas : "aucun moyen de faire un paiement" -- `pot_owner`/
+  // `pot_closed_at` ajoutés à ce mirror (avant, seul le libellé/l'objectif
+  // étaient exposés, jamais de quoi router un vrai paiement).
   const { data: potInfo } =
     myRsvp?.status === "restricted" && myRsvp.pot_access_granted
       ? await supabase
           .from("events_pot_data")
-          .select("pot_enabled, pot_mode, pot_goal_cents, pot_label")
+          .select("pot_enabled, pot_mode, pot_goal_cents, pot_label, pot_owner, pot_closed_at")
           .eq("id", preview.id)
           .maybeSingle()
       : { data: null };
+
+  let potFeatureEnabledForRestricted = false;
+  let potCollectedCentsForRestricted = 0;
+  if (potInfo?.pot_enabled) {
+    const { data: flag } = await supabase.from("feature_flags").select("enabled").eq("key", "pot").maybeSingle();
+    potFeatureEnabledForRestricted = !!flag?.enabled;
+    if (potFeatureEnabledForRestricted) {
+      const { data: succeededContributions } = await supabase
+        .from("pot_contributions")
+        .select("net_cents")
+        .eq("event_id", preview.id)
+        .eq("status", "succeeded");
+      potCollectedCentsForRestricted = (succeededContributions ?? []).reduce((sum, c) => sum + (c.net_cents ?? 0), 0);
+    }
+  }
 
   const { data: myProfile } = user
     ? await supabase
@@ -575,12 +715,15 @@ export default async function EventPage({
       {myRsvp?.status === "restricted" ? (
         <GuestRestrictedScreen
           rsvpId={myRsvp.id}
+          eventId={preview.id}
           shortCode={preview.short_code}
           currentAnswer={myRsvp.answer as "yes" | "maybe" | "no"}
           potEnabled={preview.pot_enabled}
           wantsPotAccess={myRsvp.wants_pot_access}
           potAccessGranted={myRsvp.pot_access_granted}
           pot={potInfo}
+          potFeatureEnabled={potFeatureEnabledForRestricted}
+          potCollectedCents={potCollectedCentsForRestricted}
         />
       ) : myRsvp && myRsvp.status !== "left" && myRsvp.status !== "removed" ? (
         <GuestPendingScreen
@@ -648,6 +791,7 @@ type EventRow = {
   pot_enabled: boolean;
   pot_mode: "goal" | "open";
   pot_goal_cents: number | null;
+  pot_closed_at: string | null;
   pot_label: string | null;
   host_id: string;
   share_policy: "all" | "admins";
@@ -659,6 +803,13 @@ async function EventAccueil({
   isHost,
   isAdmin,
   isBeneficiary,
+  viewerIsPotOwner,
+  potOwnerStripeConnected,
+  viewerAnsweredNoStillAdmin,
+  staysInEventReason,
+  lastContributionNetCents,
+  lastContributionAt,
+  potCollectedCents,
   dateOptions,
   coverPhotoUrl,
   beneficiaryNames,
@@ -674,6 +825,26 @@ async function EventAccueil({
   isHost: boolean;
   isAdmin: boolean;
   isBeneficiary: boolean;
+  // Retour Thomas : statut de connexion Stripe affiché juste sous la
+  // bannière, réservé au porteur de la cagnotte lui-même (voir le calcul
+  // partagé dans le composant parent).
+  viewerIsPotOwner: boolean;
+  potOwnerStripeConnected: boolean;
+  // Retour Thomas : organisateur/porteur de cagnotte ayant répondu "je ne
+  // peux pas" -- reste admin invisible, mais ne doit plus voir les
+  // accompagnants ni le chat (voir le calcul partagé dans le parent).
+  viewerAnsweredNoStillAdmin: boolean;
+  staysInEventReason: "host" | "pot_owner" | null;
+  // Retour Thomas : "+X€ le JJ/MM" sur le dernier paiement reçu, affiché
+  // dans la carte cagnotte de l'Accueil -- `null` s'il n'y a encore aucune
+  // contribution réussie.
+  lastContributionNetCents: number | null;
+  lastContributionAt: string | null;
+  // Retour Thomas : "quand on choisit un objectif, il faut une barre verte
+  // comme qui apporte quoi" -- total cumulé, utilisé UNIQUEMENT pour la
+  // jauge en mode "goal" (jamais affiché en chiffre brut par ailleurs sur
+  // l'Accueil, voir la discussion sur la pression sociale).
+  potCollectedCents: number;
   dateOptions: {
     id: string;
     startsAt: string;
@@ -778,6 +949,11 @@ async function EventAccueil({
         <EventPhotoEditor eventId={event.id} isHost={isHost} initialPhotoUrl={coverPhotoUrl} />
       </div>
 
+      {/* Retour Thomas : statut de connexion Stripe juste sous la bannière,
+          réservé au porteur de la cagnotte -- personne d'autre ne doit savoir
+          si son compte est connecté ou non. */}
+      {viewerIsPotOwner && <PotConnectionBanner connected={potOwnerStripeConnected} />}
+
       {/* Retour Thomas : "ça doit être en haut de la page d'accueil juste
           après la bannière de l'événement" -- avant même la carte "changer
           ma réponse" juste en dessous. */}
@@ -796,7 +972,15 @@ async function EventAccueil({
             rsvpId={myRsvp.id}
             shortCode={event.short_code}
             currentAnswer={myRsvp.answer}
-            showLeaveButton={true}
+            // Retour Thomas : l'organisateur et le porteur d'une cagnotte
+            // active ne peuvent jamais quitter (`leave_or_remove_participant`
+            // le bloque déjà côté serveur) -- inutile de leur montrer un
+            // bouton qui échouerait à chaque clic.
+            showLeaveButton={!isHost && !viewerIsPotOwner}
+            // Retour Thomas : "il faut dire qu'il reste dans l'événement car
+            // il est responsable de la cagnotte ou organisateur" -- message
+            // affiché dans la modale de confirmation "je ne peux pas".
+            staysInEventReason={staysInEventReason}
             isEventOver={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
           />
         </Card>
@@ -811,6 +995,7 @@ async function EventAccueil({
           pour cet événement. */}
       {viewerRsvpId &&
         event.allow_companions &&
+        !viewerAnsweredNoStillAdmin &&
         !isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at) && (
         <Card>
           <CompanionsEditor
@@ -986,36 +1171,97 @@ async function EventAccueil({
         </Card>
       )}
 
-      {event.pot_enabled && !(isBeneficiary && event.beneficiary_hidden_blocks.includes("pot")) && (
-        <Card>
-          <p className="font-display text-lg font-bold text-foreground">
-            {t("potLabel", { label: event.pot_label || "" })}
-          </p>
-          <p className="text-sm text-foreground/70">
-            {event.pot_mode === "goal" && event.pot_goal_cents
-              ? t("potGoal", { amount: (event.pot_goal_cents / 100).toFixed(0) })
-              : t("potOpen")}
-          </p>
-          {/* Étape 5 du wizard (retour Thomas : "il faut le dire quand X a
-              accès et aussi quand elle a pas accès" -- jamais silencieuse
-              dans un sens comme dans l'autre). Jamais montrée au
-              bénéficiaire lui-même à propos de lui-même (juste redondant,
-              même logique que la bannière Coulisses) -- seuls les AUTRES la
-              voient, qu'il ait accès ou non. */}
-          {!isBeneficiary && beneficiaryNames.length > 0 && (
-            <p
-              className={`text-xs font-semibold ${
-                event.beneficiary_hidden_blocks.includes("pot") ? "text-accent-coral" : "text-accent-mint"
-              }`}
-            >
-              {t(event.beneficiary_hidden_blocks.includes("pot") ? "beneficiaryNoAccessNote" : "beneficiaryAccessNote", {
-                count: beneficiaryNames.length,
-                names: joinNames(beneficiaryNames),
-              })}
+      {event.pot_enabled &&
+        !(isBeneficiary && event.beneficiary_hidden_blocks.includes("pot")) &&
+        (event.pot_closed_at ? (
+          // Retour Thomas : "le gris il doit faire tout le cadre" -- pas le
+          // composant `Card` partagé ici (son `bg-surface` par défaut
+          // gagnerait sur le gris, même piège déjà rencontré avec
+          // `PotConnectionBanner.tsx`), un vrai fond gris plein sur TOUT le
+          // cadre. Titre "Cagnotte : ..." remis en gras/à gauche "comme
+          // avant", seul le bloc confettis en dessous reste centré.
+          <div className="flex flex-col gap-3 rounded-konfeti border border-border bg-canvas p-6 shadow-konfeti">
+            <p className="font-display text-lg font-bold text-foreground">
+              {t("potLabel", { label: event.pot_label || "" })}
             </p>
-          )}
-        </Card>
-      )}
+            <div className="flex flex-col items-center gap-2 text-center">
+              <StickerConfetti className="h-12 w-12" />
+              <p className="font-display text-2xl font-bold text-foreground">{t("potClosedTitle")}</p>
+              <p className="text-lg font-semibold text-foreground/80">{(potCollectedCents / 100).toFixed(2)}€</p>
+            </div>
+            {!isBeneficiary && beneficiaryNames.length > 0 && (
+              <p
+                className={`text-xs font-semibold ${
+                  event.beneficiary_hidden_blocks.includes("pot") ? "text-accent-coral" : "text-accent-mint"
+                }`}
+              >
+                {t(event.beneficiary_hidden_blocks.includes("pot") ? "beneficiaryNoAccessNote" : "beneficiaryAccessNote", {
+                  count: beneficiaryNames.length,
+                  names: joinNames(beneficiaryNames),
+                })}
+              </p>
+            )}
+          </div>
+        ) : (
+          <Card>
+            <p className="font-display text-lg font-bold text-foreground">
+              {t("potLabel", { label: event.pot_label || "" })}
+            </p>
+            {/* Retour Thomas : plutôt que le total cumulé (pression sociale
+                sur l'Accueil, "il n'y a que 20€"), juste le DERNIER paiement
+                reçu -- crée un peu de dynamisme sans exposer le total ni qui
+                a donné (jamais de nom ici, voir page.tsx). */}
+            {lastContributionNetCents !== null && lastContributionAt && (
+              <p className="text-sm font-semibold text-accent-mint">
+                {t("lastContribution", {
+                  amount: (lastContributionNetCents / 100).toFixed(2),
+                  date: formatDate(lastContributionAt),
+                })}
+              </p>
+            )}
+            <p className="text-sm text-foreground/70">
+              {event.pot_mode === "goal" && event.pot_goal_cents
+                ? t("potGoal", { amount: (event.pot_goal_cents / 100).toFixed(0) })
+                : t("potOpen")}
+            </p>
+            {/* Retour Thomas : "quand on choisit un objectif, il faut une
+                barre verte comme qui apporte quoi" -- même style visuel que
+                `BringGauge.tsx` (piste neutre, remplissage mint), jamais en
+                mode "montant libre" (pas d'objectif = pas de barre
+                possible). */}
+            {event.pot_mode === "goal" && event.pot_goal_cents && (
+              <div className="flex flex-col gap-1">
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-canvas">
+                  <div
+                    className="h-full rounded-full bg-accent-mint transition-[width] duration-300"
+                    style={{ width: `${Math.min(potCollectedCents / event.pot_goal_cents, 1) * 100}%` }}
+                  />
+                </div>
+                <span className="text-xs font-semibold text-foreground/70">
+                  {(potCollectedCents / 100).toFixed(2)}€ / {(event.pot_goal_cents / 100).toFixed(2)}€
+                </span>
+              </div>
+            )}
+            {/* Étape 5 du wizard (retour Thomas : "il faut le dire quand X a
+                accès et aussi quand elle a pas accès" -- jamais silencieuse
+                dans un sens comme dans l'autre). Jamais montrée au
+                bénéficiaire lui-même à propos de lui-même (juste redondant,
+                même logique que la bannière Coulisses) -- seuls les AUTRES
+                la voient, qu'il ait accès ou non. */}
+            {!isBeneficiary && beneficiaryNames.length > 0 && (
+              <p
+                className={`text-xs font-semibold ${
+                  event.beneficiary_hidden_blocks.includes("pot") ? "text-accent-coral" : "text-accent-mint"
+                }`}
+              >
+                {t(event.beneficiary_hidden_blocks.includes("pot") ? "beneficiaryNoAccessNote" : "beneficiaryAccessNote", {
+                  count: beneficiaryNames.length,
+                  names: joinNames(beneficiaryNames),
+                })}
+              </p>
+            )}
+          </Card>
+        ))}
 
       {/* "Qui apporte quoi" (brief 4.4) : version compacte sur l'Accueil,
           retour Thomas ("dès que quelqu'un a rajouté un produit, on a un

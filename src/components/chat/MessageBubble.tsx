@@ -78,9 +78,15 @@ export function MessageBubble({
     // exactement comme le regroupement des messages normaux — une marge
     // propre à ce composant s'appliquerait à CHAQUE message système, y
     // compris entre deux d'affilée, ce que Thomas ne veut justement pas.
+    // Retour Thomas : "je veux juste 1x elle a rejoint et si elle quitte X a
+    // quitté" -- nom FIGÉ au moment de l'événement (`systemAuthorName`,
+    // jamais `authorName` qui lui se recalcule en direct et deviendrait
+    // "Anonyme" après un départ). `body` distingue "joined"/"left".
     return (
       <p className="py-1 text-center text-xs text-foreground/50">
-        {t("systemMessages.joined", { name: message.authorName ?? t("anonymousAuthor") })}
+        {t(`systemMessages.${message.body === "left" ? "left" : "joined"}`, {
+          name: message.systemAuthorName || t("anonymousAuthor"),
+        })}
       </p>
     );
   }
