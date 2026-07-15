@@ -115,6 +115,14 @@ test("bascule Accueil en Mode Jour J : arrivée, checklist bien rentré visible 
     await expect(page.getByText(/\d+\/\d+ arrivés/)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("Marc")).toBeVisible();
 
+    // Bug réel signalé par Thomas : "Voir qui a apporté quoi" (admin) ouvrait
+    // Participer sur le sous-onglet Sondages (par défaut) au lieu d'"À
+    // apporter" -- `setActive` doit préciser le sous-onglet cible.
+    await page.getByRole("button", { name: "Voir qui a apporté quoi" }).click();
+    await expect(page.getByRole("button", { name: "+ Ajouter un item" })).toBeVisible();
+
+    await page.goto(`/e/${event.short_code}`);
+
     // Bug réel signalé par Thomas : la checklist "Bien rentrés" listait TOUS
     // les participants (coche optionnelle), donnant l'impression trompeuse
     // que Marc était "bien rentré" alors qu'il n'a pas encore cliqué --

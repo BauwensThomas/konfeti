@@ -242,7 +242,15 @@
       "removePollOption": "Retirer cette option",
       "addPollOption": "Ajouter une option",
       "removePoll": "Retirer ce sondage",
-      "addPoll": "Ajouter un sondage"
+      "addPoll": "Ajouter un sondage",
+      "pollKindCustom": "Personnalisé",
+      "pollKindRestaurant": "Restaurant",
+      "restaurantSearchButton": "Rechercher des restaurants à proximité",
+      "restaurantSearching": "Recherche...",
+      "restaurantSearchError": "La recherche a échoué, réessaie dans un instant.",
+      "restaurantSearchEmpty": "Aucun restaurant trouvé à proximité.",
+      "restaurantSearchNeedsLocation": "Renseigne d'abord une adresse à l'étape 1 pour chercher des restaurants à proximité.",
+      "restaurantSelectedCount": "{count} restaurant(s) sélectionné(s)"
     },
     "step5": {
       "heading": "Ce que voient les bénéficiaires",
@@ -605,6 +613,7 @@
     "approve": "Approuver",
     "reject": "Refuser",
     "deletePoll": "Supprimer le sondage",
+    "bookOnTheForkLink": "Réserver sur TheFork",
     "deletePollConfirmTitle": "Es-tu sûr ? Cette action est définitive.",
     "deletePollConfirmYes": "Oui, supprimer",
     "deletePollConfirmNo": "Annuler",
@@ -657,6 +666,7 @@
     "arrivedCount": "{arrived}/{total} arrivés",
     "mapsLink": "Google Maps",
     "wazeLink": "Waze",
+    "transitLink": "Transports en commun",
     "checkInButton": "Je suis arrivé !",
     "checkedIn": "Arrivé !",
     "goToChat": "Aller au chat",

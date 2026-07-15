@@ -15,6 +15,7 @@ import { toLocalDateTimeValue, fromLocalDateTimeValue, parseDateOnlyLocal } from
 import { joinNames } from "@/lib/joinNames";
 import { UnitPickerButton, type BringUnit } from "@/components/bring/UnitPickerButton";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
+import { RestaurantPollPicker } from "@/components/RestaurantPollPicker";
 
 type DateOption = { startsAt: string; label: string };
 
@@ -81,13 +82,14 @@ export type BringItemRow = {
 
 // Sondages (brief : "Sondage(s) optionnel(s)") : même convention `id: null`
 // que `BringItemRow` -- une option sans id n'existe pas encore en base.
-export type PollOptionRow = { id: string | null; label: string };
+export type PollOptionRow = { id: string | null; label: string; externalUrl: string | null };
 // "Choix unique" (menu resto...) vs "choix multiple" (comportement
 // historique, valeur par défaut) -- retour Thomas, voir migration
 // `polls_choice_mode_and_quantity`.
 export type PollRow = {
   id: string | null;
   question: string;
+  kind: "custom" | "restaurant";
   options: PollOptionRow[];
   choiceMode: "single" | "multiple";
 };
@@ -378,9 +380,10 @@ export function CreateEventWizard({
           .map((poll) => ({
             id: poll.id,
             question: poll.question.trim(),
+            kind: poll.kind,
             options: poll.options
               .filter((option) => option.label.trim())
-              .map((option) => ({ id: option.id, label: option.label.trim() })),
+              .map((option) => ({ id: option.id, label: option.label.trim(), externalUrl: option.externalUrl })),
             choiceMode: poll.choiceMode,
           }))
           .filter((poll) => poll.question && poll.options.length >= 2),
@@ -1079,6 +1082,42 @@ export function CreateEventWizard({
                         {t("step4.pollChoiceModeSingle")}
                       </ToggleButton>
                     </div>
+                    {/* Sondage resto (brief V1.1) : options peuplées depuis
+                        Google Places au lieu de texte libre. */}
+                    <div className="flex gap-2">
+                      <ToggleButton
+                        active={poll.kind === "custom"}
+                        onClick={() => {
+                          const next = [...data.polls];
+                          next[pollIndex] = { ...next[pollIndex], kind: "custom" };
+                          update("polls", next);
+                        }}
+                      >
+                        {t("step4.pollKindCustom")}
+                      </ToggleButton>
+                      <ToggleButton
+                        active={poll.kind === "restaurant"}
+                        onClick={() => {
+                          const next = [...data.polls];
+                          next[pollIndex] = { ...next[pollIndex], kind: "restaurant" };
+                          update("polls", next);
+                        }}
+                      >
+                        {t("step4.pollKindRestaurant")}
+                      </ToggleButton>
+                    </div>
+                    {poll.kind === "restaurant" ? (
+                      <RestaurantPollPicker
+                        locationLat={data.locationLat}
+                        locationLng={data.locationLng}
+                        selectedOptions={poll.options.filter((o) => o.label.trim().length > 0)}
+                        onOptionsChange={(options) => {
+                          const next = [...data.polls];
+                          next[pollIndex] = { ...next[pollIndex], options };
+                          update("polls", next);
+                        }}
+                      />
+                    ) : (
                     <div className="flex flex-col gap-2">
                       {poll.options.map((option, optionIndex) => (
                         <div key={optionIndex} className="flex items-center gap-2">
@@ -1123,7 +1162,7 @@ export function CreateEventWizard({
                           const next = [...data.polls];
                           next[pollIndex] = {
                             ...next[pollIndex],
-                            options: [...next[pollIndex].options, { id: null, label: "" }],
+                            options: [...next[pollIndex].options, { id: null, label: "", externalUrl: null }],
                           };
                           update("polls", next);
                         }}
@@ -1132,6 +1171,7 @@ export function CreateEventWizard({
                         + {t("step4.addPollOption")}
                       </button>
                     </div>
+                    )}
                     <button
                       type="button"
                       onClick={() => update("polls", data.polls.filter((_, i) => i !== pollIndex))}
@@ -1149,9 +1189,10 @@ export function CreateEventWizard({
                       {
                         id: null,
                         question: "",
+                        kind: "custom",
                         options: [
-                          { id: null, label: "" },
-                          { id: null, label: "" },
+                          { id: null, label: "", externalUrl: null },
+                          { id: null, label: "", externalUrl: null },
                         ],
                         choiceMode: "multiple",
                       },

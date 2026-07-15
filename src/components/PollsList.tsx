@@ -13,6 +13,7 @@ type RawOptionRow = {
   id: string;
   poll_id: string;
   label: string;
+  external_url: string | null;
 };
 
 type RawVoteRow = {
@@ -68,7 +69,7 @@ export async function PollsList({
     pollIds.length > 0
       ? await supabase
           .from("poll_options")
-          .select("id, poll_id, label")
+          .select("id, poll_id, label, external_url")
           .in("poll_id", pollIds)
           .order("label")
           .returns<RawOptionRow[]>()
@@ -137,6 +138,7 @@ export async function PollsList({
         return {
           id: option.id,
           label: option.label,
+          externalUrl: option.external_url,
           totalQuantity: optionVotes.reduce((sum, v) => sum + v.quantity, 0),
           myQuantity: optionVotes.find((v) => v.rsvp_id === viewerRsvpId)?.quantity ?? 0,
         };

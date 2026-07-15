@@ -148,7 +148,13 @@ async function syncPolls(
     const { data: inserted, error } = await supabase
       .from("polls")
       .insert(
-        toInsert.map((p) => ({ event_id: eventId, question: p.question, status: "approved", choice_mode: p.choiceMode })),
+        toInsert.map((p) => ({
+          event_id: eventId,
+          question: p.question,
+          status: "approved",
+          choice_mode: p.choiceMode,
+          kind: p.kind,
+        })),
       )
       .select("id, question");
     if (error || !inserted) return false;
@@ -164,7 +170,7 @@ async function syncPolls(
   for (const poll of existingPolls) {
     const { error } = await supabase
       .from("polls")
-      .update({ question: poll.question, choice_mode: poll.choiceMode })
+      .update({ question: poll.question, choice_mode: poll.choiceMode, kind: poll.kind })
       .eq("id", poll.id!);
     if (error) return false;
   }
@@ -190,12 +196,15 @@ async function syncPolls(
     if (optionsToInsert.length > 0) {
       const { error } = await supabase
         .from("poll_options")
-        .insert(optionsToInsert.map((o) => ({ poll_id: poll.id, label: o.label })));
+        .insert(optionsToInsert.map((o) => ({ poll_id: poll.id, label: o.label, external_url: o.externalUrl })));
       if (error) return false;
     }
 
     for (const option of poll.options.filter((o) => o.id)) {
-      const { error } = await supabase.from("poll_options").update({ label: option.label }).eq("id", option.id!);
+      const { error } = await supabase
+        .from("poll_options")
+        .update({ label: option.label, external_url: option.externalUrl })
+        .eq("id", option.id!);
       if (error) return false;
     }
   }

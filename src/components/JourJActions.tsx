@@ -64,7 +64,11 @@ export function JourJActions({
           {t("goToChat")}
         </Button>
         {isAdmin && (
-          <Button variant="secondary" className="flex-1" onClick={() => tabNavigation?.setActive("participer")}>
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={() => tabNavigation?.setActive("participer", "bring")}
+          >
             {t("goToBringChecklist")}
           </Button>
         )}

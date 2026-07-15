@@ -11,6 +11,9 @@ import { Modal } from "@/components/ui/Modal";
 export type PollOptionView = {
   id: string;
   label: string;
+  // Lien affilié TheFork (Awin, brief V1.1) pour une option de sondage
+  // resto -- `null` pour un sondage classique (`kind: "custom"`).
+  externalUrl: string | null;
   totalQuantity: number;
   // Quantité déjà allouée par le viewer à CETTE option (0 = pas votée).
   myQuantity: number;
@@ -233,7 +236,22 @@ export function PollsListClient({
               <p className="text-sm font-semibold text-foreground">{poll.question}</p>
               <ul className="flex flex-col gap-0.5 text-xs text-foreground/70">
                 {poll.options.map((option) => (
-                  <li key={option.id}>{option.label}</li>
+                  <li key={option.id}>
+                    {option.label}
+                    {option.externalUrl && (
+                      <>
+                        {" "}
+                        <a
+                          href={option.externalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-semibold text-primary"
+                        >
+                          {t("bookOnTheForkLink")}
+                        </a>
+                      </>
+                    )}
+                  </li>
                 ))}
               </ul>
               {poll.proposedByName && (
@@ -290,7 +308,19 @@ export function PollsListClient({
               <ul className="grid grid-cols-[1fr_5.5rem_auto] items-center gap-x-3 gap-y-2">
                 {poll.options.map((option) => (
                   <li key={option.id} className="contents">
-                    <span className="min-w-0 truncate text-sm text-foreground">{option.label}</span>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm text-foreground">{option.label}</span>
+                      {option.externalUrl && (
+                        <a
+                          href={option.externalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold text-primary"
+                        >
+                          {t("bookOnTheForkLink")}
+                        </a>
+                      )}
+                    </div>
                     {readOnly ? (
                       <span className="text-xs font-semibold text-accent-mint">
                         {option.myQuantity > 0 && `✓${option.myQuantity > 1 ? ` x${option.myQuantity}` : ""}`}

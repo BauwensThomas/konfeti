@@ -90,8 +90,18 @@ const eventFieldsSchema = z.object({
       z.object({
         id: z.string().uuid().nullable(),
         question: z.string().trim().min(1).max(300),
+        // "custom" (options tapées à la main, comportement historique) vs
+        // "restaurant" (options peuplées depuis Google Places, brief V1.1) --
+        // ne change que l'UI du wizard, jamais les règles de vote/quota.
+        kind: z.enum(["custom", "restaurant"]).default("custom"),
         options: z
-          .array(z.object({ id: z.string().uuid().nullable(), label: z.string().trim().min(1).max(200) }))
+          .array(
+            z.object({
+              id: z.string().uuid().nullable(),
+              label: z.string().trim().min(1).max(200),
+              externalUrl: z.string().url().nullable().default(null),
+            }),
+          )
           .min(2)
           .max(10),
         // "Choix unique" (menu resto...) vs "choix multiple" (comportement

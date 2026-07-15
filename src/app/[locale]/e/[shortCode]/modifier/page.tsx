@@ -62,13 +62,13 @@ export default async function EditEventPage({
   // ci-dessus). Options récupérées séparément puis groupées par sondage.
   const { data: pollRows } = await supabase
     .from("polls")
-    .select("id, question, choice_mode")
+    .select("id, question, choice_mode, kind")
     .eq("event_id", event.id);
   const pollIds = (pollRows ?? []).map((p) => p.id);
   const { data: pollOptionRows } =
     pollIds.length > 0
-      ? await supabase.from("poll_options").select("id, poll_id, label").in("poll_id", pollIds)
-      : { data: [] as { id: string; poll_id: string; label: string }[] };
+      ? await supabase.from("poll_options").select("id, poll_id, label, external_url").in("poll_id", pollIds)
+      : { data: [] as { id: string; poll_id: string; label: string; external_url: string | null }[] };
 
   // Étape 5 (visibilité bénéficiaires) : prénoms des bénéficiaires déjà
   // approuvés, pour que les phrases ("Julie a accès à...") soient réelles
@@ -143,9 +143,10 @@ export default async function EditEventPage({
     polls: (pollRows ?? []).map((poll) => ({
       id: poll.id,
       question: poll.question,
+      kind: poll.kind as "custom" | "restaurant",
       options: (pollOptionRows ?? [])
         .filter((option) => option.poll_id === poll.id)
-        .map((option) => ({ id: option.id, label: option.label })),
+        .map((option) => ({ id: option.id, label: option.label, externalUrl: option.external_url })),
       choiceMode: poll.choice_mode as "single" | "multiple",
     })),
     beneficiaryHiddenBlocks: event.beneficiary_hidden_blocks ?? [],

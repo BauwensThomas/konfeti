@@ -30,6 +30,7 @@ import { BringAccueilGauges } from "@/components/bring/BringAccueilGauges";
 import { PollsAccueilSummary } from "@/components/polls/PollsAccueilSummary";
 import { PollsQuotaWarningSection } from "@/components/polls/PollsQuotaWarningSection";
 import { JourJCard } from "@/components/JourJCard";
+import { ArrivalInfoBlock } from "@/components/ArrivalInfoBlock";
 import { EndEventButton } from "@/components/EndEventButton";
 import { EventFinishedCard } from "@/components/EventFinishedCard";
 import { GoHomeCard } from "@/components/GoHomeCard";
@@ -891,13 +892,6 @@ async function EventAccueil({
   const tOccasions = await getTranslations("Occasions");
   const theme = EVENT_THEMES.find((th) => th.key === event.theme) ?? EVENT_THEMES[0];
 
-  const mapsUrl = event.location_text
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location_text)}`
-    : null;
-  const wazeUrl = event.location_text
-    ? `https://waze.com/ul?q=${encodeURIComponent(event.location_text)}&navigate=yes`
-    : null;
-
   return (
     <div className="flex flex-col gap-4">
       <div
@@ -988,14 +982,17 @@ async function EventAccueil({
 
       {/* Accompagnants modifiables après l'inscription (retour Thomas :
           "comment on pourrait faire pour remedier a ça" -- jusqu'ici
-          verrouillés à l'inscription). Pas gaté par `myRsvp` (donc visible de
-          l'hôte aussi, contrairement à la carte au-dessus) : `viewerRsvpId`
-          existe pour tout le monde, y compris l'hôte -- voir son commentaire
-          de type. `allow_companions` : l'hôte a peut-être désactivé les +1
-          pour cet événement. */}
+          verrouillés à l'inscription). `viewerRsvpId` existe pour tout le
+          monde, y compris l'hôte -- voir son commentaire de type.
+          `allow_companions` : l'hôte a peut-être désactivé les +1 pour cet
+          événement. Retour Thomas : une fois "arrivé" ou "bien rentré",
+          changer ses accompagnants n'a plus de sens -- même garde que la
+          carte "changer ma réponse" juste au-dessus. */}
       {viewerRsvpId &&
         event.allow_companions &&
         !viewerAnsweredNoStillAdmin &&
+        !myRsvp?.checkedInAt &&
+        !myRsvp?.arrivedHomeAt &&
         !isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at) && (
         <Card>
           <CompanionsEditor
@@ -1050,6 +1047,7 @@ async function EventAccueil({
         <JourJCard
           eventId={event.id}
           shortCode={event.short_code}
+          title={event.title}
           viewerRsvpId={viewerRsvpId}
           isAdmin={isAdmin}
           locationText={event.location_text}
@@ -1089,23 +1087,12 @@ async function EventAccueil({
             />
           )}
 
-          {event.location_text && (
-            <div className="flex flex-col gap-1">
-              <p className="text-base text-foreground">{event.location_text}</p>
-              <div className="flex gap-4 text-sm font-semibold text-primary">
-                {mapsUrl && (
-                  <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
-                    {t("mapsLink")}
-                  </a>
-                )}
-                {wazeUrl && (
-                  <a href={wazeUrl} target="_blank" rel="noopener noreferrer">
-                    {t("wazeLink")}
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
+          <ArrivalInfoBlock
+            locationText={event.location_text}
+            locationLat={event.location_lat}
+            locationLng={event.location_lng}
+            title={event.title}
+          />
         </Card>
       )}
 

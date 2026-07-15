@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { JourJActions } from "@/components/JourJActions";
 import { EventWeather } from "@/components/EventWeather";
+import { ArrivalInfoBlock } from "@/components/ArrivalInfoBlock";
 
 // Mode Jour J (brief 4.11) : bascule automatique de l'Accueil pendant toute
 // la journée de l'événement (voir `isJourJ`, `src/lib/event-status.ts`).
@@ -19,6 +20,7 @@ import { EventWeather } from "@/components/EventWeather";
 export async function JourJCard({
   eventId,
   shortCode,
+  title,
   viewerRsvpId,
   isAdmin,
   locationText,
@@ -29,6 +31,7 @@ export async function JourJCard({
 }: {
   eventId: string;
   shortCode: string;
+  title: string;
   viewerRsvpId: string | null;
   isAdmin: boolean;
   locationText: string | null;
@@ -69,13 +72,6 @@ export async function JourJCard({
     initialCheckedIn = !!myRow?.checked_in_at;
   }
 
-  const mapsUrl = locationText
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationText)}`
-    : null;
-  const wazeUrl = locationText
-    ? `https://waze.com/ul?q=${encodeURIComponent(locationText)}&navigate=yes`
-    : null;
-
   return (
     <Card className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-2 text-center">
@@ -109,23 +105,7 @@ export async function JourJCard({
         </div>
       )}
 
-      {locationText && (
-        <div className="flex flex-col items-center gap-1 text-center">
-          <p className="text-2xl font-bold text-foreground">{locationText}</p>
-          <div className="flex gap-4 text-sm font-semibold text-primary">
-            {mapsUrl && (
-              <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
-                {t("mapsLink")}
-              </a>
-            )}
-            {wazeUrl && (
-              <a href={wazeUrl} target="_blank" rel="noopener noreferrer">
-                {t("wazeLink")}
-              </a>
-            )}
-          </div>
-        </div>
-      )}
+      <ArrivalInfoBlock locationText={locationText} locationLat={lat} locationLng={lng} title={title} />
 
       {viewerRsvpId && (
         <JourJActions
