@@ -243,6 +243,8 @@
       "addPollOption": "Ajouter une option",
       "removePoll": "Retirer ce sondage",
       "addPoll": "Ajouter un sondage",
+      "pollNeedsQuestion": "Donne un titre à ce sondage pour qu'il soit pris en compte.",
+      "pollNeedsTwoOptions": "Ajoute au moins 2 options remplies pour que ce sondage soit pris en compte.",
       "pollKindCustom": "Personnalisé",
       "pollKindRestaurant": "Restaurant",
       "restaurantSearchButton": "Rechercher des restaurants à proximité",

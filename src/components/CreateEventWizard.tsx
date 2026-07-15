@@ -308,16 +308,21 @@ export function CreateEventWizard({
       return !rsvpDeadlineTooLate && !rsvpDeadlineInPast;
     }
     if (step === 4) {
-      // Retour Thomas : un sondage resto avec un seul restaurant sélectionné
-      // était jusqu'ici silencieusement écarté à la création (règle "2
-      // options minimum" déjà en place pour tout sondage), sans aucun
-      // message -- bloque désormais explicitement l'avancée du wizard tant
-      // qu'il en manque, au lieu de laisser deviner pourquoi le sondage a
-      // disparu après coup.
-      const restaurantPollsMissingOptions = data.polls.some(
-        (poll) => poll.kind === "restaurant" && poll.options.filter((o) => o.label.trim()).length < 2,
-      );
-      if (restaurantPollsMissingOptions) return false;
+      // Retour Thomas : un sondage sans titre (ou un sondage resto avec un
+      // seul restaurant sélectionné) était jusqu'ici silencieusement écarté
+      // à la création (règle "question + 2 options minimum" déjà en place
+      // pour tout sondage), sans aucun message -- bloque désormais
+      // explicitement l'avancée du wizard tant qu'un sondage COMMENCÉ (au
+      // moins un champ rempli) ne respecte pas ce minimum, plutôt que de
+      // laisser deviner pourquoi il a disparu après coup. Un sondage resté
+      // entièrement vide (jamais touché) continue d'être ignoré en
+      // silence, comme avant.
+      const incompletePoll = data.polls.some((poll) => {
+        const validOptionsCount = poll.options.filter((o) => o.label.trim()).length;
+        const started = poll.question.trim() !== "" || validOptionsCount > 0;
+        return started && (!poll.question.trim() || validOptionsCount < 2);
+      });
+      if (incompletePoll) return false;
     }
     return true;
   }
@@ -1069,6 +1074,13 @@ export function CreateEventWizard({
                       aria-label={t("step4.pollQuestionAria", { index: pollIndex + 1 })}
                       className={inputClass}
                     />
+                    {/* Retour Thomas : un sondage sans titre était jusqu'ici
+                        silencieusement écarté à la création, sans message --
+                        voir `canAdvance` (step 4) qui bloque désormais
+                        "Suivant" tant que ce cas se présente. */}
+                    {!poll.question.trim() && poll.options.some((o) => o.label.trim()) && (
+                      <p className="text-xs font-semibold text-accent-coral">{t("step4.pollNeedsQuestion")}</p>
+                    )}
                     {/* "Choix unique" (menu resto...) vs "choix multiple"
                         (retour Thomas : "je sais voter pour les 3... j'ai le
                         droit qu'à un menu"). */}
@@ -1197,6 +1209,9 @@ export function CreateEventWizard({
                       >
                         + {t("step4.addPollOption")}
                       </button>
+                      {poll.question.trim() && poll.options.filter((o) => o.label.trim()).length < 2 && (
+                        <p className="text-xs font-semibold text-accent-coral">{t("step4.pollNeedsTwoOptions")}</p>
+                      )}
                     </div>
                     )}
                     <button
