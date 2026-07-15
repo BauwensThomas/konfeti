@@ -88,10 +88,30 @@ export function RestaurantPollPicker({
           ))}
         </ul>
       )}
+      {/* Liste explicite des restaurants déjà retenus (pas juste un chiffre,
+          retour Thomas : "pourquoi j'ai ça qui reste ?" -- un compteur seul
+          ne dit pas LESQUELS sont choisis, ni comment les retirer une fois
+          que la recherche a été relancée ou que les résultats ont changé). */}
       {selectedOptions.length > 0 && (
-        <p className="text-xs text-foreground/60">
-          {t("step4.restaurantSelectedCount", { count: selectedOptions.length })}
-        </p>
+        <div className="flex flex-col gap-1 rounded-konfeti bg-surface p-2">
+          <p className="text-xs font-semibold text-foreground/60">
+            {t("step4.restaurantSelectedCount", { count: selectedOptions.length })}
+          </p>
+          <ul className="flex flex-col gap-1">
+            {selectedOptions.map((option, index) => (
+              <li key={option.id ?? option.label} className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 truncate text-foreground">{option.label}</span>
+                <button
+                  type="button"
+                  onClick={() => onOptionsChange(selectedOptions.filter((_, i) => i !== index))}
+                  className="shrink-0 text-xs font-semibold text-accent-coral"
+                >
+                  {t("step4.restaurantRemoveSelected")}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

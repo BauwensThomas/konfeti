@@ -1083,13 +1083,27 @@ export function CreateEventWizard({
                       </ToggleButton>
                     </div>
                     {/* Sondage resto (brief V1.1) : options peuplées depuis
-                        Google Places au lieu de texte libre. */}
+                        Google Places au lieu de texte libre. Bug réel signalé
+                        par Thomas ("j'avais fait un sondage personnalisé avec
+                        plusieurs choix et puis j'ai changé sur restaurant") :
+                        les anciennes options tapées à la main restaient dans
+                        le tableau et s'affichaient à tort comme des
+                        restaurants déjà sélectionnés -- les options sont donc
+                        vidées à chaque changement de type. */}
                     <div className="flex gap-2">
                       <ToggleButton
                         active={poll.kind === "custom"}
                         onClick={() => {
+                          if (poll.kind === "custom") return;
                           const next = [...data.polls];
-                          next[pollIndex] = { ...next[pollIndex], kind: "custom" };
+                          next[pollIndex] = {
+                            ...next[pollIndex],
+                            kind: "custom",
+                            options: [
+                              { id: null, label: "", externalUrl: null },
+                              { id: null, label: "", externalUrl: null },
+                            ],
+                          };
                           update("polls", next);
                         }}
                       >
@@ -1098,8 +1112,9 @@ export function CreateEventWizard({
                       <ToggleButton
                         active={poll.kind === "restaurant"}
                         onClick={() => {
+                          if (poll.kind === "restaurant") return;
                           const next = [...data.polls];
-                          next[pollIndex] = { ...next[pollIndex], kind: "restaurant" };
+                          next[pollIndex] = { ...next[pollIndex], kind: "restaurant", options: [] };
                           update("polls", next);
                         }}
                       >

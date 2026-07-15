@@ -250,7 +250,8 @@
       "restaurantSearchError": "La recherche a échoué, réessaie dans un instant.",
       "restaurantSearchEmpty": "Aucun restaurant trouvé à proximité.",
       "restaurantSearchNeedsLocation": "Renseigne d'abord une adresse à l'étape 1 pour chercher des restaurants à proximité.",
-      "restaurantSelectedCount": "{count} restaurant(s) sélectionné(s)"
+      "restaurantSelectedCount": "{count} restaurant(s) sélectionné(s)",
+      "restaurantRemoveSelected": "Retirer"
     },
     "step5": {
       "heading": "Ce que voient les bénéficiaires",
