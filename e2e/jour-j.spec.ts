@@ -318,6 +318,7 @@ test("bouton Terminer (admin) : bascule immédiate sur la carte Terminé, bloc R
     // BringListClient.tsx, retour Thomas "pour les admin il faut juste un
     // seul bouton").
     await page.getByRole("button", { name: "Participer" }).click();
+    await page.getByRole("button", { name: "À apporter" }).click();
     await expect(page.getByRole("button", { name: "+ Ajouter un item" })).not.toBeVisible();
 
     // "Rouvrir" (admin) annule le clic accidentel, retour au Mode Jour J.

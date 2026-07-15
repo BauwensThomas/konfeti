@@ -94,9 +94,11 @@ test("Je ne peux pas retire accompagnants/qui-apporte-quoi/sondages et anonymise
     // Marc prend des engagements + un accompagnant + envoie un message.
     await marcPage.goto(`/e/${event.short_code}`);
     await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "À apporter" }).click();
     await marcPage.getByLabel("Ma quantité").fill("1");
     await marcPage.getByRole("button", { name: "J'apporte" }).click();
     await expect(marcPage.getByText("1 L / 3 L")).toBeVisible({ timeout: 15_000 });
+    await marcPage.getByRole("button", { name: "Sondages" }).click();
     await marcPage.getByRole("listitem").filter({ hasText: "Cartes" }).getByRole("checkbox").check();
     await expect(marcPage.getByRole("listitem").filter({ hasText: "Cartes" })).toContainText("1 vote", {
       timeout: 15_000,

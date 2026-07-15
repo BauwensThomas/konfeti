@@ -94,6 +94,7 @@ test("proposition d'item par un invite, moderation (approbation avec reclamation
     // Marc voit l'item du wizard, à 0, et réclame 2 pièces.
     await marcPage.goto(`/e/${event.short_code}`);
     await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "À apporter" }).click();
     await expect(marcPage.getByText("0 pièce / 6 pièces")).toBeVisible();
     await marcPage.getByLabel("Ma quantité").fill("2");
     await marcPage.getByRole("button", { name: "J'apporte" }).click();
@@ -120,6 +121,7 @@ test("proposition d'item par un invite, moderation (approbation avec reclamation
     // ramener ça").
     await page.goto(`/e/${event.short_code}`);
     await page.getByRole("button", { name: "Participer" }).click();
+    await page.getByRole("button", { name: "À apporter" }).click();
     await expect(page.getByText("En attente d'approbation")).toBeVisible();
     await expect(page.getByText("Jus d'orange : 3 L")).toBeVisible();
     await expect(page.getByText("Proposé par Marc Untel")).toBeVisible();
@@ -148,6 +150,7 @@ test("proposition d'item par un invite, moderation (approbation avec reclamation
     // la proposition en double (4), pas cumulée avec son ancienne (2).
     await marcPage.goto(`/e/${event.short_code}`);
     await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "À apporter" }).click();
     await marcPage.getByRole("button", { name: "Proposer un item" }).click();
     await marcPage.getByPlaceholder("Ex. Glaçons, jus d'orange...").fill("Bouteilles de soda");
     await marcPage.getByLabel("Quantité proposée").fill("4");
@@ -156,6 +159,7 @@ test("proposition d'item par un invite, moderation (approbation avec reclamation
 
     await page.goto(`/e/${event.short_code}`);
     await page.getByRole("button", { name: "Participer" }).click();
+    await page.getByRole("button", { name: "À apporter" }).click();
     await expect(page.getByText("Bouteilles de soda : 4 pièces")).toBeVisible();
     await page.getByRole("button", { name: "Fusionner" }).click();
     const mergeDialog = page.getByRole("dialog");
@@ -208,6 +212,7 @@ test("proposition d'item par un invite, moderation (approbation avec reclamation
     // définitive, jamais renvoyé à personne.
     await marcPage.goto(`/e/${event.short_code}`);
     await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "À apporter" }).click();
     await marcPage.getByRole("button", { name: "Proposer un item" }).click();
     await marcPage.getByPlaceholder("Ex. Glaçons, jus d'orange...").fill("Bonbons");
     await marcPage.getByLabel("Quantité proposée").fill("1");
@@ -216,6 +221,7 @@ test("proposition d'item par un invite, moderation (approbation avec reclamation
 
     await page.goto(`/e/${event.short_code}`);
     await page.getByRole("button", { name: "Participer" }).click();
+    await page.getByRole("button", { name: "À apporter" }).click();
     await expect(page.getByText("Bonbons : 1 pièce")).toBeVisible();
     await page.getByRole("button", { name: "Refuser" }).click();
     await expect(page.getByText("Bonbons")).not.toBeVisible({ timeout: 15_000 });
@@ -313,6 +319,7 @@ test("dire 'je ne peux pas' retire automatiquement les réclamations déjà pris
     // Marc réclame les 3 litres de vodka.
     await marcPage.goto(`/e/${event.short_code}`);
     await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "À apporter" }).click();
     await marcPage.getByLabel("Ma quantité").fill("3");
     await marcPage.getByRole("button", { name: "J'apporte" }).click();
     await expect(marcPage.getByText("3 L / 3 L")).toBeVisible({ timeout: 15_000 });
@@ -384,6 +391,7 @@ test("dire 'je ne peux pas' retire automatiquement les réclamations déjà pris
     // de proposition "Chips" dans la modération.
     await page.goto(`/e/${event.short_code}`);
     await page.getByRole("button", { name: "Participer" }).click();
+    await page.getByRole("button", { name: "À apporter" }).click();
     await expect(page.getByText("0 L / 3 L")).toBeVisible();
     await expect(page.getByText("Marc", { exact: false })).not.toBeVisible();
     await expect(page.getByText("Chips", { exact: false })).not.toBeVisible();

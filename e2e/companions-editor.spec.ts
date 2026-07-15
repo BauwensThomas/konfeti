@@ -95,10 +95,12 @@ test("ajout d'un accompagnant apres l'inscription, puis retrait avec ajustement 
     // Marc prend des engagements : 1.5 kg de glaçons et vote "Tarte".
     await marcPage.goto(`/e/${event.short_code}`);
     await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "À apporter" }).click();
     await expect(marcPage.getByText("0 kg / 5 kg")).toBeVisible();
     await marcPage.getByLabel("Ma quantité").fill("1.5");
     await marcPage.getByRole("button", { name: "J'apporte" }).click();
     await expect(marcPage.getByText("1.5 kg / 5 kg")).toBeVisible({ timeout: 15_000 });
+    await marcPage.getByRole("button", { name: "Sondages" }).click();
     await marcPage.getByRole("listitem").filter({ hasText: "Tarte" }).getByRole("checkbox").check();
     await expect(marcPage.getByRole("listitem").filter({ hasText: "Tarte" })).toContainText("1 vote", {
       timeout: 15_000,
@@ -138,7 +140,9 @@ test("ajout d'un accompagnant apres l'inscription, puis retrait avec ajustement 
     expect(claimAfter?.quantity).toBeCloseTo(0.3, 5);
 
     await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "À apporter" }).click();
     await expect(marcPage.getByText("0.3 kg / 5 kg")).toBeVisible({ timeout: 15_000 });
+    await marcPage.getByRole("button", { name: "Sondages" }).click();
     await expect(marcPage.getByRole("listitem").filter({ hasText: "Tarte" }).getByRole("checkbox")).toBeChecked();
 
     await marcContext.close();

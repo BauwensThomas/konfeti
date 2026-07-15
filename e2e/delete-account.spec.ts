@@ -136,9 +136,11 @@ test("suppression de compte : profil efface, messages anonymises, votes/qui-appo
     // anonymisé, retour Thomas).
     await marcPage.goto(`/e/${event.short_code}`);
     await marcPage.getByRole("button", { name: "Participer" }).click();
+    await marcPage.getByRole("button", { name: "À apporter" }).click();
     await marcPage.getByLabel("Ma quantité").fill("2");
     await marcPage.getByRole("button", { name: "J'apporte" }).click();
     await expect(marcPage.getByText("2 pièces / 4 pièces")).toBeVisible({ timeout: 15_000 });
+    await marcPage.getByRole("button", { name: "Sondages" }).click();
     await marcPage.getByRole("listitem").filter({ hasText: "Rock" }).getByRole("checkbox").check();
     await expect(marcPage.getByRole("listitem").filter({ hasText: "Rock" })).toContainText("1 vote", {
       timeout: 15_000,
