@@ -113,6 +113,12 @@ export function RestaurantPollPicker({
           </ul>
         </div>
       )}
+      {/* Retour Thomas : avec un seul restaurant, "Suivant" reste désactivé
+          (voir `canAdvance` dans CreateEventWizard.tsx) -- message explicite
+          pour ne jamais laisser deviner pourquoi. */}
+      {selectedOptions.length === 1 && (
+        <p className="text-xs font-semibold text-accent-coral">{t("step4.restaurantNeedsOneMore")}</p>
+      )}
     </div>
   );
 }

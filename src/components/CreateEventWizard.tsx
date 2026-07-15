@@ -307,6 +307,18 @@ export function CreateEventWizard({
     if (step === 3) {
       return !rsvpDeadlineTooLate && !rsvpDeadlineInPast;
     }
+    if (step === 4) {
+      // Retour Thomas : un sondage resto avec un seul restaurant sélectionné
+      // était jusqu'ici silencieusement écarté à la création (règle "2
+      // options minimum" déjà en place pour tout sondage), sans aucun
+      // message -- bloque désormais explicitement l'avancée du wizard tant
+      // qu'il en manque, au lieu de laisser deviner pourquoi le sondage a
+      // disparu après coup.
+      const restaurantPollsMissingOptions = data.polls.some(
+        (poll) => poll.kind === "restaurant" && poll.options.filter((o) => o.label.trim()).length < 2,
+      );
+      if (restaurantPollsMissingOptions) return false;
+    }
     return true;
   }
 

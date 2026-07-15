@@ -251,7 +251,8 @@
       "restaurantSearchEmpty": "Aucun restaurant trouvé à proximité.",
       "restaurantSearchNeedsLocation": "Renseigne d'abord une adresse à l'étape 1 pour chercher des restaurants à proximité.",
       "restaurantSelectedCount": "{count} restaurant(s) sélectionné(s)",
-      "restaurantRemoveSelected": "Retirer"
+      "restaurantRemoveSelected": "Retirer",
+      "restaurantNeedsOneMore": "Sélectionne au moins 1 restaurant de plus pour continuer (2 minimum)."
     },
     "step5": {
       "heading": "Ce que voient les bénéficiaires",
