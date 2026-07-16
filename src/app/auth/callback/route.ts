@@ -5,10 +5,20 @@ import { createClient } from "@/lib/supabase/server";
  * Point de retour commun au magic link email et à la connexion Google (brief 1.2,
  * double porte). Hors du segment [locale] : c'est un point technique, pas une page.
  * Doit être ajouté dans Supabase Dashboard > Authentication > URL Configuration >
- * Redirect URLs (ex: http://localhost:3000/auth/callback, puis l'URL de prod).
+ * Redirect URLs (http://localhost:3000/auth/callback + l'URL de prod) : si
+ * l'URL demandée (construite depuis NEXT_PUBLIC_APP_URL) n'y est pas, Supabase
+ * l'ignore silencieusement et retombe sur la Site URL configurée, sans erreur
+ * explicite.
  */
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  // Construite depuis NEXT_PUBLIC_APP_URL, jamais depuis `new URL(request.url).origin` :
+  // le Proxy de Next.js 16 (src/proxy.ts, voir sa doc -- "network boundary in
+  // front of the app") reconstruit l'origine vue par les Route Handlers via son
+  // propre saut interne, qui ne reflète pas toujours fidèlement le Host que le
+  // client a utilisé pour se connecter (piège réel rencontré en local -- voir
+  // DECISIONS.md).
+  const origin = process.env.NEXT_PUBLIC_APP_URL ?? "https://konfeti.belgacai.com";
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/mes-evenements";
 

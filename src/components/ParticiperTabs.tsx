@@ -34,7 +34,7 @@ export function ParticiperTabs({
 }) {
   const t = useTranslations("EventPage");
   const tabNavigation = useTabNavigation();
-  const subTabs: SubTab[] = cagnotte ? ["sondages", "bring", "cagnotte"] : ["sondages", "bring"];
+  const subTabs: SubTab[] = ["sondages", "bring", ...(cagnotte ? (["cagnotte"] as const) : [])];
   const [active, setActive] = useState<SubTab>("sondages");
 
   // Retour Thomas : "quand je clique sur la bannière j'arrive sur sondage"

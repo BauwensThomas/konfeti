@@ -61,7 +61,7 @@ export type WizardData = {
   beneficiaryHiddenBlocks: BeneficiaryBlock[];
 };
 
-export type BeneficiaryBlock = "pot" | "backstage" | "chat" | "bring" | "polls" | "playlist" | "participants";
+export type BeneficiaryBlock = "pot" | "backstage" | "chat" | "bring" | "polls" | "participants";
 
 // "Qui apporte quoi" (brief 4.4) : `id` reste `null` pour une ligne ajoutée
 // dans cette session du wizard (pas encore en base) -- distingué en édition
@@ -1375,15 +1375,7 @@ export function CreateEventWizard({
 
 // Ordre d'affichage de l'étape 5 (checkbox "Masquer X aux bénéficiaires" +
 // phrase dynamique).
-const BENEFICIARY_BLOCKS: BeneficiaryBlock[] = [
-  "pot",
-  "backstage",
-  "chat",
-  "bring",
-  "polls",
-  "playlist",
-  "participants",
-];
+const BENEFICIARY_BLOCKS: BeneficiaryBlock[] = ["pot", "backstage", "chat", "bring", "polls", "participants"];
 
 // referenceDate = date de la fête si elle est connue, sinon l'année en cours
 // (cas fréquent : la fête a lieu avant ou après la date exacte de naissance).

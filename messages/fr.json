@@ -2,7 +2,7 @@
   "Home": {
     "title": "Konfeti",
     "subtitle": "Des invitations qui donnent envie de venir.",
-    "description": "Réponses, chat, qui apporte quoi, cagnotte partagée : tout se passe au même endroit.\nFini le groupe WhatsApp qui part dans tous les sens.",
+    "description": "Réponses, chat, qui apporte quoi, cagnotte partagée : tout se passe au même endroit.\nFini le groupe de discussion qui part dans tous les sens.",
     "ctaCreate": "Créer mon événement",
     "featureChatTitle": "Un chat rien qu'à vous",
     "featureChatText": "Chaque événement a sa propre conversation, avec un fil secret pour préparer les surprises.",
@@ -291,12 +291,6 @@
           "withAccess": "aux sondages",
           "hintPro": "Avantage : cache un sondage lié à la surprise (ex. choix du gâteau).",
           "hintCon": "Inconvénient : le bénéficiaire ne peut pas voter comme les autres invités."
-        },
-        "playlist": {
-          "label": "la playlist",
-          "withAccess": "à la playlist",
-          "hintPro": "Avantage : garde une surprise musicale.",
-          "hintCon": "Inconvénient : le bénéficiaire ne peut pas proposer ses propres titres."
         },
         "participants": {
           "label": "la liste des participants",

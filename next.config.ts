@@ -20,9 +20,15 @@ const supabaseWsUrl = supabaseUrl.replace(/^https:/, "wss:");
 // les fetch RSC de Next.js pour la navigation client) en https://, ce qui
 // casse tout en local puisque le serveur dev ne tourne qu'en http://
 // ("Failed to fetch RSC payload", piège rencontré et corrigé).
+//
+// `https://va.vercel-scripts.com` uniquement en dev : Vercel Analytics
+// charge un script de debug depuis ce domaine externe UNIQUEMENT en
+// développement (`script.debug.js`) -- en production, `<Analytics />`
+// utilise le proxy same-origin de Next (`/_vercel/insights/...`), déjà
+// couvert par 'self', jamais besoin de ce domaine externe.
 const cspHeader = `
   default-src 'self';
-  script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval'" : ""};
+  script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' https://va.vercel-scripts.com" : ""};
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: ${supabaseUrl};
   font-src 'self';
