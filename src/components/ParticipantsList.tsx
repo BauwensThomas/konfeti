@@ -11,6 +11,8 @@ import {
   denyPotAccess,
   revokePotAccess,
   transferEventHost,
+  blockParticipant,
+  unblockParticipant,
 } from "@/app/[locale]/actions/participants";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -25,7 +27,10 @@ export type ParticipantRow = {
   lastName: string | null;
   phone: string | null;
   avatarUrl: string | null;
-  status: "pending" | "approved" | "restricted";
+  // "removed" apparaît uniquement pour une ligne bloquée (voir `blocked`
+  // ci-dessous) -- un retrait/départ normal n'apparaît jamais du tout dans
+  // cette liste (EventPersonnes.tsx ne les récupère pas).
+  status: "pending" | "approved" | "restricted" | "removed";
   role: "guest" | "admin" | "beneficiary";
   answer: "yes" | "maybe" | "no";
   companionsCount: number;
@@ -35,6 +40,10 @@ export type ParticipantRow = {
   // uniquement le jour même (voir `isJourJ` sur `ParticipantsList`).
   checkedInAt: string | null;
   arrivedHomeAt: string | null;
+  // Blocage définitif (Phase 9, retour Thomas) : contrairement à un retrait
+  // classique, l'identité N'EST PAS anonymisée (voir la migration) -- l'admin
+  // doit pouvoir reconnaître qui est bloqué pour décider de débloquer ou non.
+  blocked: boolean;
 };
 
 export function ParticipantsList({
@@ -45,6 +54,7 @@ export function ParticipantsList({
   isHost,
   hostProfileId,
   potEnabled,
+  autoApprove,
   rows,
   isBeneficiary,
   isParticipantsHidden,
@@ -60,6 +70,12 @@ export function ParticipantsList({
   hostProfileId: string;
   isHost: boolean;
   potEnabled: boolean;
+  // Blocage définitif (Phase 9, retour Thomas) : le bouton "Bloquer" n'est
+  // proposé que si l'événement accepte n'importe qui automatiquement -- sans
+  // ça, la file d'attente normale suffit déjà à filtrer un retour indésirable
+  // (l'admin verrait la demande et pourrait simplement refuser à nouveau).
+  // Débloquer/voir la section "Bloqués" reste, lui, toujours possible.
+  autoApprove: boolean;
   rows: ParticipantRow[];
   isBeneficiary: boolean;
   isParticipantsHidden: boolean;
@@ -77,6 +93,7 @@ export function ParticipantsList({
   const [isPending, startTransition] = useTransition();
   const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | null>(null);
   const [confirmingTransferId, setConfirmingTransferId] = useState<string | null>(null);
+  const [confirmingBlockId, setConfirmingBlockId] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
 
@@ -106,6 +123,10 @@ export function ParticipantsList({
   // juste compter les inscriptions).
   const approvedYesHeadcount = approvedYes.reduce((sum, r) => sum + 1 + r.companionsCount, 0);
   const approvedMaybeHeadcount = approvedMaybe.reduce((sum, r) => sum + 1 + r.companionsCount, 0);
+  // Blocage définitif (Phase 9, retour Thomas) : section à part, toujours en
+  // dernier, jamais mêlée aux compteurs/sections ci-dessus (ces lignes ont
+  // `status = 'removed'`, déjà exclu de toutes les autres sections).
+  const blocked = rows.filter((r) => r.blocked);
 
   // L'abonnement Realtime "rsvps" vit désormais dans EventTabs (toujours
   // monté, voir ce fichier) plutôt qu'ici : ce panneau se démonte avec le
@@ -195,6 +216,31 @@ export function ParticipantsList({
     });
   }
 
+  function handleBlock(rsvpId: string) {
+    setRoleError(null);
+    startTransition(async () => {
+      const result = await blockParticipant(rsvpId, shortCode);
+      setConfirmingBlockId(null);
+      if (!result.ok) {
+        setRoleError(t("errorUnknown"));
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function handleUnblock(rsvpId: string) {
+    setRoleError(null);
+    startTransition(async () => {
+      const result = await unblockParticipant(rsvpId, shortCode);
+      if (!result.ok) {
+        setRoleError(t("errorUnknown"));
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   return (
     <Card className="flex flex-col gap-6">
       {roleError && (
@@ -273,6 +319,17 @@ export function ParticipantsList({
                     >
                       {t("reject")}
                     </Button>
+                    {autoApprove && (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        className="w-full"
+                        disabled={isPending}
+                        onClick={() => setConfirmingBlockId(row.id)}
+                      >
+                        {t("block")}
+                      </Button>
+                    )}
                   </div>
                 </li>
               ))}
@@ -340,6 +397,17 @@ export function ParticipantsList({
                     </Button>
                   </div>
                 )}
+                {autoApprove && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    className="w-full"
+                    disabled={isPending}
+                    onClick={() => setConfirmingBlockId(row.id)}
+                  >
+                    {t("block")}
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
@@ -366,6 +434,8 @@ export function ParticipantsList({
               onRoleChange={handleRoleChange}
               onRemove={setConfirmingRemoveId}
               onTransferHost={setConfirmingTransferId}
+              onBlock={setConfirmingBlockId}
+              autoApprove={autoApprove}
             />
           ))}
         </ul>
@@ -392,11 +462,53 @@ export function ParticipantsList({
                 onRoleChange={handleRoleChange}
                 onRemove={setConfirmingRemoveId}
                 onTransferHost={setConfirmingTransferId}
+                onBlock={setConfirmingBlockId}
+                autoApprove={autoApprove}
               />
             ))}
           </ul>
         </section>
       )}
+
+      {isAdmin && blocked.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-display text-lg font-bold text-foreground">{t("blockedSectionTitle")}</h2>
+          <ul className="flex flex-col gap-2">
+            {blocked.map((row) => (
+              <li key={row.id} className="flex flex-col gap-2 rounded-konfeti border border-border p-3">
+                <ParticipantIdentity
+                  row={row}
+                  companionsLabel={t("companionsCount", { count: row.companionsCount })}
+                  t={t}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  disabled={isPending}
+                  onClick={() => handleUnblock(row.id)}
+                >
+                  {t("unblock")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <Modal open={confirmingBlockId !== null} onClose={() => setConfirmingBlockId(null)}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- asset local déjà optimisé, voir CancelEventButton */}
+        <img src="/attention.webp" alt="" width={200} height={200} className="mx-auto" />
+        <p className="text-center text-base text-foreground">{t("blockConfirmTitle")}</p>
+        <div className="flex justify-center gap-3">
+          <Button disabled={isPending} onClick={() => confirmingBlockId && handleBlock(confirmingBlockId)}>
+            {t("blockConfirmYes")}
+          </Button>
+          <Button variant="ghost" onClick={() => setConfirmingBlockId(null)}>
+            {t("blockConfirmNo")}
+          </Button>
+        </div>
+      </Modal>
 
       <Modal open={confirmingRemoveId !== null} onClose={() => setConfirmingRemoveId(null)}>
         {/* eslint-disable-next-line @next/next/no-img-element -- asset local déjà optimisé, voir CancelEventButton */}
@@ -451,6 +563,8 @@ function ApprovedParticipantRow({
   onRoleChange,
   onRemove,
   onTransferHost,
+  onBlock,
+  autoApprove,
 }: {
   row: ParticipantRow;
   isSelf: boolean;
@@ -466,6 +580,8 @@ function ApprovedParticipantRow({
   onRoleChange: (rsvpId: string, role: "guest" | "admin" | "beneficiary") => void;
   onRemove: (rsvpId: string) => void;
   onTransferHost: (rsvpId: string) => void;
+  onBlock: (rsvpId: string) => void;
+  autoApprove: boolean;
 }) {
   // "Organisateur" réservé à celui qui détient host_id ACTUELLEMENT (retour
   // Thomas : "dans les personnes, je suis marqué comme administrateur et pas
@@ -483,7 +599,7 @@ function ApprovedParticipantRow({
         t={t}
       />
       {isAdmin && !isSelf && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2">
           {/* L'organisateur est intouchable, même pour un autre admin (retour
               Thomas : "je sais supprimer ou changer le rôle de
               l'organisateur, ce n'est pas logique") -- ni le sélecteur de
@@ -506,13 +622,30 @@ function ApprovedParticipantRow({
                 <option value="admin">{t("roleAdmin")}</option>
                 <option value="beneficiary">{t("roleBeneficiary")}</option>
               </select>
-              <button
-                type="button"
+              {/* Même style de bouton que "En attente" (retour Thomas : "en
+                  attente c'est comme ça, il faut faire la même chose pour
+                  retirer bloquer") -- un vrai bouton pleine largeur plutôt
+                  qu'un simple lien texte. */}
+              <Button
+                variant="danger"
+                size="sm"
+                className="w-full"
+                disabled={isPending}
                 onClick={() => onRemove(row.id)}
-                className="text-sm font-semibold text-accent-coral"
               >
                 {t("remove")}
-              </button>
+              </Button>
+              {autoApprove && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="w-full"
+                  disabled={isPending}
+                  onClick={() => onBlock(row.id)}
+                >
+                  {t("block")}
+                </Button>
+              )}
             </>
           )}
           {/* Seul l'hôte ACTUEL (jamais un simple admin promu) peut transférer
@@ -520,13 +653,14 @@ function ApprovedParticipantRow({
               (retour Thomas : possibilité de quitter son propre événement une
               fois un autre admin en place). */}
           {isHost && row.role === "admin" && (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
+              className="w-full"
               onClick={() => onTransferHost(row.id)}
-              className="text-sm font-semibold text-primary"
             >
               {t("transferHost")}
-            </button>
+            </Button>
           )}
         </div>
       )}

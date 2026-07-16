@@ -152,7 +152,7 @@ export function MessageComposer({
     setUploading(false);
 
     if (!uploadResult.ok) {
-      setError(t("sendError"));
+      setError(uploadResult.error === "disabled" ? t("composer.photosDisabled") : t("sendError"));
       return;
     }
 

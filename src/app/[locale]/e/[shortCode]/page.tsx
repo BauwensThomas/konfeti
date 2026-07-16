@@ -526,6 +526,7 @@ export default async function EventPage({
                 isHost={isHost}
                 hostProfileId={event.host_id}
                 potEnabled={event.pot_enabled}
+                autoApprove={event.auto_approve}
                 isBeneficiary={isBeneficiary}
                 isParticipantsHidden={isParticipantsHiddenForBeneficiaries}
                 beneficiaryNames={beneficiaryNames}

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import createIntlMiddleware from "next-intl/middleware";
 import { routing } from "./i18n/routing";
+import { ADMIN_SESSION_COOKIE, verifySessionCookieValue } from "./lib/admin-auth";
 
 const intlMiddleware = createIntlMiddleware(routing);
 
@@ -18,7 +19,33 @@ function isProtected(pathname: string) {
   );
 }
 
+// `/admin` (Phase 9, back-office développeur) : hors du segment `[locale]`,
+// jamais concerné par next-intl ni par le rafraîchissement de session
+// Supabase (pas un compte, un cookie de session signé maison -- voir
+// `lib/admin-auth.ts`). Vérifié ICI, en plus du guard dans chaque page
+// `/admin/*` : défense en profondeur contre un scan direct des sous-pages
+// (brute-force/énumération), retour explicite de Thomas en validant le plan.
+function handleAdminRoute(request: NextRequest): NextResponse | null {
+  if (!request.nextUrl.pathname.startsWith("/admin")) return null;
+  if (request.nextUrl.pathname === "/admin/login") return NextResponse.next();
+
+  const cookieValue = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
+  try {
+    if (!verifySessionCookieValue(cookieValue)) {
+      return NextResponse.redirect(new URL("/admin/login", request.url));
+    }
+  } catch {
+    // ADMIN_SESSION_SECRET manquante ou toute autre erreur inattendue :
+    // échec fermé (redirection), jamais un accès accordé par défaut.
+    return NextResponse.redirect(new URL("/admin/login", request.url));
+  }
+  return NextResponse.next();
+}
+
 export default async function proxy(request: NextRequest) {
+  const adminResponse = handleAdminRoute(request);
+  if (adminResponse) return adminResponse;
+
   const response = intlMiddleware(request);
 
   const supabase = createServerClient(

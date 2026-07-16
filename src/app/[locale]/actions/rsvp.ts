@@ -11,7 +11,7 @@ import { pushMessages } from "@/lib/push-messages";
 
 export type SubmitRsvpResult =
   | { ok: true }
-  | { ok: false; error: "invalid" | "already_rsvped" | "rate_limited" | "unknown" };
+  | { ok: false; error: "invalid" | "already_rsvped" | "blocked" | "rate_limited" | "unknown" };
 
 // Crée la participation de l'appelant (statut "pending", brief 1.3 étape 3),
 // une fois connecté (retour Thomas : porte unique de connexion, plus de
@@ -67,8 +67,14 @@ export async function submitRsvp(
   });
 
   if (rpcError || !rsvpId) {
-    return { ok: false, error: "already_rsvped" };
+    return { ok: false, error: rpcError?.message.includes("participant is blocked") ? "blocked" : "already_rsvped" };
   }
+
+  // IP de la dernière soumission (retour Thomas, back-office : utile pour
+  // repérer un même fauteur de troubles qui reviendrait sous un autre
+  // compte) -- `create_own_rsvp` (SQL) ne connaît pas cette colonne, mise à
+  // jour séparée comme `wants_reminders` juste en dessous.
+  await supabase.from("rsvps").update({ last_ip: ip }).eq("id", rsvpId);
 
   if (data.companions.length > 0) {
     await supabase.from("companions").insert(

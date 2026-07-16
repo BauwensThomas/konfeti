@@ -118,7 +118,13 @@ export function GuestIdentityForm({
       if (result.ok) {
         onSuccess();
       } else {
-        setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
+        setError(
+          result.error === "rate_limited"
+            ? t("errorRateLimited")
+            : result.error === "blocked"
+              ? t("errorBlocked")
+              : t("errorUnknown"),
+        );
       }
     });
   }

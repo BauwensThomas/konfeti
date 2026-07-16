@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logAdminEvent } from "@/lib/admin-log";
 
 /**
  * Purge définitive (demande de Thomas, suppression "hybride") : un événement
@@ -33,9 +34,11 @@ export async function GET(request: Request) {
     );
 
   if (selectError) {
+    await logAdminEvent("cron:purge-old-events", "error", selectError.message);
     return NextResponse.json({ error: selectError.message }, { status: 500 });
   }
   if (!eventsToPurge || eventsToPurge.length === 0) {
+    await logAdminEvent("cron:purge-old-events", "info", "0 événement purgé");
     return NextResponse.json({ purged: 0 });
   }
 
@@ -55,8 +58,10 @@ export async function GET(request: Request) {
     );
 
   if (deleteError) {
+    await logAdminEvent("cron:purge-old-events", "error", deleteError.message);
     return NextResponse.json({ error: deleteError.message }, { status: 500 });
   }
 
+  await logAdminEvent("cron:purge-old-events", "info", `${eventsToPurge.length} événement(s) purgé(s)`);
   return NextResponse.json({ purged: eventsToPurge.length });
 }

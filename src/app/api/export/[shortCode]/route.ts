@@ -1,10 +1,18 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
+import sharp from "sharp";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib";
 import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { formatQuantity, type BringUnit } from "@/lib/bring-units";
-import { fetchPeriodForecasts, describeWeatherCode, shouldShowWeather, type WeatherLabelKey } from "@/lib/weather";
+import {
+  fetchPeriodForecasts,
+  describeWeatherCode,
+  shouldShowWeather,
+  type WeatherIconKey,
+  type WeatherLabelKey,
+} from "@/lib/weather";
+import { fetchAllPages } from "@/lib/pagination";
 
 // Export PDF pour les admins (brief 4.13) : "prénom, nom, téléphone, sexe,
 // réponse, accompagnants, engagements qui amène quoi, contribution cagnotte
@@ -58,13 +66,29 @@ export async function GET(
   // demande à rejoindre l'événement, la personne ne doit pas faire partie
   // de la liste") -- la colonne "Statut" n'a alors plus lieu d'être, elle
   // vaudrait toujours "Approuvé".
-  const { data: rsvpRows } = await supabase
-    .from("rsvps")
-    .select("id, first_name, last_name, phone, gender, answer, checked_in_at, arrived_home_at")
-    .eq("event_id", event.id)
-    .eq("status", "approved")
-    .order("first_name");
-  const rsvps = rsvpRows ?? [];
+  // Pagination explicite (`fetchAllPages`) : PostgREST plafonne les lignes
+  // par requête (souvent 1000) -- un export PDF ne doit jamais silencieusement
+  // couper la liste pour un très gros événement (voir DECISIONS.md).
+  type ExportRsvpRow = {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    phone: string | null;
+    gender: string | null;
+    answer: string;
+    checked_in_at: string | null;
+    arrived_home_at: string | null;
+  };
+  const rsvps = await fetchAllPages<ExportRsvpRow>((from, to) =>
+    supabase
+      .from("rsvps")
+      .select("id, first_name, last_name, phone, gender, answer, checked_in_at, arrived_home_at")
+      .eq("event_id", event.id)
+      .eq("status", "approved")
+      .order("first_name")
+      .range(from, to)
+      .returns<ExportRsvpRow[]>(),
+  );
   const rsvpIds = rsvps.map((r) => r.id);
 
   const { data: companionRows } =
@@ -246,28 +270,34 @@ export async function GET(
 
   // Retour Thomas : un organisateur/porteur de cagnotte répondant "je ne
   // peux pas" reste "approved" (voir `update_my_answer`) tout en ne venant
-  // pas -- le tableau principal ("Je viens"/"Peut-être") ne doit plus le
-  // lister, il a son propre tableau plus bas.
-  const attendingRsvps = rsvps.filter((r) => r.answer !== "no");
-
+  // pas -- ni le tableau "Je viens" ni "Peut-être" ne doit plus le lister,
+  // il a son propre tableau plus bas.
+  //
+  // Retour Thomas (Phase 9) : "Je viens" et "Peut-être" séparés en deux
+  // tableaux distincts, plus mélangés dans un seul avec juste une colonne
+  // "Réponse" pour les distinguer.
+  const toRow = (r: (typeof rsvps)[number]): CellValue[] => {
+    return [
+      "",
+      r.first_name ?? "",
+      r.last_name ?? "",
+      r.phone ?? "",
+      r.gender === "female" ? "Femme" : r.gender === "male" ? "Homme" : "",
+      answerLabel(r.answer),
+      companionsByRsvp.get(r.id) ?? [],
+      claimsByRsvp.get(r.id) ?? [],
+      ...(polls.length > 0 ? [pollLinesFor(r.id)] : []),
+      ...(event.pot_enabled ? [((contributionsByRsvp.get(r.id) ?? 0) / 100).toFixed(2)] : []),
+      r.checked_in_at ? "Oui" : "Non",
+      r.arrived_home_at ? "Oui" : "Non",
+    ];
+  };
   // `string[]` pour les colonnes à items multiples (chaque entrée devient sa
   // propre ligne dans le PDF -- retour Thomas : "sur plusieurs lignes selon
   // le nombre de choses qu'il rapporte", pas tout collé sur une seule ligne
   // qui se contente de retourner à la ligne une fois trop large).
-  const rows: CellValue[][] = attendingRsvps.map((r) => [
-    "",
-    r.first_name ?? "",
-    r.last_name ?? "",
-    r.phone ?? "",
-    r.gender === "female" ? "Femme" : r.gender === "male" ? "Homme" : "",
-    answerLabel(r.answer),
-    companionsByRsvp.get(r.id) ?? [],
-    claimsByRsvp.get(r.id) ?? [],
-    ...(polls.length > 0 ? [pollLinesFor(r.id)] : []),
-    ...(event.pot_enabled ? [((contributionsByRsvp.get(r.id) ?? 0) / 100).toFixed(2)] : []),
-    r.checked_in_at ? "Oui" : "Non",
-    r.arrived_home_at ? "Oui" : "Non",
-  ]);
+  const yesRows: CellValue[][] = rsvps.filter((r) => r.answer === "yes").map(toRow);
+  const maybeRows: CellValue[][] = rsvps.filter((r) => r.answer === "maybe").map(toRow);
 
   // Retour Thomas : "un tableau en dessous de l'autre avec ceux qui ne
   // viennent pas mais qui ont donné pour la cagnotte" + "il faut aussi
@@ -303,12 +333,13 @@ export async function GET(
       ]);
     }
   }
-  const secondTable =
+  const nonAttendingTable =
     nonAttendingContributorRows.length > 0
       ? {
           title: "Ne viennent pas, mais ont contribué à la cagnotte",
           headers: ["Prénom", "Nom", "Téléphone", "Sexe", "Cagnotte (€)"],
           rows: nonAttendingContributorRows,
+          emptyMessage: "",
         }
       : null;
 
@@ -328,8 +359,10 @@ export async function GET(
   // répond pas ou si l'événement est trop loin dans le temps. Affichée à
   // droite du titre, à la même hauteur que la mascotte (retour Thomas,
   // même emplacement que sur la page live), pas mêlée aux `metaLines`
-  // (date/adresse) sous le titre.
-  const weatherLines: string[] = [];
+  // (date/adresse) sous le titre. Structure conservée (pas juste une chaîne
+  // formatée) : retour Thomas "je veux voir des images comme sur la page
+  // d'accueil" -- l'icône se dessine à partir de `icon`, voir `buildParticipantsPdf`.
+  const weatherEntries: { hourLabel: string; icon: WeatherIconKey; label: string; temp: number }[] = [];
   const hasCoords = event.location_lat != null && event.location_lng != null;
   if (
     shouldShowWeather(event.starts_at, event.date_mode, hasCoords) &&
@@ -343,9 +376,9 @@ export async function GET(
     );
     if (forecasts) {
       for (const { period, hour, code, temp } of forecasts) {
-        const { labelKey } = describeWeatherCode(code);
+        const { icon, labelKey } = describeWeatherCode(code);
         const suffix = period === "nextMorning" ? " (lendemain)" : "";
-        weatherLines.push(`${hour}h${suffix} · ${WEATHER_LABELS[labelKey]} · ${Math.round(temp)}°`);
+        weatherEntries.push({ hourLabel: `${hour}h${suffix}`, icon, label: WEATHER_LABELS[labelKey], temp });
       }
     }
   }
@@ -374,16 +407,13 @@ export async function GET(
 
   const mascotBuffer = await readFile(path.join(process.cwd(), "public", "mascot-og.png"));
 
-  const pdfBytes = await buildParticipantsPdf(
-    event.title,
-    summaryLines,
-    metaLines,
-    weatherLines,
-    mascotBuffer,
-    headers,
-    rows,
-    secondTable,
-  );
+  const tables = [
+    { title: "Je viens", headers, rows: yesRows, emptyMessage: "Personne n'a répondu \"je viens\" pour le moment." },
+    { title: "Peut-être", headers, rows: maybeRows, emptyMessage: "Personne n'a répondu \"peut-être\" pour le moment." },
+    ...(nonAttendingTable ? [nonAttendingTable] : []),
+  ];
+
+  const pdfBytes = await buildParticipantsPdf(event.title, summaryLines, metaLines, weatherEntries, mascotBuffer, tables);
 
   return new Response(Buffer.from(pdfBytes), {
     headers: {
@@ -517,27 +547,82 @@ const ORANGE = rgb(0.976, 0.451, 0.086);
 
 const MASCOT_SIZE = 46;
 
+// Icônes météo pour le PDF (retour Thomas : "je veux voir des images comme
+// sur la page d'accueil") -- même tracé que `src/components/weather/WeatherIcons.tsx`
+// (composants React, inutilisables tels quels dans du SVG brut/pdf-lib),
+// dupliqué ici volontairement : même principe que `WEATHER_LABELS` plus haut,
+// ce fichier reste indépendant de React/next-intl. `sharp` rasterise le SVG en
+// PNG (même pattern que `/api/og/[shortCode]` et `/api/invitation-card/[shortCode]`,
+// voir DECISIONS.md) -- pdf-lib ne sait embarquer que du PNG/JPEG, jamais du SVG.
+const WEATHER_ICON_CLOUD = (fill: string) =>
+  `<path d="M18 42 Q10 42 10 34 Q10 27 17 26 Q18 17 28 17 Q37 17 39 25 Q48 25 48 34 Q48 42 40 42 Z" fill="${fill}" />`;
+
+const WEATHER_ICON_SVGS: Record<WeatherIconKey, string> = {
+  sunny: `<circle cx="32" cy="32" r="14" fill="#FACC15" />
+    <g stroke="#FACC15" stroke-width="4" stroke-linecap="round">
+      <path d="M32 6 V12" /><path d="M32 52 V58" /><path d="M6 32 H12" /><path d="M52 32 H58" />
+      <path d="M14 14 L18 18" /><path d="M46 46 L50 50" /><path d="M50 14 L46 18" /><path d="M18 46 L14 50" />
+    </g>`,
+  partlyCloudy: `<circle cx="24" cy="22" r="11" fill="#FACC15" />${WEATHER_ICON_CLOUD("#F9FAFB")}`,
+  cloudy: WEATHER_ICON_CLOUD("#D1D5DB"),
+  foggy: `${WEATHER_ICON_CLOUD("#E5E7EB")}
+    <g stroke="#9CA3AF" stroke-width="3" stroke-linecap="round"><path d="M12 48 H52" /><path d="M16 54 H48" /></g>`,
+  drizzle: `${WEATHER_ICON_CLOUD("#D1D5DB")}
+    <g stroke="#38BDF8" stroke-width="3" stroke-linecap="round"><path d="M22 48 V52" /><path d="M32 48 V52" /><path d="M42 48 V52" /></g>`,
+  rainy: `${WEATHER_ICON_CLOUD("#9CA3AF")}
+    <g stroke="#38BDF8" stroke-width="4" stroke-linecap="round"><path d="M20 46 L16 58" /><path d="M32 46 L28 58" /><path d="M44 46 L40 58" /></g>`,
+  snowy: `${WEATHER_ICON_CLOUD("#D1D5DB")}
+    <g fill="#FFFFFF" stroke="#93C5FD" stroke-width="1.5"><circle cx="21" cy="50" r="3.5" /><circle cx="32" cy="54" r="3.5" /><circle cx="43" cy="50" r="3.5" /></g>`,
+  stormy: `${WEATHER_ICON_CLOUD("#6B7280")}
+    <path d="M34 44 L26 54 H32 L28 62 L40 50 H34 Z" fill="#FACC15" />`,
+};
+
+// Rasterisées une seule fois par process (les icônes ne changent jamais) --
+// mêmes buffers PNG réutilisés pour toutes les requêtes suivantes, seul
+// l'embed dans le PDFDocument (par requête, voir `embeddedWeatherIcons` dans
+// `buildParticipantsPdf`) doit lui être refait à chaque génération.
+const weatherIconPngCache = new Map<WeatherIconKey, Promise<Buffer>>();
+
+function getWeatherIconPng(icon: WeatherIconKey): Promise<Buffer> {
+  let cached = weatherIconPngCache.get(icon);
+  if (!cached) {
+    const svg = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">${WEATHER_ICON_SVGS[icon]}</svg>`;
+    cached = sharp(Buffer.from(svg)).resize(96, 96).png().toBuffer();
+    weatherIconPngCache.set(icon, cached);
+  }
+  return cached;
+}
+
 async function buildParticipantsPdf(
   eventTitle: string,
   summaryLines: { text: string; color: RGB }[],
   metaLines: string[],
-  weatherLines: string[],
+  weatherEntries: { hourLabel: string; icon: WeatherIconKey; label: string; temp: number }[],
   mascotBuffer: Buffer,
-  headers: string[],
-  rows: CellValue[][],
-  // Retour Thomas : "un tableau en dessous de l'autre avec ceux qui ne
-  // viennent pas mais qui ont donné pour la cagnotte" -- un organisateur/
-  // porteur de cagnotte répondant "je ne peux pas" (voir `update_my_answer`)
-  // reste admin mais n'a plus sa place dans le tableau principal (compteur
-  // "je viens"/"peut-être", colonnes d'accompagnement...). Second tableau
-  // minimal (juste nom + montant), affiché seulement s'il y a au moins une
-  // ligne, `null` sinon (jamais de second tableau vide).
-  secondTable: { title: string; headers: string[]; rows: CellValue[][] } | null,
+  // Un tableau titré par section (retour Thomas, Phase 9 : "Je viens" et
+  // "Peut-être" séparés plutôt que mélangés avec une colonne "Réponse"),
+  // plus le tableau "ne viennent pas mais ont contribué" existant -- même
+  // mécanisme de rendu pour les trois, jamais un cas spécial pour le premier.
+  // `emptyMessage` vide ("") : le tableau ne s'affiche pas du tout s'il n'a
+  // aucune ligne (comportement historique de l'ancien "secondTable").
+  tables: { title: string; headers: string[]; rows: CellValue[][]; emptyMessage: string }[],
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const mascotImage = await doc.embedPng(mascotBuffer);
+
+  // Icônes météo (au plus 4, une par créneau) : embarquées une seule fois par
+  // icône réellement utilisée dans CE PDF, avant `drawPageChrome` (qui reste
+  // une fonction synchrone -- `doc.embedPng` est asynchrone, impossible à
+  // appeler depuis là sans transformer tous ses appelants en `await`).
+  const weatherIconImages = new Map<WeatherIconKey, PDFImage>();
+  for (const entry of weatherEntries) {
+    if (!weatherIconImages.has(entry.icon)) {
+      const png = await getWeatherIconPng(entry.icon);
+      weatherIconImages.set(entry.icon, await doc.embedPng(png));
+    }
+  }
 
   // Coupe un seul "mot" (ou toute la valeur pour une colonne `noSplit`)
   // caractère par caractère quand il dépasse `maxWidth` à lui seul --
@@ -634,14 +719,27 @@ async function buildParticipantsPdf(
       // Météo à droite du titre, à la même hauteur que la mascotte (retour
       // Thomas : même emplacement que sur la page live) -- une ligne par
       // créneau, alignée à droite, empilée sur la hauteur de la mascotte.
-      if (weatherLines.length > 0) {
-        const weatherFontSize = 8;
-        const weatherLineHeight = 10;
+      // Icône avant le texte (retour Thomas : "je veux voir des images comme
+      // sur la page d'accueil"), même icône que `EventWeather.tsx`.
+      if (weatherEntries.length > 0) {
+        // Retour Thomas : "la météo un peu plus grand" -- icônes et texte
+        // agrandis par rapport à la première version.
+        const weatherFontSize = 10;
+        const weatherLineHeight = 15;
+        const weatherIconSize = 12;
+        const weatherIconGap = 5;
         let wy = y - 4;
-        for (const line of weatherLines) {
-          const lineWidth = font.widthOfTextAtSize(line, weatherFontSize);
-          page.drawText(line, {
-            x: PAGE_WIDTH - MARGIN - lineWidth,
+        for (const entry of weatherEntries) {
+          const text = `${entry.hourLabel} · ${entry.label} · ${Math.round(entry.temp)}°`;
+          const textWidth = font.widthOfTextAtSize(text, weatherFontSize);
+          const rowWidth = weatherIconSize + weatherIconGap + textWidth;
+          const rowX = PAGE_WIDTH - MARGIN - rowWidth;
+          const icon = weatherIconImages.get(entry.icon);
+          if (icon) {
+            page.drawImage(icon, { x: rowX, y: wy - 2, width: weatherIconSize, height: weatherIconSize });
+          }
+          page.drawText(text, {
+            x: rowX + weatherIconSize + weatherIconGap,
             y: wy,
             size: weatherFontSize,
             font,
@@ -652,8 +750,10 @@ async function buildParticipantsPdf(
       }
       // Espace supplémentaire avant le compteur (retour Thomas : "trop serré
       // par rapport à la mascotte") -- un cran de plus que le simple bas de
-      // la mascotte/du sous-titre.
-      y -= Math.max(MASCOT_SIZE, 34) + 12 + 16;
+      // la mascotte/du sous-titre. Encore un cran (`LINE_HEIGHT`) en plus
+      // depuis l'ajout des icônes météo (retour Thomas : "le 'je viens' et
+      // tout ce qui est en dessous doit descendre d'une ligne").
+      y -= Math.max(MASCOT_SIZE, 34) + 12 + 16 + LINE_HEIGHT;
       // Compteur "je viens"/"peut-être"/total en gras, les 3 sur UNE seule
       // ligne (retour Thomas), alignés gauche/centre/droite -- utile pour les
       // chaises à placer ou une réservation au resto.
@@ -682,7 +782,10 @@ async function buildParticipantsPdf(
           y -= 14;
         }
       }
-      y -= 4;
+      // Retour Thomas : "il faut descendre le 'je viens' par rapport à
+      // l'adresse" -- même espace que celui déjà utilisé entre deux tableaux
+      // (voir `index > 0` plus bas), pas juste le reliquat de 4px d'avant.
+      y -= 18;
     } else {
       page.drawText(`${eventTitle} - Liste des participants (suite)`, { x: MARGIN, y, size: 10, font, color: MUTED });
       y -= 18;
@@ -829,22 +932,26 @@ async function buildParticipantsPdf(
     return yy;
   }
 
-  y = renderTable(headers, rows, y, "Aucun participant pour le moment.");
+  // Un titre de section + un espace au-dessus de CHAQUE tableau (retour
+  // Thomas, Phase 9) -- "Je viens"/"Peut-être" désormais séparés au même
+  // titre que l'ancien "second tableau" ne viennent pas/cagnotte, plus de
+  // cas spécial pour le premier. Un tableau à `emptyMessage` vide ("") ne
+  // s'affiche pas du tout s'il n'a aucune ligne (comportement historique).
+  tables.forEach((table, index) => {
+    if (table.rows.length === 0 && table.emptyMessage === "") return;
 
-  // Retour Thomas : second tableau "ne viennent pas mais ont contribué à la
-  // cagnotte" -- seulement s'il y a au moins une ligne (jamais de tableau
-  // vide), avec un espace + un titre de section entre les deux.
-  if (secondTable && secondTable.rows.length > 0) {
-    y -= 24;
-    if (y < MARGIN + 80) {
-      page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      allPages.push(page);
-      y = drawPageChrome(page, false);
+    if (index > 0) {
+      y -= 24;
+      if (y < MARGIN + 80) {
+        page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+        allPages.push(page);
+        y = drawPageChrome(page, false);
+      }
     }
-    page.drawText(secondTable.title, { x: MARGIN, y, size: 12, font: bold, color: INK });
+    page.drawText(table.title, { x: MARGIN, y, size: 12, font: bold, color: INK });
     y -= 18;
-    y = renderTable(secondTable.headers, secondTable.rows, y, "");
-  }
+    y = renderTable(table.headers, table.rows, y, table.emptyMessage);
+  });
 
   const generatedAt = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
   allPages.forEach((p, i) => {

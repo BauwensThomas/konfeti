@@ -305,3 +305,117 @@ test("acces restreint (je peux pas), cagnotte masquee au beneficiaire, et retour
     await deleteTestUser(host.id);
   }
 });
+
+test("blocage definitif (Phase 9) : empeche un retour, debloquer le permet a nouveau", async ({
+  page,
+  browser,
+}) => {
+  const hostEmail = `e2e-block-${Date.now()}@example.com`;
+  const host = await loginAs(page, hostEmail);
+  let eventId: string | null = null;
+  let guestId: string | null = null;
+
+  try {
+    const title = `Fete blocage ${Date.now()}`;
+    const event = await createTestEvent(page, title);
+    eventId = event.id;
+
+    // "Bloquer" n'est proposé que si l'événement accepte n'importe qui
+    // automatiquement (retour Thomas) -- activé directement en base, pas
+    // encore de case à cocher dédiée testée ici (wizard existant, hors
+    // périmètre de ce test).
+    await supabaseAdmin.from("events").update({ auto_approve: true }).eq("id", event.id);
+
+    const guestContext = await browser.newContext();
+    const guestPage = await guestContext.newPage();
+
+    // Auto-approbation réellement câblée (Phase 9) : atterrit directement en
+    // "approved", jamais "pending". Attente sur la BASE (pas sur un titre de
+    // page, visible même pour un visiteur non validé -- piège rencontré en
+    // écrivant ce test, l'assertion passait alors que le formulaire était
+    // encore en cours de soumission).
+    await submitGuestIdentity(guestPage, event.short_code, "Bruno", "Je viens !");
+
+    let rsvp: { id: string; profile_id: string; status: string } | null = null;
+    await expect
+      .poll(async () => {
+        const { data } = await supabaseAdmin
+          .from("rsvps")
+          .select("id, profile_id, status")
+          .eq("event_id", event.id)
+          .eq("first_name", "Bruno")
+          .maybeSingle();
+        rsvp = data;
+        return data?.status;
+      })
+      .toBe("approved");
+    guestId = rsvp!.profile_id;
+
+    await expect(guestPage.getByRole("heading", { name: title })).toBeVisible({ timeout: 10_000 });
+
+    // Message système "joined" posté immédiatement (même auto-approuvé).
+    const { data: joinedMessage } = await supabaseAdmin
+      .from("messages")
+      .select("id")
+      .eq("event_id", event.id)
+      .eq("is_system", true)
+      .eq("body", "joined")
+      .maybeSingle();
+    expect(joinedMessage).toBeTruthy();
+
+    // L'admin bloque Bruno.
+    await page.goto(`/e/${event.short_code}`);
+    await page.getByRole("button", { name: "Personnes" }).click();
+    await page.locator("li", { hasText: "Bruno" }).getByRole("button", { name: "Bloquer" }).click();
+    await page.getByRole("button", { name: "Oui, bloquer" }).click();
+
+    await expect
+      .poll(async () => {
+        const { data } = await supabaseAdmin.from("rsvps").select("status, blocked").eq("id", rsvp!.id).single();
+        return data;
+      })
+      .toMatchObject({ status: "removed", blocked: true });
+
+    // Bruno tente de revenir avec le même compte : refusé.
+    await guestPage.goto(`/e/${event.short_code}`);
+    await guestPage.getByPlaceholder("Julie").fill("Bruno");
+    await guestPage.getByPlaceholder("Dean").fill("Untel");
+    await guestPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000095");
+    await guestPage.getByLabel("Un homme").check();
+    await guestPage.getByRole("button", { name: "Avatar 1" }).click();
+    await guestPage.getByLabel("Je viens !").check();
+    await guestPage.getByRole("button", { name: "Envoyer ma réponse" }).click();
+    await expect(guestPage.getByText("Tu ne peux pas rejoindre cet événement.")).toBeVisible({ timeout: 10_000 });
+
+    // L'admin débloque Bruno.
+    await page.goto(`/e/${event.short_code}`);
+    await page.getByRole("button", { name: "Personnes" }).click();
+    await page.locator("li", { hasText: "Bruno" }).getByRole("button", { name: "Débloquer" }).click();
+
+    await expect
+      .poll(async () => {
+        const { data } = await supabaseAdmin.from("rsvps").select("blocked").eq("id", rsvp!.id).single();
+        return data?.blocked;
+      })
+      .toBe(false);
+
+    // Bruno peut désormais revenir normalement (auto-approuvé à nouveau).
+    await guestPage.reload();
+    await guestPage.getByPlaceholder("Julie").fill("Bruno");
+    await guestPage.getByPlaceholder("Dean").fill("Untel");
+    await guestPage.getByPlaceholder("+32 470 00 00 00").fill("+32470000095");
+    await guestPage.getByLabel("Un homme").check();
+    await guestPage.getByRole("button", { name: "Avatar 1" }).click();
+    await guestPage.getByLabel("Je viens !").check();
+    await guestPage.getByRole("button", { name: "Envoyer ma réponse" }).click();
+    await expect(guestPage.getByRole("heading", { name: title })).toBeVisible({ timeout: 10_000 });
+
+    await guestContext.close();
+  } finally {
+    if (eventId) {
+      await supabaseAdmin.from("events").delete().eq("id", eventId);
+    }
+    if (guestId) await deleteTestUser(guestId);
+    await deleteTestUser(host.id);
+  }
+});

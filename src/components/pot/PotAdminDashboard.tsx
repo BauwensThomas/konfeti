@@ -2,6 +2,18 @@ import { getTranslations } from "next-intl/server";
 import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { StartOnboardingButton } from "@/components/pot/StartOnboardingButton";
+import { fetchAllPages } from "@/lib/pagination";
+
+type ContributionRow = {
+  id: string;
+  amount_cents: number;
+  fee_stripe_cents: number;
+  fee_konfeti_cents: number;
+  net_cents: number;
+  status: string;
+  created_at: string;
+  rsvps: { profile_id: string | null; first_name: string | null; last_name: string | null } | null;
+};
 
 // Tableau de bord cagnotte, admin uniquement (brief 4.5 : "suivi complet
 // pour les admins... commission Konfeti affichée honnêtement"). Server
@@ -37,26 +49,22 @@ export async function PotAdminDashboard({
   // autre chose -- client service-role ici, par cohérence.
   const admin = createServiceRoleClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-  const [{ data: contributions }, { data: payouts }, { data: ownerProfile }] = await Promise.all([
-    supabase
-      .from("pot_contributions")
-      .select(
-        "id, amount_cents, fee_stripe_cents, fee_konfeti_cents, net_cents, status, created_at, rsvps(profile_id, first_name, last_name)",
-      )
-      .eq("event_id", eventId)
-      .order("created_at", { ascending: false })
-      .returns<
-        {
-          id: string;
-          amount_cents: number;
-          fee_stripe_cents: number;
-          fee_konfeti_cents: number;
-          net_cents: number;
-          status: string;
-          created_at: string;
-          rsvps: { profile_id: string | null; first_name: string | null; last_name: string | null } | null;
-        }[]
-      >(),
+  // Pagination explicite (`fetchAllPages`) : PostgREST plafonne les lignes
+  // par requête (souvent 1000) -- pas plausible pour une seule cagnotte
+  // aujourd'hui, mais même précaution que le reste du projet (voir
+  // DECISIONS.md).
+  const [contributions, { data: payouts }, { data: ownerProfile }] = await Promise.all([
+    fetchAllPages<ContributionRow>((from, to) =>
+      supabase
+        .from("pot_contributions")
+        .select(
+          "id, amount_cents, fee_stripe_cents, fee_konfeti_cents, net_cents, status, created_at, rsvps(profile_id, first_name, last_name)",
+        )
+        .eq("event_id", eventId)
+        .order("created_at", { ascending: false })
+        .range(from, to)
+        .returns<ContributionRow[]>(),
+    ),
     supabase
       .from("pot_payouts")
       .select("id, amount_cents, status, arrival_date, created_at")
@@ -67,7 +75,7 @@ export async function PotAdminDashboard({
       : Promise.resolve({ data: null }),
   ]);
 
-  const succeeded = (contributions ?? []).filter((c) => c.status === "succeeded");
+  const succeeded = contributions.filter((c) => c.status === "succeeded");
   const totalNetCents = succeeded.reduce((sum, c) => sum + (c.net_cents ?? 0), 0);
   const totalKonfetiFeeCents = succeeded.reduce((sum, c) => sum + (c.fee_konfeti_cents ?? 0), 0);
 

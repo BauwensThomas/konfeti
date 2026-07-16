@@ -1,6 +1,7 @@
 import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { resolveAvatarUrl } from "@/lib/avatars";
+import { fetchAllPages } from "@/lib/pagination";
 import { ParticipantsList, type ParticipantRow } from "@/components/ParticipantsList";
 
 type RawRsvpRow = {
@@ -18,6 +19,17 @@ type RawRsvpRow = {
   wants_pot_access: boolean;
   checked_in_at: string | null;
   arrived_home_at: string | null;
+};
+
+// Blocage définitif (Phase 9, retour Thomas) : identité PAS anonymisée
+// (contrairement à un retrait classique) -- voir la migration dédiée.
+type RawBlockedRsvpRow = {
+  id: string;
+  profile_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_kind: "preset" | "photo";
+  avatar_value: string | null;
 };
 
 type RawPublicRsvpRow = {
@@ -44,6 +56,7 @@ export async function EventPersonnes({
   isHost,
   hostProfileId,
   potEnabled,
+  autoApprove,
   isBeneficiary,
   isParticipantsHidden,
   beneficiaryNames,
@@ -58,6 +71,10 @@ export async function EventPersonnes({
   isHost: boolean;
   hostProfileId: string;
   potEnabled: boolean;
+  // Blocage définitif (Phase 9, retour Thomas) : le bouton "Bloquer" n'a de
+  // sens que si l'événement accepte n'importe qui automatiquement (sinon la
+  // file d'attente normale suffit déjà à filtrer un retour indésirable).
+  autoApprove: boolean;
   // Étape 5 du wizard (retour Thomas : "il faut rajouter dans personnes que
   // Julie a accès ou pas") : même pattern que la cagnotte/le chat -- une note
   // "X a/n'a pas accès" affichée aux AUTRES participants, jamais au(x)
@@ -82,16 +99,22 @@ export async function EventPersonnes({
   let rows: ParticipantRow[];
 
   if (isAdmin) {
-    const { data } = await supabase
-      .from("rsvps")
-      .select(
-        "id, profile_id, first_name, last_name, phone, avatar_kind, avatar_value, status, role, answer, pot_access_granted, wants_pot_access, checked_in_at, arrived_home_at",
-      )
-      .eq("event_id", eventId)
-      .in("status", ["pending", "restricted", "approved"])
-      .returns<RawRsvpRow[]>();
-
-    const rsvpRows = data ?? [];
+    // Pagination explicite (`fetchAllPages`) : PostgREST plafonne les lignes
+    // renvoyées par requête (souvent 1000) -- seule table de cet écran qui
+    // pourrait réalistement l'atteindre un jour (un très gros événement
+    // ouvert), tout le reste (companions, votes...) reste borné par ce même
+    // nombre de participants (retour Thomas, voir DECISIONS.md).
+    const rsvpRows = await fetchAllPages<RawRsvpRow>((from, to) =>
+      supabase
+        .from("rsvps")
+        .select(
+          "id, profile_id, first_name, last_name, phone, avatar_kind, avatar_value, status, role, answer, pot_access_granted, wants_pot_access, checked_in_at, arrived_home_at",
+        )
+        .eq("event_id", eventId)
+        .in("status", ["pending", "restricted", "approved"])
+        .range(from, to)
+        .returns<RawRsvpRow[]>(),
+    );
     const { data: companions } = await supabase
       .from("companions")
       .select("rsvp_id")
@@ -151,24 +174,58 @@ export async function EventPersonnes({
           wantsPotAccess: r.wants_pot_access,
           checkedInAt: r.checked_in_at,
           arrivedHomeAt: r.arrived_home_at,
+          blocked: false,
         };
       }),
     );
+
+    // Blocage définitif (Phase 9) : requête séparée -- ces lignes ont
+    // `status = 'removed'`, hors du filtre `.in("status", ...)` ci-dessus.
+    // Identité PAS anonymisée (voir la migration), pas besoin du repli
+    // service-role utilisé pour "restricted".
+    const { data: blockedData } = await supabase
+      .from("rsvps")
+      .select("id, profile_id, first_name, last_name, avatar_kind, avatar_value")
+      .eq("event_id", eventId)
+      .eq("blocked", true)
+      .returns<RawBlockedRsvpRow[]>();
+
+    const blockedRows: ParticipantRow[] = await Promise.all(
+      (blockedData ?? []).map(async (r) => ({
+        id: r.id,
+        profileId: r.profile_id,
+        firstName: r.first_name,
+        lastName: r.last_name,
+        phone: null,
+        avatarUrl: await resolveAvatarUrl(supabase, r.avatar_kind, r.avatar_value),
+        status: "removed" as const,
+        role: "guest" as const,
+        answer: "yes" as const,
+        companionsCount: 0,
+        potAccessGranted: false,
+        wantsPotAccess: false,
+        checkedInAt: null,
+        arrivedHomeAt: null,
+        blocked: true,
+      })),
+    );
+    rows = [...rows, ...blockedRows];
   } else {
     // rsvps_public_data_select (RLS) inclut aussi désormais removed/left
     // (Phase 5, pour que le chat puisse résoudre "Anonyme" sur un message
     // d'un participant parti) : filtre status explicite ici pour ne garder
     // que les participants réellement approuvés dans cette liste.
-    const { data } = await supabase
-      .from("rsvps_public_data")
-      .select(
-        "id, first_name, last_initial, avatar_kind, avatar_value, status, role, answer, companions_count, checked_in_at, arrived_home_at",
-      )
-      .eq("event_id", eventId)
-      .eq("status", "approved")
-      .returns<RawPublicRsvpRow[]>();
-
-    const rsvpRows = data ?? [];
+    const rsvpRows = await fetchAllPages<RawPublicRsvpRow>((from, to) =>
+      supabase
+        .from("rsvps_public_data")
+        .select(
+          "id, first_name, last_initial, avatar_kind, avatar_value, status, role, answer, companions_count, checked_in_at, arrived_home_at",
+        )
+        .eq("event_id", eventId)
+        .eq("status", "approved")
+        .range(from, to)
+        .returns<RawPublicRsvpRow[]>(),
+    );
     rows = await Promise.all(
       rsvpRows.map(async (r) => ({
         id: r.id,
@@ -185,6 +242,7 @@ export async function EventPersonnes({
         wantsPotAccess: false,
         checkedInAt: r.checked_in_at,
         arrivedHomeAt: r.arrived_home_at,
+        blocked: false,
       })),
     );
   }
@@ -198,6 +256,7 @@ export async function EventPersonnes({
       isHost={isHost}
       hostProfileId={hostProfileId}
       potEnabled={potEnabled}
+      autoApprove={autoApprove}
       rows={rows}
       isBeneficiary={isBeneficiary}
       isParticipantsHidden={isParticipantsHidden}

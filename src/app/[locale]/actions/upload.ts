@@ -7,7 +7,7 @@ import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 export type UploadPhotoResult =
   | { ok: true; path: string }
-  | { ok: false; error: "not_authenticated" | "invalid" | "too_large" | "rate_limited" | "unknown" };
+  | { ok: false; error: "not_authenticated" | "invalid" | "too_large" | "rate_limited" | "disabled" | "unknown" };
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 Mo, avant redimensionnement
 const MAX_DIMENSION = 1200; // px, côté le plus long
@@ -71,6 +71,15 @@ export async function uploadMessagePhoto(formData: FormData): Promise<UploadPhot
 
   if (!user) {
     return { ok: false, error: "unknown" };
+  }
+
+  // Coupe-circuit global (back-office /admin, retour Thomas) : désactivé, plus
+  // personne ne peut poster de photo dans le chat, sur AUCUN événement --
+  // vérifié ici (pas seulement côté UI) pour ne jamais dépendre de la seule
+  // désactivation du bouton chez le client.
+  const { data: flag } = await supabase.from("feature_flags").select("enabled").eq("key", "chat_photos").maybeSingle();
+  if (flag?.enabled === false) {
+    return { ok: false, error: "disabled" };
   }
 
   const ip = await getClientIp();

@@ -4,6 +4,7 @@ import { sendTransactionalEmail } from "@/lib/email/brevo";
 import { undecidedReminderEmail, tomorrowReminderEmail, postEventEmail } from "@/lib/email/templates";
 import { sendPush } from "@/lib/push-send";
 import { pushMessages } from "@/lib/push-messages";
+import { logAdminEvent } from "@/lib/admin-log";
 
 /**
  * Relances et rappels (brief 4.7) : "relances des indécis à J-7 et J-2,
@@ -34,6 +35,7 @@ export async function GET(request: Request) {
     .not("starts_at", "is", null);
 
   if (error) {
+    await logAdminEvent("cron:event-reminders", "error", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -122,5 +124,6 @@ export async function GET(request: Request) {
     }
   }
 
+  await logAdminEvent("cron:event-reminders", "info", `${sent} rappel(s) envoyé(s)`);
   return NextResponse.json({ sent });
 }

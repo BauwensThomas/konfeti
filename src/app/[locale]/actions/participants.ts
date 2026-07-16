@@ -245,6 +245,72 @@ export async function removeParticipant(
   return { ok: true };
 }
 
+// Bloque définitivement un participant sur CET événement (retour Thomas,
+// Phase 9 : retirer quelqu'un d'un événement "ouvert" ne l'empêche pas de
+// revenir, `create_own_rsvp` réactivant automatiquement l'ancienne ligne).
+// `admin_block_participant` (SQL) fait le même travail que
+// `leave_or_remove_participant(..., 'removed')` en plus de poser
+// `blocked = true`, et vérifie elle-même les droits admin.
+export async function blockParticipant(rsvpId: string, shortCode: string): Promise<ParticipantActionResult> {
+  const parsed = rsvpIdSchema.safeParse({ rsvpId });
+  if (!parsed.success) {
+    return { ok: false, error: "invalid" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "not_authenticated" };
+  }
+
+  if (isRateLimited(`blockParticipant:${user.id}`, 60, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
+  const { error } = await supabase.rpc("admin_block_participant", { p_rsvp_id: parsed.data.rsvpId });
+
+  if (error) {
+    return { ok: false, error: error.message.includes("not authorized") ? "unauthorized" : "unknown" };
+  }
+
+  revalidatePath(`/e/${shortCode}`);
+  return { ok: true };
+}
+
+// Débloque un participant précédemment bloqué (symétrique) : la ligne reste
+// "removed" (pas de réintégration automatique), elle pourra simplement
+// resoumettre son identité normalement si elle revient. `admin_unblock_participant`
+// (SQL) vérifie elle-même les droits admin.
+export async function unblockParticipant(rsvpId: string, shortCode: string): Promise<ParticipantActionResult> {
+  const parsed = rsvpIdSchema.safeParse({ rsvpId });
+  if (!parsed.success) {
+    return { ok: false, error: "invalid" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "not_authenticated" };
+  }
+
+  if (isRateLimited(`unblockParticipant:${user.id}`, 60, 60 * 60 * 1000)) {
+    return { ok: false, error: "rate_limited" };
+  }
+
+  const { error } = await supabase.rpc("admin_unblock_participant", { p_rsvp_id: parsed.data.rsvpId });
+
+  if (error) {
+    return { ok: false, error: error.message.includes("not authorized") ? "unauthorized" : "unknown" };
+  }
+
+  revalidatePath(`/e/${shortCode}`);
+  return { ok: true };
+}
+
 // Départ volontaire (brief 1.5) : même fonction que removeParticipant, mais
 // avec le statut "left" — leave_or_remove_participant impose elle-même que
 // seul le propriétaire de la ligne puisse choisir ce statut.
