@@ -45,6 +45,17 @@ export function LocationAutocomplete({
   const containerRef = useRef<HTMLDivElement>(null);
   const requestIdRef = useRef(0);
   const listId = useId();
+  // Valeur pour laquelle il ne faut PAS relancer de recherche -- capturée une
+  // seule fois au montage (préremplissage initial en modification
+  // d'événement) puis remise à jour uniquement dans `selectSuggestion`
+  // (retour Thomas : "quand je clique sur modifier, l'adresse revient comme
+  // si je devais revalider à chaque fois"). Volontairement PAS une mutation
+  // faite depuis l'effet ci-dessous ("sauter une seule fois") : le Strict
+  // Mode de React invoque chaque effet deux fois en dev, ce qui neutralisait
+  // ce genre de garde-fou dès la deuxième invocation (la valeur passait déjà
+  // à `false`/consommée à la première). Ici, les deux invocations comparent
+  // `value` à la même référence, jamais modifiée par l'effet lui-même.
+  const lastAcceptedValueRef = useRef(value);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -57,6 +68,10 @@ export function LocationAutocomplete({
   }, []);
 
   useEffect(() => {
+    if (value === lastAcceptedValueRef.current) {
+      return;
+    }
+
     const requestId = ++requestIdRef.current;
 
     // Requête différée dans un `setTimeout` même pour le cas "texte trop
@@ -124,6 +139,7 @@ export function LocationAutocomplete({
   }, [value]);
 
   function selectSuggestion(suggestion: Suggestion) {
+    lastAcceptedValueRef.current = suggestion.label;
     onChange(suggestion.label, { lat: suggestion.lat, lng: suggestion.lng });
     setSuggestions([]);
     setOpen(false);

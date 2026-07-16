@@ -97,7 +97,8 @@ test("validation par un admin, promotion en admin, retrait et depart volontaire"
     // L'hote promeut Marc administrateur.
     await page.reload();
     await page.getByRole("button", { name: "Personnes" }).click();
-    await page.getByRole("combobox").first().selectOption("admin");
+    await page.getByRole("button", { name: "Invité", exact: true }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "Administrateur" }).click();
 
     await expect
       .poll(async () => {

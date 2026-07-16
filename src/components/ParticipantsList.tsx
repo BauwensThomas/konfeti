@@ -610,18 +610,16 @@ function ApprovedParticipantRow({
               quel autre (même bloc, aucune restriction supplémentaire). */}
           {!isRowHost && (
             <>
-              <select
+              {/* Retour Thomas : "j'aimerais que tout ce qui est liste
+                  devienne des popups comme le reste du projet" -- même
+                  pattern que le choix d'occasion/d'unité (bouton + `Modal`),
+                  plus de `<select>` natif. */}
+              <RolePickerButton
                 value={row.role}
+                onChange={(role) => onRoleChange(row.id, role)}
                 disabled={isPending}
-                onChange={(e) =>
-                  onRoleChange(row.id, e.target.value as "guest" | "admin" | "beneficiary")
-                }
-                className="rounded-konfeti border border-border bg-surface px-2 py-1 text-sm text-foreground"
-              >
-                <option value="guest">{t("roleGuest")}</option>
-                <option value="admin">{t("roleAdmin")}</option>
-                <option value="beneficiary">{t("roleBeneficiary")}</option>
-              </select>
+                t={t}
+              />
               {/* Même style de bouton que "En attente" (retour Thomas : "en
                   attente c'est comme ça, il faut faire la même chose pour
                   retirer bloquer") -- un vrai bouton pleine largeur plutôt
@@ -665,6 +663,62 @@ function ApprovedParticipantRow({
         </div>
       )}
     </li>
+  );
+}
+
+const ASSIGNABLE_ROLES = ["guest", "admin", "beneficiary"] as const;
+
+// Bouton + popup de choix de rôle (retour Thomas : "j'aimerais que tout ce
+// qui est liste devienne des popups comme le reste du projet") -- même
+// pattern que `UnitPickerButton`/le choix d'occasion dans `CreateEventWizard.tsx`,
+// juste sans dépendance externe puisque les 3 rôles sont fixes ici.
+function RolePickerButton({
+  value,
+  onChange,
+  disabled,
+  t,
+}: {
+  value: "guest" | "admin" | "beneficiary";
+  onChange: (role: "guest" | "admin" | "beneficiary") => void;
+  disabled: boolean;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const [open, setOpen] = useState(false);
+
+  function labelFor(role: "guest" | "admin" | "beneficiary") {
+    if (role === "admin") return t("roleAdmin");
+    if (role === "beneficiary") return t("roleBeneficiary");
+    return t("roleGuest");
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        className="rounded-konfeti border border-border bg-surface px-2 py-1 text-left text-sm text-foreground"
+      >
+        {labelFor(value)}
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)}>
+        <div className="flex flex-col gap-1">
+          {ASSIGNABLE_ROLES.map((role) => (
+            <button
+              key={role}
+              type="button"
+              onClick={() => {
+                onChange(role);
+                setOpen(false);
+              }}
+              className="rounded-konfeti px-4 py-3 text-left text-base text-foreground hover:bg-primary/10"
+            >
+              {labelFor(role)}
+            </button>
+          ))}
+        </div>
+      </Modal>
+    </>
   );
 }
 

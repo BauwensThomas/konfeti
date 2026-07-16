@@ -8,8 +8,18 @@ import type { RsvpIdentityInput } from "@/lib/validation/rsvp";
 import { PRESET_AVATARS } from "@/lib/avatars";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 
-type Companion = { kind: "partner" | "child" | "friend" | "family"; firstName: string };
+type CompanionKind = "partner" | "child" | "friend" | "family";
+type Companion = { kind: CompanionKind; firstName: string };
+const COMPANION_KINDS: CompanionKind[] = ["partner", "child", "friend", "family"];
+
+function companionKindLabel(kind: CompanionKind, t: ReturnType<typeof useTranslations>) {
+  if (kind === "partner") return t("companionKindPartner");
+  if (kind === "child") return t("companionKindChild");
+  if (kind === "friend") return t("companionKindFriend");
+  return t("companionKindFamily");
+}
 
 type InitialIdentity = {
   firstName: string;
@@ -47,6 +57,10 @@ export function GuestIdentityForm({
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [answer, setAnswer] = useState<"yes" | "maybe" | "no" | null>(null);
   const [companions, setCompanions] = useState<Companion[]>([]);
+  // Popup de choix de type d'accompagnant (retour Thomas : "j'aimerais que
+  // tout ce qui est liste devienne des popups comme le reste du projet") --
+  // index de la ligne concernée, `null` si aucun popup ouvert.
+  const [kindPickerIndex, setKindPickerIndex] = useState<number | null>(null);
   // Consentement rappels par email (brief 4.7) : JAMAIS pré-coché.
   const [wantsReminders, setWantsReminders] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -244,18 +258,13 @@ export function GuestIdentityForm({
           </legend>
           {companions.map((companion, index) => (
             <div key={index} className="flex items-center gap-2">
-              <select
-                value={companion.kind}
-                onChange={(e) =>
-                  updateCompanion(index, { kind: e.target.value as Companion["kind"] })
-                }
-                className={inputClass}
+              <button
+                type="button"
+                onClick={() => setKindPickerIndex(index)}
+                className={`${inputClass} text-left`}
               >
-                <option value="partner">{t("companionKindPartner")}</option>
-                <option value="child">{t("companionKindChild")}</option>
-                <option value="friend">{t("companionKindFriend")}</option>
-                <option value="family">{t("companionKindFamily")}</option>
-              </select>
+                {companionKindLabel(companion.kind, t)}
+              </button>
               <input
                 type="text"
                 value={companion.firstName}
@@ -282,6 +291,24 @@ export function GuestIdentityForm({
           </button>
         </fieldset>
       )}
+
+      <Modal open={kindPickerIndex !== null} onClose={() => setKindPickerIndex(null)}>
+        <div className="flex flex-col gap-1">
+          {COMPANION_KINDS.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => {
+                if (kindPickerIndex !== null) updateCompanion(kindPickerIndex, { kind });
+                setKindPickerIndex(null);
+              }}
+              className="rounded-konfeti px-4 py-3 text-left text-base text-foreground hover:bg-primary/10"
+            >
+              {companionKindLabel(kind, t)}
+            </button>
+          ))}
+        </div>
+      </Modal>
 
       <fieldset>
         <legend className="mb-1 text-left text-sm font-semibold text-foreground">

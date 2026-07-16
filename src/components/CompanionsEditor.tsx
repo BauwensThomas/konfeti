@@ -49,6 +49,11 @@ export function CompanionsEditor({
   const [adding, setAdding] = useState(false);
   const [newKind, setNewKind] = useState<CompanionKind>("partner");
   const [newFirstName, setNewFirstName] = useState("");
+  // Popup de choix de type d'accompagnant (retour Thomas : "j'aimerais que
+  // tout ce qui est liste devienne des popups comme le reste du projet") --
+  // imbriquée dans le popup "Ajouter un accompagnant" (`position: fixed`,
+  // aucun souci d'empilement, même principe que les Modal existantes).
+  const [kindPickerOpen, setKindPickerOpen] = useState(false);
   const [removingCompanion, setRemovingCompanion] = useState<Companion | null>(null);
   // Quantité à retirer par réclamation, saisie librement (retour Thomas :
   // "ce n'est pas mieux de demander la quantité à retirer ?" -- plutôt qu'un
@@ -193,16 +198,13 @@ export function CompanionsEditor({
 
       <Modal open={adding} onClose={() => setAdding(false)}>
         <p className="font-display text-lg font-bold text-foreground">{t("companionAdd")}</p>
-        <select
-          value={newKind}
-          onChange={(e) => setNewKind(e.target.value as CompanionKind)}
-          className="w-full rounded-konfeti border border-border bg-surface px-3 py-2.5 text-base text-foreground"
+        <button
+          type="button"
+          onClick={() => setKindPickerOpen(true)}
+          className="w-full rounded-konfeti border border-border bg-surface px-3 py-2.5 text-left text-base text-foreground"
         >
-          <option value="partner">{t("companionKindPartner")}</option>
-          <option value="child">{t("companionKindChild")}</option>
-          <option value="friend">{t("companionKindFriend")}</option>
-          <option value="family">{t("companionKindFamily")}</option>
-        </select>
+          {companionKindLabel(t, newKind)}
+        </button>
         <input
           type="text"
           value={newFirstName}
@@ -217,6 +219,24 @@ export function CompanionsEditor({
           <Button variant="ghost" onClick={() => setAdding(false)}>
             {t("leaveConfirmNo")}
           </Button>
+        </div>
+      </Modal>
+
+      <Modal open={kindPickerOpen} onClose={() => setKindPickerOpen(false)}>
+        <div className="flex flex-col gap-1">
+          {(["partner", "child", "friend", "family"] as CompanionKind[]).map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => {
+                setNewKind(kind);
+                setKindPickerOpen(false);
+              }}
+              className="rounded-konfeti px-4 py-3 text-left text-base text-foreground hover:bg-primary/10"
+            >
+              {companionKindLabel(t, kind)}
+            </button>
+          ))}
         </div>
       </Modal>
 
