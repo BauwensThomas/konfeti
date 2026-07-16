@@ -572,36 +572,84 @@ export default async function EventPage({
               pendingPollsCount={pendingPollsCount}
               pendingBringCount={pendingBringCount}
               sondages={
-                isPollsListHidden ? (
-                  <Card className="text-center text-sm text-foreground/60">{t("pollsListHidden")}</Card>
-                ) : (
-                  <PollsList
-                    eventId={event.id}
-                    shortCode={event.short_code}
-                    viewerRsvpId={myRsvpRow?.id ?? null}
-                    isAdmin={isAdmin}
-                    readOnly={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
-                    hideApprovedList={viewerAnsweredNoStillAdmin}
-                  />
-                )
+                <>
+                  {/* Retour Thomas : "dans participer sondages a apporter et
+                      cagnotte, on ne voit pas cette info" -- même bannière
+                      "X a/n'a pas accès" que Personnes/Chat, jamais montrée
+                      au bénéficiaire concerné lui-même à propos de lui-même. */}
+                  {!isBeneficiary && beneficiaryNames.length > 0 && (
+                    <p
+                      className={`text-center text-xs font-semibold ${
+                        arePollsHiddenForBeneficiaries ? "text-accent-coral" : "text-accent-mint"
+                      }`}
+                    >
+                      {t(arePollsHiddenForBeneficiaries ? "pollsNoAccessNote" : "pollsAccessNote", {
+                        count: beneficiaryNames.length,
+                        names: joinNames(beneficiaryNames),
+                      })}
+                    </p>
+                  )}
+                  {isPollsListHidden ? (
+                    <Card className="text-center text-sm text-foreground/60">{t("pollsListHidden")}</Card>
+                  ) : (
+                    <PollsList
+                      eventId={event.id}
+                      shortCode={event.short_code}
+                      viewerRsvpId={myRsvpRow?.id ?? null}
+                      isAdmin={isAdmin}
+                      readOnly={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
+                      hideApprovedList={viewerAnsweredNoStillAdmin}
+                    />
+                  )}
+                </>
               }
               bring={
-                isBringListHidden ? (
-                  <Card className="text-center text-sm text-foreground/60">{t("bringListHidden")}</Card>
-                ) : (
-                  <BringList
-                    eventId={event.id}
-                    shortCode={event.short_code}
-                    viewerRsvpId={myRsvpRow?.id ?? null}
-                    isAdmin={isAdmin}
-                    readOnly={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
-                    hideApprovedList={viewerAnsweredNoStillAdmin}
-                  />
-                )
+                <>
+                  {!isBeneficiary && beneficiaryNames.length > 0 && (
+                    <p
+                      className={`text-center text-xs font-semibold ${
+                        isBringHiddenForBeneficiaries ? "text-accent-coral" : "text-accent-mint"
+                      }`}
+                    >
+                      {t(isBringHiddenForBeneficiaries ? "bringNoAccessNote" : "bringAccessNote", {
+                        count: beneficiaryNames.length,
+                        names: joinNames(beneficiaryNames),
+                      })}
+                    </p>
+                  )}
+                  {isBringListHidden ? (
+                    <Card className="text-center text-sm text-foreground/60">{t("bringListHidden")}</Card>
+                  ) : (
+                    <BringList
+                      eventId={event.id}
+                      shortCode={event.short_code}
+                      viewerRsvpId={myRsvpRow?.id ?? null}
+                      isAdmin={isAdmin}
+                      readOnly={isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at)}
+                      hideApprovedList={viewerAnsweredNoStillAdmin}
+                    />
+                  )}
+                </>
               }
               cagnotte={
-                potFeatureEnabled ? (
+                event.pot_enabled && isBeneficiary ? (
+                  // Contrairement à bring/polls/chat, la cagnotte n'a aucun
+                  // mode "masqué mais visible qu'il y a quelque chose" (brief
+                  // 1.4) : l'écran de contribution/suivi reste TOUJOURS
+                  // inaccessible à un bénéficiaire, peu importe le réglage
+                  // (seul le résumé de l'Accueil, plus haut, respecte ce
+                  // réglage -- jamais les détails contributeurs/montant ici).
+                  <Card className="text-center text-sm text-foreground/60">{t("potListHidden")}</Card>
+                ) : potFeatureEnabled ? (
                   <div className="flex flex-col gap-4">
+                    {beneficiaryNames.length > 0 && (
+                      <p className="text-center text-xs font-semibold text-accent-coral">
+                        {t("beneficiaryNoAccessNote", {
+                          count: beneficiaryNames.length,
+                          names: joinNames(beneficiaryNames),
+                        })}
+                      </p>
+                    )}
                     <PotContribution
                       eventId={event.id}
                       label={event.pot_label}

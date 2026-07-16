@@ -18,7 +18,10 @@ import { logAdminEvent } from "@/lib/admin-log";
  */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Échec fermé même si `CRON_SECRET` n'est pas configuré (audit sécurité) :
+  // sans ce garde-fou explicite, une variable d'environnement oubliée sur
+  // Vercel rend la comparaison vraie pour l'en-tête littéral "Bearer undefined".
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

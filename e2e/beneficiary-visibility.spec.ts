@@ -276,3 +276,86 @@ test("la liste des participants peut être masquée pour le bénéficiaire", asy
     if (julieId) await deleteTestUser(julieId);
   }
 });
+
+// Retour Thomas : "dans participer sondages a apporter et cagnotte, on ne
+// voit pas cette info" -- la bannière "X a/n'a pas accès" existait déjà sur
+// Personnes/Chat/Accueil (cagnotte), mais pas dans les sous-onglets de
+// Participer eux-mêmes.
+test("les notes d'accès bénéficiaire apparaissent aussi dans Participer (sondages/qui apporte quoi/cagnotte)", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(60_000);
+  const hostEmail = `e2e-beneficiary-participer-${Date.now()}@example.com`;
+  const host = await loginAs(page, hostEmail);
+  let eventId: string | null = null;
+  let julieId: string | null = null;
+
+  try {
+    const title = `Fete participer beneficiaire ${Date.now()}`;
+    await page.getByRole("link", { name: "Créer un événement" }).click();
+    await page.getByPlaceholder("L'anniversaire de Julie").fill(title);
+    await page.locator('input[type="datetime-local"]').first().fill("2026-12-24T20:00");
+    await page.getByPlaceholder("Adresse et ville").fill("Rue de Test 1, 1000 Bruxelles");
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+    await page.getByRole("button", { name: "Suivant" }).click();
+
+    // Étape 4 : active la cagnotte (montant libre).
+    await page.getByLabel("Ajouter une cagnotte").check();
+    await page.getByRole("button", { name: "Montant libre" }).click();
+    await page.getByPlaceholder("Cadeau collectif pour Julie").fill("Cadeau pour Julie");
+    await page.getByRole("button", { name: "Suivant" }).click();
+
+    // Étape 5 : cagnotte masquée par défaut, sondages/"qui apporte quoi" non
+    // masqués par défaut -- aucune case à toucher ici.
+    await page.getByRole("button", { name: "Créer l'événement" }).click();
+    await expect(page).toHaveURL(/\/mes-evenements$/);
+
+    const { data: event } = await supabaseAdmin
+      .from("events")
+      .select("id, short_code")
+      .eq("title", title)
+      .maybeSingle();
+    if (!event) throw new Error("evenement introuvable");
+    eventId = event.id;
+
+    const julieContext = await browser.newContext();
+    const juliePage = await julieContext.newPage();
+    await joinAsBeneficiary(juliePage, page, event.short_code, "Julie");
+
+    const { data: julieRsvp } = await supabaseAdmin
+      .from("rsvps")
+      .select("profile_id")
+      .eq("event_id", event.id)
+      .eq("first_name", "Julie")
+      .maybeSingle();
+    julieId = julieRsvp!.profile_id;
+
+    // Sondages et "qui apporte quoi" : non masqués par défaut, l'hôte doit
+    // voir la note positive DANS l'onglet Participer, pas seulement Personnes.
+    await page.goto(`/e/${event.short_code}`);
+    await page.getByRole("button", { name: "Participer" }).click();
+    await expect(page.getByText("Julie a accès aux sondages.")).toBeVisible();
+    await page.getByRole("button", { name: "À apporter" }).click();
+    await expect(page.getByText('Julie a accès à "qui apporte quoi".')).toBeVisible();
+
+    // Cagnotte : masquée par défaut, la note négative doit apparaître ICI
+    // aussi, pas seulement sur l'Accueil.
+    await page.getByRole("button", { name: "Cagnotte" }).click();
+    await expect(page.getByText("Julie n'a pas accès à la cagnotte.")).toBeVisible();
+
+    // Julie, elle, voit désormais un placeholder explicite dans l'onglet
+    // Cagnotte (au lieu de l'onglet disparaissant en silence comme avant).
+    await juliePage.goto(`/e/${event.short_code}`);
+    await juliePage.getByRole("button", { name: "Participer" }).click();
+    await juliePage.getByRole("button", { name: "Cagnotte" }).click();
+    await expect(juliePage.getByText("L'organisateur a masqué la cagnotte pour toi.")).toBeVisible();
+
+    await julieContext.close();
+  } finally {
+    if (eventId) await supabaseAdmin.from("events").delete().eq("id", eventId);
+    await deleteTestUser(host.id);
+    if (julieId) await deleteTestUser(julieId);
+  }
+});

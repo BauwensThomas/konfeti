@@ -25,9 +25,12 @@ export function ParticiperTabs({
 }: {
   sondages: ReactNode;
   bring: ReactNode;
-  // `null` si la cagnotte est désactivée sur cet événement (retour Thomas :
-  // "absente si cagnotte désactivé") -- l'onglet lui-même disparaît alors,
-  // pas seulement son contenu.
+  // `null` UNIQUEMENT si la cagnotte est désactivée sur cet événement (retour
+  // Thomas : "absente si cagnotte désactivé") -- l'onglet lui-même disparaît
+  // alors, pas seulement son contenu. Si la cagnotte est activée mais masquée
+  // pour CE bénéficiaire précis, page.tsx passe un placeholder non-null ici
+  // (même principe que sondages/bring) plutôt que null, pour que l'onglet
+  // reste visible avec un message explicite au lieu de disparaître en silence.
   cagnotte: ReactNode | null;
   pendingPollsCount: number;
   pendingBringCount: number;
