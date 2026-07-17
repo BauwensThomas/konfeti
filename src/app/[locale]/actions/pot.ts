@@ -76,6 +76,55 @@ export async function startPotOnboarding(
   }
 }
 
+// Retour Thomas ("on ne devrait pas rajouter... de modifier ces infos ?",
+// après avoir remarqué que son IBAN était déjà prérempli par Stripe depuis un
+// autre de ses comptes) : plutôt que de reconstruire nous-mêmes un formulaire
+// de gestion du compte bancaire, Stripe fournit déjà un vrai tableau de bord
+// dédié à chaque compte Express (solde, virements, IBAN...) -- ce lien de
+// connexion à usage unique y redirige directement, jamais besoin de
+// dupliquer cette UI côté Konfeti. Mêmes gardes que `startPotOnboarding`
+// (authentification, porteur de CET événement, flag global).
+export async function createExpressDashboardLink(
+  eventId: string,
+): Promise<
+  { ok: true; url: string } | { ok: false; error: "not_authenticated" | "unauthorized" | "unknown" | "pot_unavailable" }
+> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "not_authenticated" };
+  }
+
+  const { data: event } = await supabase.from("events").select("pot_owner").eq("id", eventId).maybeSingle();
+  if (event?.pot_owner !== user.id) {
+    return { ok: false, error: "unauthorized" };
+  }
+
+  const { data: potFlag } = await supabase.from("feature_flags").select("enabled").eq("key", "pot").maybeSingle();
+  if (!potFlag?.enabled) {
+    return { ok: false, error: "pot_unavailable" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("stripe_account_id, stripe_onboarding_complete")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.stripe_account_id || !profile.stripe_onboarding_complete) {
+    return { ok: false, error: "unauthorized" };
+  }
+
+  try {
+    const loginLink = await stripe.accounts.createLoginLink(profile.stripe_account_id);
+    return { ok: true, url: loginLink.url };
+  } catch {
+    return { ok: false, error: "unknown" };
+  }
+}
+
 // Contribution à la cagnotte (brief 4.5/5.6) : le contributeur choisit le
 // NET qu'il veut voir arriver dans la cagnotte (retour Thomas explicite),
 // `feeBreakdownFromNet` calcule le montant réellement facturé. Charge

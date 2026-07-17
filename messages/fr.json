@@ -671,7 +671,9 @@
       "failed": "Échoué"
     },
     "onboardingButton": "Configurer les paiements",
-    "onboardingStarting": "Un instant..."
+    "onboardingStarting": "Un instant...",
+    "manageButton": "Gérer mes infos de paiement",
+    "manageOpening": "Un instant..."
   },
   "JourJ": {
     "heading": "C'est le jour J !",

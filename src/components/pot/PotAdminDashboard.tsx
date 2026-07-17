@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { StartOnboardingButton } from "@/components/pot/StartOnboardingButton";
+import { ManagePaymentInfoButton } from "@/components/pot/ManagePaymentInfoButton";
 import { fetchAllPages } from "@/lib/pagination";
 
 type ContributionRow = {
@@ -110,8 +111,14 @@ export async function PotAdminDashboard({
           personne). Le reste du tableau de bord reste visible de tous les
           admins, mais les noms des contributeurs restent réservés au porteur
           de la cagnotte (voir `isPotOwnerViewer` plus haut). */}
-      {!ownerProfile?.stripe_onboarding_complete && potOwnerId && potOwnerId === viewerId && (
-        <StartOnboardingButton eventId={eventId} />
+      {potOwnerId && potOwnerId === viewerId && (
+        <>
+          {!ownerProfile?.stripe_onboarding_complete ? (
+            <StartOnboardingButton eventId={eventId} />
+          ) : (
+            <ManagePaymentInfoButton eventId={eventId} />
+          )}
+        </>
       )}
 
       <p className="text-sm text-foreground">{t("adminTotalCollected", { total: (totalNetCents / 100).toFixed(2) })}</p>
