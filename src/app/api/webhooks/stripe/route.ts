@@ -11,15 +11,42 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 // posée en Phase 1 : aucun grant client sur ces deux tables). Body brut
 // (`request.text()`, jamais `request.json()`) : la vérification de
 // signature a besoin des octets exacts envoyés par Stripe.
+//
+// Deux secrets, pas un seul : l'interface "Event destinations" de Stripe
+// sépare désormais les événements par périmètre ("Votre compte" vs "Comptes
+// connectés"), chacun avec sa propre destination et donc son propre secret
+// de signature -- contrairement à l'ancienne interface (un seul webhook avec
+// une case "écouter aussi les comptes connectés"). `checkout.session.*`
+// arrive via la destination "Votre compte" (la session est créée sur le
+// compte plateforme, voir `transfer_data.destination` dans `actions/pot.ts`)
+// ; `account.updated`/`payout.*` arrivent via "Comptes connectés" (ils
+// concernent le compte Express du porteur de cagnotte). On essaie les deux
+// secrets tour à tour -- `STRIPE_WEBHOOK_SECRET_CONNECT` reste optionnelle
+// tant que cette 2e destination n'est pas encore créée.
 export async function POST(request: Request) {
   const body = await request.text();
   const signature = request.headers.get("stripe-signature");
 
-  let event: Stripe.Event;
-  try {
-    event = stripe.webhooks.constructEvent(body, signature!, process.env.STRIPE_WEBHOOK_SECRET!);
-  } catch (err) {
-    await logAdminEvent("webhook:stripe", "error", err instanceof Error ? err.message : "invalid signature");
+  const secrets = [process.env.STRIPE_WEBHOOK_SECRET, process.env.STRIPE_WEBHOOK_SECRET_CONNECT].filter(
+    (s): s is string => !!s,
+  );
+
+  let event: Stripe.Event | null = null;
+  let lastError: unknown;
+  for (const secret of secrets) {
+    try {
+      event = stripe.webhooks.constructEvent(body, signature!, secret);
+      break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  if (!event) {
+    await logAdminEvent(
+      "webhook:stripe",
+      "error",
+      lastError instanceof Error ? lastError.message : "invalid signature",
+    );
     return NextResponse.json({ error: "invalid signature" }, { status: 400 });
   }
 
