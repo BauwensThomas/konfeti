@@ -23,7 +23,7 @@ export function ScreenshotGallery({
               onClick={() => setOpenSrc({ src, alt })}
               className="relative aspect-430/780 w-full max-w-56 cursor-pointer overflow-hidden rounded-konfeti border-4 border-white shadow-konfeti"
             >
-              <Image src={src} alt={alt} fill sizes="224px" className="object-cover object-top" />
+              <Image src={src} alt={alt} fill sizes="224px" priority className="object-cover object-top" />
             </button>
             <p className="font-display text-lg font-bold text-foreground">{title}</p>
             <p className="max-w-56 text-sm text-foreground/70">{text}</p>
