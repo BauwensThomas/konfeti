@@ -40,7 +40,7 @@ insert into events (
   'Parking rue du Verger, on sonne au portail bleu.', 'decontracte', 'un maillot si il fait chaud',
   'yes', 'no', now() + interval '14 days', now() + interval '14 days' + interval '6 hours',
   'Rue du Verger 12, 1000 Bruxelles', 50.8503, 4.3517, 40, true,
-  'goal', 15000, 'Cadeau collectif pour Emma', array['bring', 'polls', 'playlist'], 'active'
+  'goal', 15000, 'Cadeau collectif pour Emma', array['bring', 'polls'], 'active'
 );
 
 update feature_flags set enabled = true where key = 'pot';
@@ -93,10 +93,3 @@ insert into messages (event_id, rsvp_id, channel, body, is_system) values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', null, 'main', 'Julie D a rejoint la fete !', true),
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'aaaaaaaa-2222-2222-2222-222222222222', 'main', 'Hate d''y etre !', false),
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'aaaaaaaa-1111-1111-1111-111111111111', 'backstage', 'On cache le cadeau chez moi jusqu''au jour J', false);
-
--- ============================================================
--- Waitlist (independant de l'evenement)
--- ============================================================
-insert into waitlist (email) values
-  ('curieux1@example.com'),
-  ('curieux2@example.com');

@@ -11,4 +11,22 @@ alter table profiles
   drop column if exists spotify_refresh_token,
   drop column if exists spotify_token_expires_at;
 
-alter publication supabase_realtime drop table playlist_suggestions;
+-- Bug réel trouvé en testant une reconstruction complète depuis zéro (retour
+-- Thomas : "un fichier sql avec toutes les tables") : sur une base FRAÎCHE,
+-- `playlist_suggestions` n'a jamais été ajoutée à la publication realtime
+-- (l'ajout faisait partie de la version ORIGINALE de ce fichier, remplacée
+-- ici par son annulation) -- `alter publication ... drop table` échouait donc
+-- avec "relation is not part of the publication". Sur la vraie base de
+-- Thomas, la table y avait bien été ajoutée pour de vrai avant d'être
+-- retirée : cette instruction a réussi une seule fois, en conditions réelles,
+-- jamais rejouée depuis. Rendue idempotente pour fonctionner dans les deux
+-- cas (base fraîche ou déjà migrée).
+do $$
+begin
+  if exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'playlist_suggestions'
+  ) then
+    alter publication supabase_realtime drop table playlist_suggestions;
+  end if;
+end $$;
