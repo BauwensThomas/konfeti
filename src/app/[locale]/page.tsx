@@ -13,6 +13,15 @@ import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 // fois la publication faite.
 const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.konfeti.app";
 
+// Retour Thomas : "cache pour le moment" -- la fiche n'est pas encore
+// publiée, le lien resterait cassé (404 Play Store) si affiché tel quel.
+// Interrupteur `PLAY_STORE_PUBLISHED` plutôt qu'un commentaire à décommenter
+// à la main : Thomas pourra basculer d'un simple changement de variable
+// d'environnement (Vercel) le jour de la publication, sans nouveau
+// déploiement de code. Lu côté serveur uniquement (Server Component, jamais
+// envoyé au client) -- pas besoin du préfixe NEXT_PUBLIC_.
+const PLAY_STORE_PUBLISHED = process.env.PLAY_STORE_PUBLISHED === "true";
+
 // Page d'explication du projet (retour Thomas : plus une page de
 // pré-lancement avec vidéo/waitlist, mais une vraie vitrine qui donne envie
 // d'utiliser l'app) -- ceux qui cliquent un lien d'invitation
@@ -99,15 +108,17 @@ export default function Home() {
           <div className="flex flex-col gap-1 rounded-konfeti border-2 border-primary/15 bg-white p-4 text-left">
             <p className="text-sm font-bold text-foreground">{t("installAndroidTitle")}</p>
             <p className="text-sm text-foreground/70">{t("installAndroidSteps")}</p>
-            <a
-              href={PLAY_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-primary"
-            >
-              <IconGooglePlay className="h-5 w-5 shrink-0" />
-              {t("installAndroidPlayStore")}
-            </a>
+            {PLAY_STORE_PUBLISHED && (
+              <a
+                href={PLAY_STORE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-primary"
+              >
+                <IconGooglePlay className="h-5 w-5 shrink-0" />
+                {t("installAndroidPlayStore")}
+              </a>
+            )}
           </div>
           <div className="flex flex-col gap-1 rounded-konfeti border-2 border-primary/15 bg-white p-4 text-left">
             <p className="text-sm font-bold text-foreground">{t("installIosTitle")}</p>
