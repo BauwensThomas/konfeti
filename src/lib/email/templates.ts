@@ -2,8 +2,7 @@
 // mascotte"). HTML minimal avec CSS inline (nécessaire pour la compatibilité
 // des clients mail, aucun CSS externe/`<style>` de bloc fiable partout) --
 // mêmes couleurs de marque que l'app (violet, jaune, corail, menthe, fond
-// crème), mascotte en absolu (`NEXT_PUBLIC_APP_URL`, un email n'a pas accès
-// aux assets locaux du site).
+// crème).
 
 const BRAND = {
   primary: "#7C3AED",
@@ -11,11 +10,19 @@ const BRAND = {
   ink: "#2E1065",
   coral: "#FB7185",
   mint: "#34D399",
+  grey: "#EDEAE7",
 };
 
-function appUrl(path: string): string {
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://konfeti.belgacai.com";
-  return `${base}${path}`;
+// Retour Thomas : les images pointaient vers `NEXT_PUBLIC_APP_URL`
+// (konfeti.belgacai.com en prod, localhost en dev) -- cassées dans un email
+// reçu tant que le site n'est pas déployé, ou inaccessibles de l'extérieur en
+// dev. Bucket Storage public dédié à la place (`email-assets`, voir
+// `20260717000100_email_assets_bucket.sql`) : le projet Supabase, lui, est
+// déjà en ligne en permanence, indépendamment du déploiement de l'app.
+const EMAIL_ASSET_BASE = "https://tibinblvqxqcygzmxouv.supabase.co/storage/v1/object/public/email-assets";
+
+function assetUrl(path: string): string {
+  return `${EMAIL_ASSET_BASE}${path}`;
 }
 
 function wrapper(bodyHtml: string): string {
@@ -27,8 +34,8 @@ function wrapper(bodyHtml: string): string {
       <td align="center">
         <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background-color:#ffffff;border-radius:20px;overflow:hidden;">
           <tr>
-            <td align="center" style="background-color:${BRAND.primary};padding:24px;">
-              <img src="${appUrl("/mascot.webp")}" alt="Konfeti" width="80" height="80" style="display:block;" />
+            <td align="center" style="background-color:${BRAND.grey};padding:24px;border:3px solid ${BRAND.primary};border-radius:20px 20px 0 0;">
+              <img src="${assetUrl("/mascot.webp")}" alt="Konfeti" width="80" height="80" style="display:block;" />
             </td>
           </tr>
           <tr>
@@ -37,7 +44,25 @@ function wrapper(bodyHtml: string): string {
             </td>
           </tr>
           <tr>
-            <td align="center" style="padding:16px 28px 28px;color:#9CA3AF;font-size:12px;">
+            <td align="center" style="padding:24px 28px 12px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:0 10px;">
+                    <a href="https://www.instagram.com/konfeti_app" style="display:inline-flex;align-items:center;gap:6px;color:#6B7280;font-size:13px;font-weight:600;text-decoration:none;">
+                      <img src="${assetUrl("/icon-instagram.png")}" alt="" width="18" height="18" style="display:inline-block;vertical-align:middle;margin-right:5px;" />Instagram
+                    </a>
+                  </td>
+                  <td style="padding:0 10px;">
+                    <a href="https://www.facebook.com/profile.php?id=61591900944905" style="display:inline-flex;align-items:center;gap:6px;color:#6B7280;font-size:13px;font-weight:600;text-decoration:none;">
+                      <img src="${assetUrl("/icon-facebook.png")}" alt="" width="18" height="18" style="display:inline-block;vertical-align:middle;margin-right:5px;" />Facebook
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:0 28px 28px;color:#9CA3AF;font-size:12px;">
               Konfeti, un projet BelgaCai &middot; <a href="mailto:konfeti@belgacai.com" style="color:#9CA3AF;">konfeti@belgacai.com</a>
             </td>
           </tr>
