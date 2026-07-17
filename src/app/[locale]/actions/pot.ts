@@ -23,7 +23,9 @@ function serviceRoleClient() {
 // jamais laisser un client fabriquer un faux id de compte Stripe.
 export async function startPotOnboarding(
   eventId: string,
-): Promise<{ ok: true; url: string } | { ok: false; error: "not_authenticated" | "unauthorized" | "unknown" }> {
+): Promise<
+  { ok: true; url: string } | { ok: false; error: "not_authenticated" | "unauthorized" | "unknown" | "pot_unavailable" }
+> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -35,6 +37,14 @@ export async function startPotOnboarding(
   const { data: event } = await supabase.from("events").select("pot_owner, short_code").eq("id", eventId).maybeSingle();
   if (event?.pot_owner !== user.id) {
     return { ok: false, error: "unauthorized" };
+  }
+
+  // Même filet de sécurité que `createPotContribution` (voir plus bas) : le
+  // flag global coupe aussi la possibilité de démarrer un nouvel onboarding
+  // Stripe, pas seulement la contribution elle-même.
+  const { data: potFlag } = await supabase.from("feature_flags").select("enabled").eq("key", "pot").maybeSingle();
+  if (!potFlag?.enabled) {
+    return { ok: false, error: "pot_unavailable" };
   }
 
   const { data: profile } = await supabase.from("profiles").select("stripe_account_id").eq("id", user.id).single();
@@ -133,6 +143,17 @@ export async function createPotContribution(
     .maybeSingle();
 
   if (!event?.pot_enabled || event.pot_closed_at || !event.pot_owner) {
+    return { ok: false, error: "pot_unavailable" };
+  }
+
+  // Filet de sécurité (retour Thomas : "tout ce qui parle de la cagnotte
+  // doit disparaître si désactivé") -- l'UI cache déjà le formulaire quand ce
+  // flag est coupé, mais rien n'empêchait jusqu'ici un appel direct à cette
+  // action de créer une vraie session Stripe malgré tout. Vérifié ici en
+  // dernier (après les contrôles propres à l'événement ci-dessus), jamais
+  // fait confiance qu'à l'UI, comme le reste du projet.
+  const { data: potFlag } = await admin.from("feature_flags").select("enabled").eq("key", "pot").maybeSingle();
+  if (!potFlag?.enabled) {
     return { ok: false, error: "pot_unavailable" };
   }
 

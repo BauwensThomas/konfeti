@@ -455,6 +455,7 @@ export default async function EventPage({
               isHost={isHost}
               isAdmin={isAdmin}
               isBeneficiary={isBeneficiary}
+              potFeatureEnabled={potFeatureEnabled}
               viewerIsPotOwner={viewerIsPotOwner}
               potOwnerStripeConnected={potOwnerStripeConnected}
               viewerAnsweredNoStillAdmin={viewerAnsweredNoStillAdmin}
@@ -525,7 +526,7 @@ export default async function EventPage({
                 isAdmin={isAdmin}
                 isHost={isHost}
                 hostProfileId={event.host_id}
-                potEnabled={event.pot_enabled}
+                potEnabled={potFeatureEnabled}
                 autoApprove={event.auto_approve}
                 isBeneficiary={isBeneficiary}
                 isParticipantsHidden={isParticipantsHiddenForBeneficiaries}
@@ -719,12 +720,17 @@ export default async function EventPage({
           .maybeSingle()
       : { data: null };
 
+  // Retour Thomas : "il faut que tout ce qui parle de la cagnotte disparaisse
+  // si désactivé" -- le flag doit être vérifié sur `preview.pot_enabled`
+  // (toujours connu) plutôt que `potInfo?.pot_enabled` (jamais rempli tant
+  // que l'accès n'est pas déjà accordé, voir plus haut), sinon le bouton
+  // "demander l'accès" (avant tout accord) ignorait silencieusement le flag.
   let potFeatureEnabledForRestricted = false;
   let potCollectedCentsForRestricted = 0;
-  if (potInfo?.pot_enabled) {
+  if (preview.pot_enabled) {
     const { data: flag } = await supabase.from("feature_flags").select("enabled").eq("key", "pot").maybeSingle();
     potFeatureEnabledForRestricted = !!flag?.enabled;
-    if (potFeatureEnabledForRestricted) {
+    if (potFeatureEnabledForRestricted && potInfo?.pot_enabled) {
       const { data: succeededContributions } = await supabase
         .from("pot_contributions")
         .select("net_cents")
@@ -768,7 +774,6 @@ export default async function EventPage({
           eventId={preview.id}
           shortCode={preview.short_code}
           currentAnswer={myRsvp.answer as "yes" | "maybe" | "no"}
-          potEnabled={preview.pot_enabled}
           wantsPotAccess={myRsvp.wants_pot_access}
           potAccessGranted={myRsvp.pot_access_granted}
           pot={potInfo}
@@ -853,6 +858,7 @@ async function EventAccueil({
   isHost,
   isAdmin,
   isBeneficiary,
+  potFeatureEnabled,
   viewerIsPotOwner,
   potOwnerStripeConnected,
   viewerAnsweredNoStillAdmin,
@@ -875,6 +881,11 @@ async function EventAccueil({
   isHost: boolean;
   isAdmin: boolean;
   isBeneficiary: boolean;
+  // Feature flag `pot` (retour Thomas : "il faut que tout ce qui parle de la
+  // cagnotte disparaisse si désactivé") -- `event.pot_enabled` seul (réglage
+  // de CET événement) ne suffit pas, il faut aussi que le flag global soit
+  // actif pour que la carte s'affiche.
+  potFeatureEnabled: boolean;
   // Retour Thomas : statut de connexion Stripe affiché juste sous la
   // bannière, réservé au porteur de la cagnotte lui-même (voir le calcul
   // partagé dans le composant parent).
@@ -1207,7 +1218,7 @@ async function EventAccueil({
         </Card>
       )}
 
-      {event.pot_enabled &&
+      {potFeatureEnabled &&
         !(isBeneficiary && event.beneficiary_hidden_blocks.includes("pot")) &&
         (event.pot_closed_at ? (
           // Retour Thomas : "le gris il doit faire tout le cadre" -- pas le

@@ -235,6 +235,18 @@ export async function createEvent(
     return { ok: false, error: "rate_limited" };
   }
 
+  // Filet de sécurité (retour Thomas : "tout ce qui parle de la cagnotte
+  // doit disparaître si désactivé") -- le wizard cache déjà l'option, mais
+  // rien n'empêchait jusqu'ici un appel direct à cette action d'activer
+  // quand même une cagnotte sur un NOUVEL événement. Seule la création est
+  // concernée : une cagnotte déjà active sur un événement existant n'est
+  // jamais désactivée de force par une simple modification pendant que le
+  // flag est coupé (voir `updateEvent`, inchangé).
+  const { data: potFlag } = await supabase.from("feature_flags").select("enabled").eq("key", "pot").maybeSingle();
+  if (data.potEnabled && !potFlag?.enabled) {
+    data.potEnabled = false;
+  }
+
   let event: { id: string; short_code: string } | null = null;
 
   // Quelques essais en cas de collision sur short_code (quasi impossible,

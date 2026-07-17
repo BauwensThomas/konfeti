@@ -32,7 +32,6 @@ export function GuestRestrictedScreen({
   eventId,
   shortCode,
   currentAnswer,
-  potEnabled,
   wantsPotAccess,
   potAccessGranted,
   pot,
@@ -43,7 +42,6 @@ export function GuestRestrictedScreen({
   eventId: string;
   shortCode: string;
   currentAnswer: "yes" | "maybe" | "no";
-  potEnabled: boolean;
   wantsPotAccess: boolean;
   potAccessGranted: boolean;
   pot: PotInfo;
@@ -84,7 +82,7 @@ export function GuestRestrictedScreen({
           bien avant le vrai paiement, Phase 7), jamais le formulaire réel.
           Vrai composant de contribution ici, identique à celui utilisé pour
           un participant approuvé (voir page.tsx). */}
-      {potEnabled && pot?.pot_enabled && potAccessGranted && potFeatureEnabled && (
+      {potFeatureEnabled && pot?.pot_enabled && potAccessGranted && (
         <div className="w-full">
           <PotContribution
             eventId={eventId}
@@ -96,20 +94,8 @@ export function GuestRestrictedScreen({
           />
         </div>
       )}
-      {potEnabled && pot?.pot_enabled && potAccessGranted && !potFeatureEnabled && (
-        <Card className="w-full">
-          <p className="text-base text-foreground">
-            {t("restrictedPotLabel", { label: pot.pot_label || "" })}
-          </p>
-          <p className="text-sm text-foreground/70">
-            {pot.pot_mode === "goal" && pot.pot_goal_cents
-              ? t("restrictedPotGoal", { amount: (pot.pot_goal_cents / 100).toFixed(0) })
-              : t("restrictedPotOpen")}
-          </p>
-        </Card>
-      )}
 
-      {potEnabled && !potAccessGranted && (
+      {potFeatureEnabled && !potAccessGranted && (
         <Card className="w-full">
           {wantsPotAccess ? (
             <p className="text-sm text-foreground/70">{t("restrictedPotPending")}</p>

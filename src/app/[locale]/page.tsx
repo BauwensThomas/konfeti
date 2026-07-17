@@ -1,11 +1,12 @@
 import Image from "next/image";
-import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/Button";
 import { StandaloneRedirect } from "@/components/StandaloneRedirect";
 import { StickerConfetti, StickerGift } from "@/components/stickers";
 import { IconGooglePlay } from "@/components/icons/SocialIcons";
 import { ScreenshotGallery } from "@/components/ScreenshotGallery";
+import { createClient } from "@/lib/supabase/server";
 
 // Retour Thomas : "je lancerai pas l'app sans que tout soit en ordre donc tu
 // peux deja mettre pour le playstore" -- compte Play Console déjà créé, mais
@@ -30,8 +31,17 @@ const PLAY_STORE_PUBLISHED = process.env.PLAY_STORE_PUBLISHED === "true";
 // konfeti.belgacai.com directement. `StandaloneRedirect` : seul un
 // lancement depuis l'icône ajoutée à l'écran d'accueil (PWA) saute cette
 // page pour aller droit sur Mes événements.
-export default function Home() {
-  const t = useTranslations("Home");
+export default async function Home() {
+  const t = await getTranslations("Home");
+
+  // Retour Thomas : "il faut que tout ce qui parle de la cagnotte
+  // disparaisse si désactivé" -- même flag global que partout ailleurs
+  // (`feature_flags`, clé 'pot'), lu ici en anonyme (policy publique dédiée,
+  // `feature_flags_select_public`) puisque cette page n'exige aucune
+  // connexion.
+  const supabase = await createClient();
+  const { data: potFlag } = await supabase.from("feature_flags").select("enabled").eq("key", "pot").maybeSingle();
+  const potFeatureEnabled = !!potFlag?.enabled;
 
   // Vraies captures de l'app (retour Thomas : "qu'on met plusieurs images
   // vraies de l'application"), pas des icônes génériques -- prises sur un
@@ -82,7 +92,7 @@ export default function Home() {
           </h1>
           <p className="font-display text-xl text-foreground sm:text-2xl">{t("subtitle")}</p>
           <p className="whitespace-pre-line text-base text-foreground/80 sm:text-lg">
-            {t("description")}
+            {t(potFeatureEnabled ? "description" : "descriptionNoPot")}
           </p>
         </div>
 

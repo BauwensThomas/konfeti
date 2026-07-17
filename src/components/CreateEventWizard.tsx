@@ -150,6 +150,14 @@ type CreateEventWizardProps = {
   // création, l'événement n'a encore aucun participant, ce tableau reste
   // vide et les phrases de l'étape 5 restent génériques).
   beneficiaryNames?: string[];
+  // Feature flag `pot` (retour Thomas : "il faut que tout ce qui parle de la
+  // cagnotte disparaisse si désactivé", le temps de régulariser un numéro de
+  // TVA avant le passage en Live) -- masque entièrement l'option plutôt que
+  // de la désactiver seule, pour qu'aucune trace de la fonctionnalité ne
+  // reste visible tant qu'elle est coupée. En édition, une cagnotte déjà
+  // activée avant la coupure garde sa valeur (le champ caché n'est jamais
+  // réinitialisé), elle réapparaît telle quelle une fois le flag réactivé.
+  potFeatureEnabled: boolean;
 };
 
 export function CreateEventWizard({
@@ -158,6 +166,7 @@ export function CreateEventWizard({
   initialData,
   initialPhotoUrl,
   beneficiaryNames = [],
+  potFeatureEnabled,
 }: CreateEventWizardProps) {
   const isEditMode = !!eventId;
   const t = useTranslations("CreateEvent");
@@ -912,63 +921,67 @@ export function CreateEventWizard({
               </div>
             </Field>
 
-            <label className="flex items-center gap-2 text-base text-foreground">
-              <input
-                type="checkbox"
-                checked={data.potEnabled}
-                onChange={(e) => update("potEnabled", e.target.checked)}
-              />
-              {t("step4.potEnabledLabel")}
-            </label>
-
-            {data.potEnabled && (
+            {potFeatureEnabled && (
               <>
-                <Field label={t("step4.potModeLabel")}>
-                  <div className="flex gap-2">
-                    <ToggleButton
-                      active={data.potMode === "goal"}
-                      onClick={() => update("potMode", "goal")}
-                    >
-                      {t("step4.potModeGoal")}
-                    </ToggleButton>
-                    <ToggleButton
-                      active={data.potMode === "open"}
-                      onClick={() => update("potMode", "open")}
-                    >
-                      {t("step4.potModeOpen")}
-                    </ToggleButton>
-                  </div>
-                </Field>
-                {data.potMode === "goal" && (
+                <label className="flex items-center gap-2 text-base text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={data.potEnabled}
+                    onChange={(e) => update("potEnabled", e.target.checked)}
+                  />
+                  {t("step4.potEnabledLabel")}
+                </label>
+
+                {data.potEnabled && (
                   <>
-                    <Field label={t("step4.potGoalLabel")}>
+                    <Field label={t("step4.potModeLabel")}>
+                      <div className="flex gap-2">
+                        <ToggleButton
+                          active={data.potMode === "goal"}
+                          onClick={() => update("potMode", "goal")}
+                        >
+                          {t("step4.potModeGoal")}
+                        </ToggleButton>
+                        <ToggleButton
+                          active={data.potMode === "open"}
+                          onClick={() => update("potMode", "open")}
+                        >
+                          {t("step4.potModeOpen")}
+                        </ToggleButton>
+                      </div>
+                    </Field>
+                    {data.potMode === "goal" && (
+                      <>
+                        <Field label={t("step4.potGoalLabel")}>
+                          <input
+                            type="number"
+                            min={1}
+                            value={data.potGoalEuros}
+                            onChange={(e) => update("potGoalEuros", e.target.value)}
+                            className={inputClass}
+                          />
+                        </Field>
+                        <label className="flex items-center gap-2 text-base text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={data.potCloseAtGoal}
+                            onChange={(e) => update("potCloseAtGoal", e.target.checked)}
+                          />
+                          {t("step4.potCloseAtGoalLabel")}
+                        </label>
+                      </>
+                    )}
+                    <Field label={t("step4.potLabelLabel")}>
                       <input
-                        type="number"
-                        min={1}
-                        value={data.potGoalEuros}
-                        onChange={(e) => update("potGoalEuros", e.target.value)}
+                        type="text"
+                        value={data.potLabel}
+                        onChange={(e) => update("potLabel", e.target.value)}
+                        placeholder={t("step4.potLabelPlaceholder")}
                         className={inputClass}
                       />
                     </Field>
-                    <label className="flex items-center gap-2 text-base text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={data.potCloseAtGoal}
-                        onChange={(e) => update("potCloseAtGoal", e.target.checked)}
-                      />
-                      {t("step4.potCloseAtGoalLabel")}
-                    </label>
                   </>
                 )}
-                <Field label={t("step4.potLabelLabel")}>
-                  <input
-                    type="text"
-                    value={data.potLabel}
-                    onChange={(e) => update("potLabel", e.target.value)}
-                    placeholder={t("step4.potLabelPlaceholder")}
-                    className={inputClass}
-                  />
-                </Field>
               </>
             )}
 

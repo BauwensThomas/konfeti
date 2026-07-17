@@ -22,9 +22,11 @@ export default async function CreateEventPage() {
     redirect("/connexion?next=/creer");
   }
 
+  const { data: potFlag } = await supabase.from("feature_flags").select("enabled").eq("key", "pot").maybeSingle();
+
   return (
     <main className="flex flex-1 flex-col items-center gap-6 px-6 py-12 sm:py-16">
-      <CreateEventWizard />
+      <CreateEventWizard potFeatureEnabled={!!potFlag?.enabled} />
     </main>
   );
 }

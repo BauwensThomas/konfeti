@@ -84,6 +84,8 @@ export default async function EditEventPage({
     .map((r) => r.first_name)
     .filter((name): name is string => !!name);
 
+  const { data: potFlag } = await supabase.from("feature_flags").select("enabled").eq("key", "pot").maybeSingle();
+
   const photoUrl = event.cover_photo_path
     ? (
         await supabase.storage
@@ -160,6 +162,7 @@ export default async function EditEventPage({
         initialData={initialData}
         initialPhotoUrl={photoUrl}
         beneficiaryNames={beneficiaryNames}
+        potFeatureEnabled={!!potFlag?.enabled}
       />
     </main>
   );
