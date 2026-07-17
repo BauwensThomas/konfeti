@@ -75,7 +75,8 @@ test("l'hôte transfère l'organisation à un admin promu, puis peut quitter l'�
     // aussi, distinguer l'hôte actuel d'un simple admin promu.
     await expect(page.getByText("Organisateur")).toBeVisible();
     await page.getByRole("button", { name: "Approuver comme invité" }).click();
-    await page.getByRole("combobox").first().selectOption("admin");
+    await page.getByRole("button", { name: "Invité", exact: true }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "Administrateur" }).click();
 
     await expect
       .poll(async () => {

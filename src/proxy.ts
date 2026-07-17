@@ -13,9 +13,20 @@ const intlMiddleware = createIntlMiddleware(routing);
 // (complétion de profil) et `/creer` sont protégées ici.
 const PROTECTED_PREFIXES = ["/creer", "/profil/completer"];
 
+// Bug réel trouvé en conditions réelles (premier vrai visiteur non connecté,
+// base tout juste vidée) : `request.nextUrl.pathname` porte TOUJOURS le
+// préfixe de langue (`/fr/creer`, `localePrefix` par défaut de next-intl =
+// "always"), jamais juste `/creer` -- cette protection ne s'est donc JAMAIS
+// déclenchée depuis sa création, aucun test précédent n'ayant de session
+// absente sur cette route pour le révéler. Préfixe retiré avant comparaison.
 function isProtected(pathname: string) {
+  const withoutLocale = routing.locales.reduce((path, locale) => {
+    if (path === `/${locale}`) return "/";
+    if (path.startsWith(`/${locale}/`)) return path.slice(locale.length + 1);
+    return path;
+  }, pathname);
   return PROTECTED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    (prefix) => withoutLocale === prefix || withoutLocale.startsWith(`${prefix}/`),
   );
 }
 

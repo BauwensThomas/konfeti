@@ -82,7 +82,8 @@ test("edition du profil (vrai compte) : prerempli, sauvegarde, propagation live 
     await page.goto(`/e/${event.short_code}`);
     await page.getByRole("button", { name: "Personnes" }).click();
     await page.getByRole("button", { name: "Approuver comme invité" }).click();
-    await page.getByRole("combobox").first().selectOption("admin");
+    await page.getByRole("button", { name: "Invité", exact: true }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "Administrateur" }).click();
     await expect
       .poll(async () => {
         const { data } = await supabaseAdmin

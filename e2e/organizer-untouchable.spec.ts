@@ -106,8 +106,10 @@ test("un admin promu ne peut ni changer le role ni retirer l'organisateur, mais 
     await page.getByRole("button", { name: "Personnes" }).click();
     await page.getByRole("button", { name: "Approuver comme invité" }).first().click();
     await page.getByRole("button", { name: "Approuver comme invité" }).first().click();
-    await page.locator("li", { hasText: "Alice Untel" }).getByRole("combobox").selectOption("admin");
-    await page.locator("li", { hasText: "Bob Untel" }).getByRole("combobox").selectOption("admin");
+    await page.locator("li", { hasText: "Alice Untel" }).getByRole("button", { name: "Invité", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Administrateur" }).click();
+    await page.locator("li", { hasText: "Bob Untel" }).getByRole("button", { name: "Invité", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Administrateur" }).click();
 
     // L'hôte a lui aussi sa propre ligne rsvps (créée paresseusement par
     // ensure_own_rsvp, role='admin' par défaut) : les trois se retrouvent
@@ -146,7 +148,7 @@ test("un admin promu ne peut ni changer le role ni retirer l'organisateur, mais 
     await alicePage.getByRole("button", { name: "Personnes" }).click();
     const hostRow = alicePage.locator("li").filter({ hasText: "Organisateur" });
     await expect(hostRow).toBeVisible();
-    await expect(hostRow.getByRole("combobox")).toHaveCount(0);
+    await expect(hostRow.getByRole("button", { name: "Organisateur" })).toHaveCount(0);
     await expect(hostRow.getByRole("button", { name: "Retirer" })).toHaveCount(0);
 
     // Côté SQL : même en appelant directement les fonctions RPC en tant

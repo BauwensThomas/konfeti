@@ -5,10 +5,10 @@ import { LoginForm } from "@/components/LoginForm";
 export default async function ConnexionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
   const t = await getTranslations("Login");
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
 
   return (
     <main className="flex flex-1 flex-col items-center gap-8 px-6 py-16 text-center sm:py-24">
@@ -34,7 +34,7 @@ export default async function ConnexionPage({
         </p>
       )}
 
-      <LoginForm />
+      <LoginForm next={next} />
     </main>
   );
 }

@@ -20,7 +20,11 @@ export async function GET(request: Request) {
   // DECISIONS.md).
   const origin = process.env.NEXT_PUBLIC_APP_URL ?? "https://konfeti.belgacai.com";
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/mes-evenements";
+  // Jamais une URL absolue ici (open redirect) : `next` vient d'un paramètre
+  // d'URL, potentiellement forgé -- seul un chemin relatif commençant par
+  // `/` est accepté, jamais `//...` (URL "protocol-relative").
+  const rawNext = searchParams.get("next");
+  const next = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/mes-evenements";
 
   if (code) {
     const supabase = await createClient();

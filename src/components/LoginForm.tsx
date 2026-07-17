@@ -9,7 +9,7 @@ import {
 } from "@/app/[locale]/actions/auth";
 import { Button } from "@/components/ui/Button";
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string }) {
   const t = useTranslations("Login");
   const [state, formAction, isPending] = useActionState<MagicLinkResult | null, FormData>(
     sendMagicLink,
@@ -30,6 +30,7 @@ export function LoginForm() {
   return (
     <div className="flex w-full max-w-sm flex-col gap-4">
       <form action={formAction} className="flex flex-col gap-3">
+        {next && <input type="hidden" name="next" value={next} />}
         <div>
           <label htmlFor="login-email" className="sr-only">
             {t("emailLabel")}
@@ -61,6 +62,7 @@ export function LoginForm() {
       </div>
 
       <form action={signInWithGoogle}>
+        {next && <input type="hidden" name="next" value={next} />}
         <Button type="submit" variant="secondary" className="w-full">
           {t("google")}
         </Button>

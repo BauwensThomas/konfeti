@@ -43,7 +43,10 @@ export async function completeProfile(
     return { ok: false, error: "unknown" };
   }
 
-  redirect(next || "/mes-evenements");
+  // Jamais une URL absolue ici (open redirect) : `next` vient d'un paramètre
+  // d'URL relayé depuis `/auth/callback` (potentiellement forgé) -- seul un
+  // chemin relatif commençant par `/` est accepté, jamais `//...`.
+  redirect(next && next.startsWith("/") && !next.startsWith("//") ? next : "/mes-evenements");
 }
 
 export type UpdateProfileResult =

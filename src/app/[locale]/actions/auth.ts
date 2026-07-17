@@ -11,6 +11,21 @@ export type MagicLinkResult =
   | { ok: true }
   | { ok: false; error: "invalid_email" | "unknown" };
 
+// Retour Thomas : "quand on clique sur créer un event, on arrive sur la page
+// de connexion si on n'est pas connecté, et sur créer l'event si on est
+// connecté" -- `/creer` redirige désormais vers `/connexion?next=/creer` pour
+// un visiteur non connecté (voir creer/page.tsx). Ce `next` doit survivre au
+// magic link/à Google jusqu'au retour sur `/auth/callback`, qui sait déjà le
+// relayer (`searchParams.get("next")`, existant). Jamais une URL absolue
+// (open redirect) : seul un chemin relatif commençant par `/` est accepté,
+// jamais `//...` (URL "protocol-relative", redirigerait hors du site).
+function sanitizeNextPath(value: FormDataEntryValue | null): string {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
+    return "/mes-evenements";
+  }
+  return value;
+}
+
 export async function sendMagicLink(
   _prevState: MagicLinkResult | null,
   formData: FormData,
@@ -20,8 +35,9 @@ export async function sendMagicLink(
     return { ok: false, error: "invalid_email" };
   }
 
+  const next = sanitizeNextPath(formData.get("next"));
   const supabase = await createClient();
-  const emailRedirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`;
+  const emailRedirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=${encodeURIComponent(next)}`;
 
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data.email,
@@ -35,9 +51,10 @@ export async function sendMagicLink(
   return { ok: true };
 }
 
-export async function signInWithGoogle() {
+export async function signInWithGoogle(formData: FormData) {
+  const next = sanitizeNextPath(formData.get("next"));
   const supabase = await createClient();
-  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`;
+  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=${encodeURIComponent(next)}`;
 
   const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
 

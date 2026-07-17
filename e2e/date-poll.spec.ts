@@ -157,7 +157,8 @@ test("un admin promu (pas l'hôte) peut aussi valider la date retenue", async ({
     await page.goto(`/e/${event.short_code}`);
     await page.getByRole("button", { name: "Personnes" }).click();
     await page.getByRole("button", { name: "Approuver comme invité" }).click();
-    await page.getByRole("combobox").first().selectOption("admin");
+    await page.getByRole("button", { name: "Invité", exact: true }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "Administrateur" }).click();
 
     await expect
       .poll(async () => {
