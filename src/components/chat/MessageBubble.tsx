@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { editOwnMessage, moderateDeleteMessage, setReaction } from "@/app/[locale]/actions/chat";
 import { AvatarPlaceholder } from "@/components/AvatarPlaceholder";
 import { Modal } from "@/components/ui/Modal";
@@ -11,6 +11,7 @@ import { EmojiPicker } from "@/components/chat/EmojiPicker";
 import type { ChatReactionEmoji } from "@/lib/validation/chat";
 import type { ChatMessageView, ChatReactionSummary } from "@/components/chat/types";
 import { notifySessionExpired } from "@/lib/session-expired";
+import { dateLocaleTag } from "@/lib/locale-date";
 
 const EDIT_WINDOW_MS = 30_000;
 
@@ -40,6 +41,7 @@ export function MessageBubble({
   onJumpToMessage: (messageId: string) => void;
 }) {
   const t = useTranslations("Chat");
+  const locale = useLocale();
   const [isPending, startTransition] = useTransition();
   const [confirmingModerate, setConfirmingModerate] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -130,8 +132,8 @@ export function MessageBubble({
   // déjà utilisé ailleurs sur la page événement : une bulle de chat est
   // beaucoup plus étroite qu'un en-tête de page, la compacité prime ici.
   const createdAtDate = new Date(message.createdAt);
-  const time = `${createdAtDate.toLocaleDateString("fr-BE", { day: "2-digit", month: "2-digit" })} ${createdAtDate.toLocaleTimeString(
-    "fr-BE",
+  const time = `${createdAtDate.toLocaleDateString(dateLocaleTag(locale), { day: "2-digit", month: "2-digit" })} ${createdAtDate.toLocaleTimeString(
+    dateLocaleTag(locale),
     { hour: "2-digit", minute: "2-digit" },
   )}`;
   const isSending = message.status === "sending";

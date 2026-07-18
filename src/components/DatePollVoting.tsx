@@ -1,11 +1,12 @@
 "use client";
 
 import { useOptimistic, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { finalizeDatePoll, voteDateOption } from "@/app/[locale]/actions/date-poll";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { notifySessionExpired } from "@/lib/session-expired";
+import { dateLocaleTag } from "@/lib/locale-date";
 
 type DateOptionWithVotes = {
   id: string;
@@ -27,6 +28,7 @@ export function DatePollVoting({
   options: DateOptionWithVotes[];
 }) {
   const t = useTranslations("EventPage");
+  const locale = useLocale();
   const [isPending, startTransition] = useTransition();
   const [confirmingOptionId, setConfirmingOptionId] = useState<string | null>(null);
 
@@ -86,7 +88,7 @@ export function DatePollVoting({
                 onChange={(e) => handleToggle(option.id, e.target.checked)}
               />
               <span>
-                {formatDateTime(option.startsAt)}
+                {formatDateTime(option.startsAt, locale)}
                 {option.label ? ` (${option.label})` : ""}
               </span>
             </label>
@@ -123,8 +125,8 @@ export function DatePollVoting({
   );
 }
 
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("fr-BE", {
+function formatDateTime(iso: string, locale: string) {
+  return new Date(iso).toLocaleString(dateLocaleTag(locale), {
     weekday: "long",
     day: "numeric",
     month: "long",

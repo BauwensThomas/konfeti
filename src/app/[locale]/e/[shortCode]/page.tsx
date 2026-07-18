@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { EVENT_THEMES } from "@/lib/themes";
 import { isEventOver, isJourJ } from "@/lib/event-status";
@@ -39,6 +39,7 @@ import { Card } from "@/components/ui/Card";
 import { buttonClassName } from "@/components/ui/Button";
 import { joinNames } from "@/lib/joinNames";
 import type { BringUnit } from "@/lib/bring-units";
+import { dateLocaleTag } from "@/lib/locale-date";
 
 // Open Graph dynamique (brief 5.7/Phase 3) : le titre/aperçu de partage
 // reflète l'événement (titre réel), mais ne se base QUE sur `events_public_data`
@@ -950,6 +951,7 @@ async function EventAccueil({
 }) {
   const t = await getTranslations("EventPage");
   const tOccasions = await getTranslations("Occasions");
+  const locale = await getLocale();
   const theme = EVENT_THEMES.find((th) => th.key === event.theme) ?? EVENT_THEMES[0];
 
   return (
@@ -1125,8 +1127,8 @@ async function EventAccueil({
           <p className="font-display text-lg font-bold text-foreground">{t("dateLocationHeading")}</p>
           {event.date_mode === "fixed" && event.starts_at ? (
             <p className="text-base font-semibold text-foreground">
-              {formatDateTime(event.starts_at)}
-              {event.ends_at ? ` · ${t("endsAtLabel", { time: formatTime(event.ends_at) })}` : ""}
+              {formatDateTime(event.starts_at, locale)}
+              {event.ends_at ? ` · ${t("endsAtLabel", { time: formatTime(event.ends_at, locale) })}` : ""}
             </p>
           ) : dateOptions.length > 0 ? (
             <DatePollVoting
@@ -1212,7 +1214,7 @@ async function EventAccueil({
           )}
           {event.rsvp_deadline && (
             <p className="text-sm text-foreground/80">
-              {t("rsvpDeadlineLabel", { date: formatDate(event.rsvp_deadline) })}
+              {t("rsvpDeadlineLabel", { date: formatDate(event.rsvp_deadline, locale) })}
             </p>
           )}
         </Card>
@@ -1262,7 +1264,7 @@ async function EventAccueil({
               <p className="text-sm font-semibold text-accent-mint">
                 {t("lastContribution", {
                   amount: (lastContributionNetCents / 100).toFixed(2),
-                  date: formatDate(lastContributionAt),
+                  date: formatDate(lastContributionAt, locale),
                 })}
               </p>
             )}
@@ -1334,8 +1336,8 @@ async function EventAccueil({
   );
 }
 
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("fr-BE", {
+function formatDateTime(iso: string, locale: string) {
+  return new Date(iso).toLocaleString(dateLocaleTag(locale), {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -1345,12 +1347,12 @@ function formatDateTime(iso: string) {
   });
 }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" });
+function formatTime(iso: string, locale: string) {
+  return new Date(iso).toLocaleTimeString(dateLocaleTag(locale), { hour: "2-digit", minute: "2-digit" });
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("fr-BE", {
+function formatDate(iso: string, locale: string) {
+  return new Date(iso).toLocaleDateString(dateLocaleTag(locale), {
     day: "numeric",
     month: "long",
   });

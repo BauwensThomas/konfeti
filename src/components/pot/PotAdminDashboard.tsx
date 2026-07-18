@@ -1,4 +1,5 @@
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
+import { dateLocaleTag } from "@/lib/locale-date";
 import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { StartOnboardingButton } from "@/components/pot/StartOnboardingButton";
@@ -31,6 +32,7 @@ export async function PotAdminDashboard({
   viewerId: string | null;
 }) {
   const t = await getTranslations("Pot");
+  const locale = await getLocale();
   const supabase = await createClient();
 
   // Retour Thomas : seul le porteur de la cagnotte (celui qui a lié son
@@ -156,8 +158,8 @@ export async function PotAdminDashboard({
                 <span className="flex flex-col">
                   <span>{isPotOwnerViewer ? contributorName || t("adminContributor") : t("adminContributor")}</span>
                   <span className="text-xs text-foreground/60">
-                    {new Date(c.created_at).toLocaleDateString("fr-FR")}{" "}
-                    {new Date(c.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                    {new Date(c.created_at).toLocaleDateString(dateLocaleTag(locale))}{" "}
+                    {new Date(c.created_at).toLocaleTimeString(dateLocaleTag(locale), { hour: "2-digit", minute: "2-digit" })}
                   </span>
                 </span>
                 <span>{((c.net_cents ?? 0) / 100).toFixed(2)}€</span>

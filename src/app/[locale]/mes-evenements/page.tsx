@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
+import { dateLocaleTag } from "@/lib/locale-date";
 import { createClient } from "@/lib/supabase/server";
 import { isEventOver, isJourJ, sortEventsByDate } from "@/lib/event-status";
 import { computeUnreadCount } from "@/lib/chat/unread";
@@ -22,6 +23,7 @@ type EventRow = {
 
 export default async function MyEventsPage() {
   const t = await getTranslations("MyEvents");
+  const locale = await getLocale();
   const supabase = await createClient();
   const {
     data: { user },
@@ -116,7 +118,7 @@ export default async function MyEventsPage() {
               <p className="text-sm text-foreground/60">
                 {event.date_mode === "poll" || !event.starts_at
                   ? t("dateTBD")
-                  : new Date(event.starts_at).toLocaleString("fr-BE", {
+                  : new Date(event.starts_at).toLocaleString(dateLocaleTag(locale), {
                       weekday: "long",
                       day: "numeric",
                       month: "long",
