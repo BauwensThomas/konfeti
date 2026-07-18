@@ -46,6 +46,10 @@ export async function uploadEventPhoto(formData: FormData): Promise<UploadPhotoR
       .webp({ quality: 80 })
       .toBuffer();
 
+    // Filet de sécurité, voir même correctif dans actions/avatar.ts : revérifie
+    // que le résultat est une image réellement décodable avant de l'uploader.
+    await sharp(resized).metadata();
+
     const path = `${user.id}/${crypto.randomUUID()}.webp`;
     const { error } = await supabase.storage
       .from("event-photos")
@@ -101,6 +105,10 @@ export async function uploadMessagePhoto(formData: FormData): Promise<UploadPhot
       .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 80 })
       .toBuffer();
+
+    // Filet de sécurité, voir même correctif dans actions/avatar.ts : revérifie
+    // que le résultat est une image réellement décodable avant de l'uploader.
+    await sharp(resized).metadata();
 
     const path = `${user.id}/messages/${crypto.randomUUID()}.webp`;
     const { error } = await supabase.storage

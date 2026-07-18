@@ -48,6 +48,15 @@ export async function uploadAvatarPhoto(formData: FormData): Promise<UploadAvata
       .webp({ quality: 80 })
       .toBuffer();
 
+    // Filet de sécurité (retour Thomas : une photo uploadée avec succès
+    // s'est retrouvée corrompue dans Storage, cause exacte non confirmée --
+    // possible incident ponctuel de l'encodeur WebP sur l'environnement
+    // serverless) : revérifie que le résultat est une image réellement
+    // décodable avant de l'uploader, plutôt que de faire confiance aveugle à
+    // la sortie de `sharp`. Si ça échoue, l'erreur est capturée par le
+    // `catch` ci-dessous comme n'importe quelle autre erreur de traitement.
+    await sharp(resized).metadata();
+
     const path = `${user.id}/avatars/${crypto.randomUUID()}.webp`;
     const { error } = await supabase.storage
       .from("event-photos")
