@@ -1,21 +1,12 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { useIsStandalone } from "@/lib/useIsStandalone";
-import { subscribeToPush, unsubscribeFromPush, updatePushCategoryPreference } from "@/app/[locale]/actions/push";
+import { usePushSubscription } from "@/lib/usePushSubscription";
+import { updatePushCategoryPreference } from "@/app/[locale]/actions/push";
 import type { PushCategoryInput } from "@/lib/validation/push";
 
 const CATEGORIES: PushCategoryInput[] = ["invitations", "chat", "organisation", "jourj"];
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
-}
-
-type Status = "loading" | "unsupported" | "unsubscribed" | "subscribed";
 
 // Réglage push, visible UNIQUEMENT en mode installé (`useIsStandalone`) --
 // sur iPhone le Web Push ne fonctionne QUE si l'app est ajoutée à l'écran
@@ -23,68 +14,24 @@ type Status = "loading" | "unsupported" | "unsubscribed" | "subscribed";
 // induirait en erreur (voir landing page, section "Installe l'application").
 // 4 catégories cochées par défaut, désactivables individuellement (retour
 // Thomas : "doit être coché de base mais décochable si besoin") -- même
-// pattern optimiste que `ReminderPreferenceToggle`, mais x4.
+// pattern optimiste que `ReminderPreferenceToggle`, mais x4. Logique
+// d'abonnement partagée avec `PushNotificationPrompt.tsx` via `usePushSubscription`.
 export function PushNotificationSettings({
   initialPreferences,
 }: {
   initialPreferences: Record<PushCategoryInput, boolean>;
 }) {
   const t = useTranslations("ProfileCompletion");
-  const isStandalone = useIsStandalone();
-  const [status, setStatus] = useState<Status>("loading");
+  const { isStandalone, status, error: subscriptionError, subscribe, unsubscribe } = usePushSubscription();
   const [preferences, setPreferences] = useState(initialPreferences);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
-    if (!isStandalone) return;
-    (async () => {
-      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-        setStatus("unsupported");
-        return;
-      }
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      const subscription = await registration.pushManager.getSubscription();
-      setStatus(subscription ? "subscribed" : "unsubscribed");
-    })();
-  }, [isStandalone]);
-
   async function handleSubscribe() {
     setError(null);
-    try {
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setError(t("pushErrorPermissionDenied"));
-        return;
-      }
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!) as BufferSource,
-      });
-      const result = await subscribeToPush(subscription.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } });
-      if (!result.ok) {
-        setError(t("errorUnknown"));
-        return;
-      }
-      setStatus("subscribed");
-    } catch {
-      setError(t("errorUnknown"));
-    }
-  }
-
-  async function handleUnsubscribe() {
-    setError(null);
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      if (subscription) {
-        await unsubscribeFromPush(subscription.endpoint);
-        await subscription.unsubscribe();
-      }
-      setStatus("unsubscribed");
-    } catch {
-      setError(t("errorUnknown"));
+    const ok = await subscribe();
+    if (!ok) {
+      setError(subscriptionError === "permission_denied" ? t("pushErrorPermissionDenied") : t("errorUnknown"));
     }
   }
 
@@ -131,7 +78,7 @@ export function PushNotificationSettings({
               </label>
             ))}
           </div>
-          <button type="button" onClick={handleUnsubscribe} className="self-start text-sm font-semibold text-accent-coral">
+          <button type="button" onClick={unsubscribe} className="self-start text-sm font-semibold text-accent-coral">
             {t("pushDisableButton")}
           </button>
         </>

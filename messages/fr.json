@@ -113,7 +113,13 @@
     "attendingBadge": "Invité",
     "finishedBadge": "Terminé",
     "ongoingBadge": "En cours",
-    "dateTBD": "Date en cours de vote"
+    "dateTBD": "Date en cours de vote",
+    "pushPromptTitle": "Ne rate rien",
+    "pushPromptBody": "Active les notifications pour être prévenu des réponses, du chat et des rappels avant tes événements.",
+    "pushPromptEnable": "Activer les notifications",
+    "pushPromptDismiss": "Plus tard",
+    "pushPromptErrorPermissionDenied": "Les notifications sont bloquées pour Konfeti dans les réglages de ton téléphone.",
+    "pushPromptErrorUnknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant."
   },
   "Themes": {
     "confetti": "Confetti Party",

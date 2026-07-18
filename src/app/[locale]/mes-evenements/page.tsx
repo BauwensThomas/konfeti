@@ -7,6 +7,7 @@ import { isEventOver, isJourJ, sortEventsByDate } from "@/lib/event-status";
 import { computeUnreadCount } from "@/lib/chat/unread";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 
 type EventRow = {
   id: string;
@@ -154,6 +155,8 @@ export default async function MyEventsPage() {
           <Button>{t("createButton")}</Button>
         </Link>
       </div>
+
+      <PushNotificationPrompt />
 
       {events.length === 0 ? (
         <div className="flex flex-col items-center gap-4 text-center">
