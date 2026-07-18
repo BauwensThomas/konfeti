@@ -104,6 +104,7 @@ export function EventPhotoEditor({
         ref={inputRef}
         type="file"
         accept="image/*"
+        capture="environment"
         onChange={handleFileChange}
         className="hidden"
       />

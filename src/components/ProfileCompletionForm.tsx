@@ -106,8 +106,16 @@ export function ProfileCompletionForm({
           // avant d'arriver dans le profil") — jamais de destination fixe
           // possible ici, /profil est accessible depuis n'importe où via le
           // footer. Court délai pour laisser voir la confirmation avant de
-          // quitter la page.
-          setTimeout(() => router.back(), 900);
+          // quitter la page. Retour Thomas : "il faut que la page se
+          // refresh" -- `router.back()` restaure la page précédente depuis
+          // le cache client de Next.js, jamais garanti à jour avec les
+          // nouvelles données serveur ; `router.refresh()` force le
+          // re-fetch, comme partout ailleurs dans le projet après une
+          // mutation.
+          setTimeout(() => {
+            router.back();
+            router.refresh();
+          }, 900);
         } else {
           setError(
             result.error === "invalid"
@@ -232,6 +240,7 @@ export function ProfileCompletionForm({
           ref={fileInputRef}
           type="file"
           accept="image/*"
+          capture="environment"
           onChange={handlePhotoChange}
           className="hidden"
         />
