@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/supabase/guest-session";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
+import { uploadAndVerify } from "@/lib/upload-and-verify";
 
 export type UploadPhotoResult =
   | { ok: true; path: string }
@@ -46,16 +47,13 @@ export async function uploadEventPhoto(formData: FormData): Promise<UploadPhotoR
       .webp({ quality: 80 })
       .toBuffer();
 
-    // Filet de sécurité, voir même correctif dans actions/avatar.ts : revérifie
-    // que le résultat est une image réellement décodable avant de l'uploader.
+    // Filet de sécurité, voir src/lib/upload-and-verify.ts : upload puis
+    // revérifie ce qui est réellement arrivé dans Storage, pas seulement le
+    // buffer avant envoi (une corruption en transit a déjà été observée).
     await sharp(resized).metadata();
 
     const path = `${user.id}/${crypto.randomUUID()}.webp`;
-    const { error } = await supabase.storage
-      .from("event-photos")
-      .upload(path, resized, { contentType: "image/webp" });
-
-    if (error) {
+    if (!(await uploadAndVerify(supabase, path, resized))) {
       return { ok: false, error: "unknown" };
     }
 
@@ -106,16 +104,11 @@ export async function uploadMessagePhoto(formData: FormData): Promise<UploadPhot
       .webp({ quality: 80 })
       .toBuffer();
 
-    // Filet de sécurité, voir même correctif dans actions/avatar.ts : revérifie
-    // que le résultat est une image réellement décodable avant de l'uploader.
+    // Filet de sécurité, voir src/lib/upload-and-verify.ts.
     await sharp(resized).metadata();
 
     const path = `${user.id}/messages/${crypto.randomUUID()}.webp`;
-    const { error } = await supabase.storage
-      .from("event-photos")
-      .upload(path, resized, { contentType: "image/webp" });
-
-    if (error) {
+    if (!(await uploadAndVerify(supabase, path, resized))) {
       return { ok: false, error: "unknown" };
     }
 

@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/supabase/guest-session";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
+import { uploadAndVerify } from "@/lib/upload-and-verify";
 
 export type UploadAvatarResult =
   | { ok: true; path: string }
@@ -48,21 +49,17 @@ export async function uploadAvatarPhoto(formData: FormData): Promise<UploadAvata
       .webp({ quality: 80 })
       .toBuffer();
 
-    // Filet de sécurité (retour Thomas : une photo uploadée avec succès
-    // s'est retrouvée corrompue dans Storage, cause exacte non confirmée --
-    // possible incident ponctuel de l'encodeur WebP sur l'environnement
-    // serverless) : revérifie que le résultat est une image réellement
-    // décodable avant de l'uploader, plutôt que de faire confiance aveugle à
-    // la sortie de `sharp`. Si ça échoue, l'erreur est capturée par le
-    // `catch` ci-dessous comme n'importe quelle autre erreur de traitement.
+    // Validation du buffer avant l'envoi -- garde utile en soi, mais
+    // insuffisante seule : retour Thomas, une photo dont CE buffer passait
+    // déjà cette vérification s'est quand même retrouvée corrompue dans
+    // Storage. Root-causé via Sentry : "An unexpected response was received
+    // from the server" sur une connexion mobile instable -- la corruption
+    // arrive donc APRÈS ce point, pendant l'envoi réseau vers Supabase
+    // Storage lui-même, jamais dans le traitement `sharp`.
     await sharp(resized).metadata();
 
     const path = `${user.id}/avatars/${crypto.randomUUID()}.webp`;
-    const { error } = await supabase.storage
-      .from("event-photos")
-      .upload(path, resized, { contentType: "image/webp" });
-
-    if (error) {
+    if (!(await uploadAndVerify(supabase, path, resized))) {
       return { ok: false, error: "unknown" };
     }
 
