@@ -57,6 +57,7 @@ next-env.d.ts
 
 # dossiers de travail hors code (backups, notes, visuels/videos sources, le brief lui-meme)
 /backups
+/backup
 /doc
 /images
 /videos
