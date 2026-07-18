@@ -118,17 +118,17 @@
     "emptyText": "Create your first invitation, it only takes a minute.",
     "organizingHeading": "I'm hosting",
     "attendingHeading": "I'm attending",
+    "pendingHeading": "Awaiting approval",
     "hostBadge": "Host",
     "attendingBadge": "Guest",
+    "pendingBadge": "Pending",
     "finishedBadge": "Finished",
     "ongoingBadge": "Ongoing",
     "dateTBD": "Date being voted on",
     "pushPromptTitle": "Don't miss a thing",
     "pushPromptBody": "Turn on notifications to be alerted about replies, chat messages, and reminders before your events.",
     "pushPromptEnable": "Enable notifications",
-    "pushPromptDismiss": "Later",
-    "pushPromptErrorPermissionDenied": "Notifications are blocked for Konfeti in your phone's settings.",
-    "pushPromptErrorUnknown": "Oops, something went wrong. Try again in a moment."
+    "pushPromptDismiss": "Later"
   },
   "Themes": {
     "confetti": "Confetti Party",

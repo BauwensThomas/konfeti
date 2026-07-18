@@ -66,7 +66,30 @@ export default async function MyEventsPage() {
       : { data: [] as EventRow[] };
   const attendingEvents = sortEventsByDate(attendingData ?? []);
 
-  const events = [...hostedEvents, ...attendingEvents];
+  // Événements où l'on a répondu mais où l'hôte n'a pas encore validé
+  // (retour Thomas : "on a pas un truc evenement en attente ?") -- jusqu'ici
+  // ces événements restaient invisibles depuis cette page (la seule trace
+  // était `GuestPendingScreen` sur le lien direct de l'événement, aucune vue
+  // d'ensemble si on attend une validation sur plusieurs événements à la fois).
+  const { data: pendingRsvps } = await supabase
+    .from("rsvps")
+    .select("event_id")
+    .eq("profile_id", user!.id)
+    .eq("status", "pending");
+  const pendingEventIds = [...new Set((pendingRsvps ?? []).map((r) => r.event_id))].filter(
+    (id) => !hostedIds.has(id),
+  );
+  const { data: pendingData } =
+    pendingEventIds.length > 0
+      ? await supabase
+          .from("events")
+          .select("id, short_code, title, theme, starts_at, date_mode, ends_at, ended_at")
+          .in("id", pendingEventIds)
+          .neq("status", "cancelled")
+      : { data: [] as EventRow[] };
+  const pendingEvents = sortEventsByDate(pendingData ?? []);
+
+  const events = [...hostedEvents, ...attendingEvents, ...pendingEvents];
 
   // Pastille non-lus (brief 4.3), désormais sur les deux sections (avant :
   // limité aux événements hébergés, voir doc/TODO.md — corrigé au passage
@@ -96,7 +119,15 @@ export default async function MyEventsPage() {
     }
   }
 
-  function EventCard({ event, isHosted }: { event: EventRow; isHosted: boolean }) {
+  function EventCard({
+    event,
+    isHosted,
+    isPending = false,
+  }: {
+    event: EventRow;
+    isHosted: boolean;
+    isPending?: boolean;
+  }) {
     const finished = isEventOver(event.starts_at, event.date_mode, event.ends_at, event.ended_at);
     // Retour Thomas : "pourquoi je vois organisateur et pas en cours ?" --
     // pendant le Mode Jour J (jour de la fête + fin + jours de grâce), le
@@ -135,6 +166,10 @@ export default async function MyEventsPage() {
             ) : ongoing ? (
               <span className="rounded-full bg-accent-mint/10 px-3 py-1 text-xs font-semibold text-accent-mint">
                 {t("ongoingBadge")}
+              </span>
+            ) : isPending ? (
+              <span className="rounded-full bg-accent-sky/10 px-3 py-1 text-xs font-semibold text-accent-sky">
+                {t("pendingBadge")}
               </span>
             ) : (
               <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
@@ -175,32 +210,48 @@ export default async function MyEventsPage() {
         </div>
       ) : (
         <div className="flex w-full max-w-lg lg:max-w-2xl flex-col gap-6">
-          {/* Titres de section seulement si les deux catégories coexistent :
-              pour le cas le plus courant (uniquement des événements
-              hébergés, ou uniquement des participations), une simple liste
-              plate reste plus lisible qu'un unique titre de section. */}
-          {hostedEvents.length > 0 && attendingEvents.length > 0 ? (
+          {/* Titres de section seulement si au moins deux catégories
+              coexistent : pour le cas le plus courant (une seule catégorie
+              non vide), une simple liste plate reste plus lisible qu'un
+              unique titre de section. */}
+          {[hostedEvents, attendingEvents, pendingEvents].filter((c) => c.length > 0).length > 1 ? (
             <>
-              <div className="flex flex-col gap-3">
-                <h2 className="font-display text-lg font-bold text-foreground">
-                  {t("organizingHeading")}
-                </h2>
-                <ul className="flex flex-col gap-4">
-                  {hostedEvents.map((event) => (
-                    <EventCard key={event.id} event={event} isHosted />
-                  ))}
-                </ul>
-              </div>
-              <div className="flex flex-col gap-3">
-                <h2 className="font-display text-lg font-bold text-foreground">
-                  {t("attendingHeading")}
-                </h2>
-                <ul className="flex flex-col gap-4">
-                  {attendingEvents.map((event) => (
-                    <EventCard key={event.id} event={event} isHosted={false} />
-                  ))}
-                </ul>
-              </div>
+              {hostedEvents.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <h2 className="font-display text-lg font-bold text-foreground">
+                    {t("organizingHeading")}
+                  </h2>
+                  <ul className="flex flex-col gap-4">
+                    {hostedEvents.map((event) => (
+                      <EventCard key={event.id} event={event} isHosted />
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {attendingEvents.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <h2 className="font-display text-lg font-bold text-foreground">
+                    {t("attendingHeading")}
+                  </h2>
+                  <ul className="flex flex-col gap-4">
+                    {attendingEvents.map((event) => (
+                      <EventCard key={event.id} event={event} isHosted={false} />
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {pendingEvents.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <h2 className="font-display text-lg font-bold text-foreground">
+                    {t("pendingHeading")}
+                  </h2>
+                  <ul className="flex flex-col gap-4">
+                    {pendingEvents.map((event) => (
+                      <EventCard key={event.id} event={event} isHosted={false} isPending />
+                    ))}
+                  </ul>
+                </div>
+              )}
             </>
           ) : (
             <ul className="flex flex-col gap-4">
@@ -209,6 +260,9 @@ export default async function MyEventsPage() {
               ))}
               {attendingEvents.map((event) => (
                 <EventCard key={event.id} event={event} isHosted={false} />
+              ))}
+              {pendingEvents.map((event) => (
+                <EventCard key={event.id} event={event} isHosted={false} isPending />
               ))}
             </ul>
           )}

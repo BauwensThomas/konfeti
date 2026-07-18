@@ -118,17 +118,17 @@
     "emptyText": "Cria o teu primeiro convite, só demora um minuto.",
     "organizingHeading": "Organizo",
     "attendingHeading": "Participo",
+    "pendingHeading": "A aguardar validação",
     "hostBadge": "Organizador",
     "attendingBadge": "Convidado",
+    "pendingBadge": "Pendente",
     "finishedBadge": "Terminado",
     "ongoingBadge": "A decorrer",
     "dateTBD": "Data em votação",
     "pushPromptTitle": "Não percas nada",
     "pushPromptBody": "Ativa as notificações para seres avisado sobre respostas, chat e lembretes antes dos teus eventos.",
     "pushPromptEnable": "Ativar notificações",
-    "pushPromptDismiss": "Mais tarde",
-    "pushPromptErrorPermissionDenied": "As notificações estão bloqueadas para o Konfeti nas definições do teu telemóvel.",
-    "pushPromptErrorUnknown": "Ups, algo correu mal. Tenta de novo daqui a pouco."
+    "pushPromptDismiss": "Mais tarde"
   },
   "Themes": {
     "confetti": "Festa de Confettis",

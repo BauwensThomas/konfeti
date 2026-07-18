@@ -118,17 +118,17 @@
     "emptyText": "Maak je eerste uitnodiging, het duurt maar een minuutje.",
     "organizingHeading": "Ik organiseer",
     "attendingHeading": "Ik neem deel",
+    "pendingHeading": "In afwachting van goedkeuring",
     "hostBadge": "Organisator",
     "attendingBadge": "Gast",
+    "pendingBadge": "In afwachting",
     "finishedBadge": "Afgelopen",
     "ongoingBadge": "Bezig",
     "dateTBD": "Datum wordt nog gestemd",
     "pushPromptTitle": "Mis niets",
     "pushPromptBody": "Activeer meldingen om verwittigd te worden bij reacties, chat en herinneringen voor je evenementen.",
     "pushPromptEnable": "Meldingen activeren",
-    "pushPromptDismiss": "Later",
-    "pushPromptErrorPermissionDenied": "Meldingen zijn geblokkeerd voor Konfeti in de instellingen van je telefoon.",
-    "pushPromptErrorUnknown": "Oeps, er is iets misgegaan. Probeer het zo weer."
+    "pushPromptDismiss": "Later"
   },
   "Themes": {
     "confetti": "Confetti Party",
