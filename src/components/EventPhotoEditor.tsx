@@ -6,6 +6,7 @@ import { updateEventCoverPhoto } from "@/app/[locale]/actions/events";
 import { uploadEventPhoto } from "@/app/[locale]/actions/upload";
 import { AvatarPlaceholder } from "@/components/AvatarPlaceholder";
 import { Modal } from "@/components/ui/Modal";
+import { PhotoSourceModal } from "@/components/ui/PhotoSourceModal";
 import { Button } from "@/components/ui/Button";
 
 /**
@@ -29,7 +30,9 @@ export function EventPhotoEditor({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [showPhotoSource, setShowPhotoSource] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const avatarClasses =
     "h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-white/40 object-cover sm:h-28 sm:w-28";
@@ -47,7 +50,7 @@ export function EventPhotoEditor({
 
   function handleChangeClick() {
     setMenuOpen(false);
-    inputRef.current?.click();
+    setShowPhotoSource(true);
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -92,7 +95,7 @@ export function EventPhotoEditor({
     <>
       <button
         type="button"
-        onClick={() => (photoUrl ? setMenuOpen(true) : inputRef.current?.click())}
+        onClick={() => (photoUrl ? setMenuOpen(true) : setShowPhotoSource(true))}
         className="relative shrink-0 overflow-hidden rounded-full transition-[transform] active:scale-95"
       >
         {photo}
@@ -100,14 +103,27 @@ export function EventPhotoEditor({
           {t("photoChange")}
         </span>
       </button>
+      <PhotoSourceModal
+        open={showPhotoSource}
+        onClose={() => setShowPhotoSource(false)}
+        onCamera={() => {
+          setShowPhotoSource(false);
+          cameraInputRef.current?.click();
+        }}
+        onGallery={() => {
+          setShowPhotoSource(false);
+          galleryInputRef.current?.click();
+        }}
+      />
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         onChange={handleFileChange}
         className="hidden"
       />
+      <input ref={galleryInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
       {uploading && <p className="text-xs text-white/80">{t("photoUploading")}</p>}
       {error && <p className="text-xs text-white">{error}</p>}
 

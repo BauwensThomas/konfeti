@@ -7,6 +7,7 @@ import { completeProfile, updateProfile } from "@/app/[locale]/actions/profile";
 import { uploadAvatarPhoto } from "@/app/[locale]/actions/avatar";
 import { PRESET_AVATARS } from "@/lib/avatars";
 import { Button } from "@/components/ui/Button";
+import { PhotoSourceModal } from "@/components/ui/PhotoSourceModal";
 
 type InitialProfile = {
   firstName: string;
@@ -50,7 +51,9 @@ export function ProfileCompletionForm({
     initial?.avatarKind === "photo" ? (initial.avatarPreviewUrl ?? null) : null,
   );
   const [avatarUploading, setAvatarUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showPhotoSource, setShowPhotoSource] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -223,7 +226,7 @@ export function ProfileCompletionForm({
           ))}
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => setShowPhotoSource(true)}
             className={`relative mx-auto flex h-22 w-22 items-center justify-center overflow-hidden rounded-full border-2 bg-surface text-sm font-semibold text-primary ${
               avatarKind === "photo" ? "border-primary" : "border-border"
             }`}
@@ -236,14 +239,27 @@ export function ProfileCompletionForm({
             )}
           </button>
         </div>
+        <PhotoSourceModal
+          open={showPhotoSource}
+          onClose={() => setShowPhotoSource(false)}
+          onCamera={() => {
+            setShowPhotoSource(false);
+            cameraInputRef.current?.click();
+          }}
+          onGallery={() => {
+            setShowPhotoSource(false);
+            galleryInputRef.current?.click();
+          }}
+        />
         <input
-          ref={fileInputRef}
+          ref={cameraInputRef}
           type="file"
           accept="image/*"
           capture="environment"
           onChange={handlePhotoChange}
           className="hidden"
         />
+        <input ref={galleryInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
       </fieldset>
 
       {error && (

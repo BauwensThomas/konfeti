@@ -1,4 +1,8 @@
 {
+  "PhotoSourcePicker": {
+    "camera": "Prendre une photo",
+    "gallery": "Choisir depuis la galerie"
+  },
   "Home": {
     "title": "Konfeti",
     "subtitle": "Des invitations qui donnent envie de venir.",

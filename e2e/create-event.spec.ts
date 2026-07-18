@@ -34,6 +34,7 @@ test("un organisateur complete son profil et cree un evenement", async ({ page }
     await page.getByPlaceholder("L'anniversaire de Julie").fill(title);
     await page
       .locator('input[type="file"]')
+      .first()
       .setInputFiles(path.join(__dirname, "fixtures", "test-photo.png"));
     await expect(page.getByText("Envoi en cours...")).toBeHidden({ timeout: 10_000 });
     await page.locator('input[type="datetime-local"]').first().fill("2026-12-24T20:00");

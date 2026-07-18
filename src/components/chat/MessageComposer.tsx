@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { sendMessage } from "@/app/[locale]/actions/chat";
 import { uploadMessagePhoto } from "@/app/[locale]/actions/upload";
+import { PhotoSourceModal } from "@/components/ui/PhotoSourceModal";
 import type { ChatMessageView } from "@/components/chat/types";
 
 // Brouillon persisté (brief 4.3, retour Thomas : le texte en cours de frappe
@@ -88,7 +89,9 @@ export function MessageComposer({
   const [isPending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showPhotoSource, setShowPhotoSource] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   function updateBody(value: string) {
     setBody(value);
@@ -209,21 +212,34 @@ export function MessageComposer({
       <div className="flex items-center gap-1.5">
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => setShowPhotoSource(true)}
           disabled={uploading || isPending}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground/60 hover:bg-primary/10 disabled:opacity-50"
           aria-label={t("composer.addPhoto")}
         >
           <CameraIcon className="h-5 w-5" />
         </button>
+        <PhotoSourceModal
+          open={showPhotoSource}
+          onClose={() => setShowPhotoSource(false)}
+          onCamera={() => {
+            setShowPhotoSource(false);
+            cameraInputRef.current?.click();
+          }}
+          onGallery={() => {
+            setShowPhotoSource(false);
+            galleryInputRef.current?.click();
+          }}
+        />
         <input
-          ref={fileInputRef}
+          ref={cameraInputRef}
           type="file"
           accept="image/*"
           capture="environment"
           className="hidden"
           onChange={handlePhotoChange}
         />
+        <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
         <input
           // Id stable ciblé directement par MessageBubble au clic sur
           // "Répondre" (retour Thomas : "on arrive directement dans écrire

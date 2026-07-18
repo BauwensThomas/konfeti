@@ -10,6 +10,7 @@ import { OCCASIONS } from "@/lib/validation/event";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
+import { PhotoSourceModal } from "@/components/ui/PhotoSourceModal";
 import { AvatarPlaceholder } from "@/components/AvatarPlaceholder";
 import { toLocalDateTimeValue, fromLocalDateTimeValue, parseDateOnlyLocal } from "@/lib/datetime";
 import { joinNames } from "@/lib/joinNames";
@@ -190,7 +191,9 @@ export function CreateEventWizard({
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(initialPhotoUrl ?? null);
   const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
   const [confirmingPhotoDelete, setConfirmingPhotoDelete] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [showPhotoSource, setShowPhotoSource] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   // Même demande de Thomas, étendue à "Enfants bienvenus"/"Animaux bienvenus"
   // (retour Thomas : "il va falloir aussi mettre des popup pour enfants
   // bienvenus et animaux bienvenus") -- même pattern popup que l'unité
@@ -223,13 +226,13 @@ export function CreateEventWizard({
     if (photoPreviewUrl) {
       setPhotoMenuOpen((open) => !open);
     } else {
-      photoInputRef.current?.click();
+      setShowPhotoSource(true);
     }
   }
 
   function handleChangePhotoClick() {
     setPhotoMenuOpen(false);
-    photoInputRef.current?.click();
+    setShowPhotoSource(true);
   }
 
   function handleDeletePhotoConfirmed() {
@@ -485,14 +488,27 @@ export function CreateEventWizard({
                   </Button>
                 </div>
               </Modal>
+              <PhotoSourceModal
+                open={showPhotoSource}
+                onClose={() => setShowPhotoSource(false)}
+                onCamera={() => {
+                  setShowPhotoSource(false);
+                  cameraInputRef.current?.click();
+                }}
+                onGallery={() => {
+                  setShowPhotoSource(false);
+                  galleryInputRef.current?.click();
+                }}
+              />
               <input
-                ref={photoInputRef}
+                ref={cameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
                 onChange={handlePhotoChange}
                 className="hidden"
               />
+              <input ref={galleryInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
               {photoUploading && (
                 <p className="text-sm text-foreground/60">{t("step1.photoUploading")}</p>
               )}
