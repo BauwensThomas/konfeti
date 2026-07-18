@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export function Modal({
   open,
@@ -24,7 +25,15 @@ export function Modal({
 }) {
   if (!open) return null;
 
-  return (
+  // Portail vers `document.body` (retour Thomas, bug réel repéré sur le
+  // sélecteur de langue) : un `Modal` déclenché depuis un ancêtre avec
+  // `backdrop-filter`/`filter`/`transform` (ici le header, `backdrop-blur-sm`)
+  // se retrouvait positionné par rapport à CET ancêtre au lieu du vrai
+  // viewport -- ces propriétés CSS créent un nouveau "containing block" pour
+  // tout descendant `position: fixed`, un piège classique et non évident.
+  // Rendre systématiquement dans `document.body` élimine toute la classe de
+  // bug, peu importe où ce composant est utilisé à l'avenir.
+  return createPortal(
     <div
       className={`fixed inset-0 z-50 flex bg-black/50 ${fromBottom ? "items-end" : "items-center justify-center p-6"}`}
       onClick={onClose}
@@ -37,12 +46,13 @@ export function Modal({
           fromBottom
             ? "modal-slide-up flex max-h-[85vh] w-full flex-col gap-4 overflow-y-auto rounded-t-konfeti bg-surface p-6 shadow-konfeti pb-safe"
             : fitContent
-              ? "flex w-fit max-w-[92vw] flex-col gap-4 rounded-konfeti bg-surface p-3 shadow-konfeti"
-              : `flex flex-col gap-4 rounded-konfeti bg-surface p-6 shadow-konfeti ${className}`
+              ? "flex max-h-[85vh] w-fit max-w-[92vw] flex-col gap-4 overflow-y-auto rounded-konfeti bg-surface p-3 shadow-konfeti"
+              : `flex max-h-[85vh] flex-col gap-4 overflow-y-auto rounded-konfeti bg-surface p-6 shadow-konfeti ${className}`
         }
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
