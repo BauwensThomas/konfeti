@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import { createClient } from "@/lib/supabase/server";
 import { FooterMenu } from "@/components/FooterMenu";
 import { FooterSocialLinks } from "@/components/FooterSocialLinks";
 
@@ -12,9 +13,19 @@ export async function Footer() {
   const t = await getTranslations("Footer");
   const year = new Date().getFullYear();
 
+  // Retour Thomas : "on a mis aucun bouton se déconnecter, ce n'est pas
+  // grave ?" -- vrai manque, la seule façon de se déconnecter avant ce
+  // correctif passait par "Gérer les cookies" (effet de bord d'un bouton
+  // RGPD, jamais pensé comme une vraie déconnexion). "Se déconnecter" n'a de
+  // sens qu'avec une session active, jamais affiché à un visiteur non connecté.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <footer className="pb-safe flex flex-col items-center gap-3 px-6 pt-8 text-center">
-      <FooterMenu />
+      <FooterMenu isLoggedIn={!!user} />
       <FooterSocialLinks />
       <p className="text-xs text-primary">{t("copyright", { year })}</p>
     </footer>

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { clearSession } from "@/app/[locale]/actions/auth";
 
 // Titre cliquable au-dessus du copyright (retour Thomas : "un titre, et
 // quand on clique dessus ça ouvre un popup avec les différents liens des
@@ -11,7 +13,7 @@ import { Modal } from "@/components/ui/Modal";
 // section 9) + le lien profil retiré du footer par le passé (voir
 // Footer.tsx, "pas nécessaire" en accès direct) mais qui retrouve sa place
 // ici, dans un menu secondaire plutôt qu'affiché en permanence.
-export function FooterMenu() {
+export function FooterMenu({ isLoggedIn }: { isLoggedIn: boolean }) {
   const t = useTranslations("Footer");
   const [open, setOpen] = useState(false);
 
@@ -48,6 +50,13 @@ export function FooterMenu() {
             </li>
           ))}
         </ul>
+        {isLoggedIn && (
+          <form action={clearSession}>
+            <Button type="submit" variant="danger" size="sm" className="mt-2 w-full">
+              {t("linkLogout")}
+            </Button>
+          </form>
+        )}
       </Modal>
     </>
   );

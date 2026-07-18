@@ -31,11 +31,15 @@ function wrapper(bodyHtml: string): string {
 <body style="margin:0;padding:0;background-color:${BRAND.cream};font-family:sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${BRAND.cream};padding:32px 16px;">
     <tr>
-      <td align="center">
+      <td align="center" style="position:relative;">
+        <img src="${assetUrl("/icon-confetti.png")}" alt="" width="30" height="30" style="position:absolute;top:0;left:8px;" />
+        <img src="${assetUrl("/icon-confetti.png")}" alt="" width="26" height="26" style="position:absolute;top:6px;right:12px;transform:rotate(90deg);" />
+        <img src="${assetUrl("/icon-confetti.png")}" alt="" width="26" height="26" style="position:absolute;bottom:6px;left:14px;transform:rotate(-90deg);" />
+        <img src="${assetUrl("/icon-confetti.png")}" alt="" width="30" height="30" style="position:absolute;bottom:0;right:8px;transform:rotate(180deg);" />
         <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background-color:#ffffff;border-radius:20px;overflow:hidden;">
           <tr>
             <td align="center" style="background-color:${BRAND.grey};padding:24px;border:3px solid ${BRAND.primary};border-radius:20px 20px 0 0;">
-              <img src="${assetUrl("/mascot.webp")}" alt="Konfeti" width="80" height="80" style="display:block;" />
+              <img src="${assetUrl("/mascot.webp")}" alt="Konfeti" width="80" height="80" style="display:block;margin:0 auto;" />
             </td>
           </tr>
           <tr>
