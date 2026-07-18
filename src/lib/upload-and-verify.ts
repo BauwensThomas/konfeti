@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import * as Sentry from "@sentry/nextjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Filet de sécurité contre une corruption en transit vers Supabase Storage
@@ -24,10 +25,33 @@ export async function uploadAndVerify(
   const { data: uploaded, error: downloadError } = await supabase.storage.from("event-photos").download(path);
   if (downloadError) return false;
 
+  const downloadedBytes = Buffer.from(await uploaded.arrayBuffer());
   try {
-    await sharp(Buffer.from(await uploaded.arrayBuffer())).metadata();
+    await sharp(downloadedBytes).metadata();
     return true;
-  } catch {
+  } catch (sharpError) {
+    // Diagnostic explicite (retour Thomas : corruption reproductible à
+    // chaque tentative, y compris en WiFi -- l'hypothèse "aléa réseau
+    // ponctuel" ne suffit plus à l'expliquer). Sans ce signalement manuel,
+    // Sentry ne voit jamais cet échec : `uploadAndVerify` renvoie un
+    // résultat géré, jamais une exception qui remonterait jusqu'au global
+    // error handler. Contexte complet capturé pour comparer un prochain cas
+    // (taille avant/après, tentative, message d'erreur sharp exact).
+    Sentry.captureMessage("uploadAndVerify: fichier corrompu après upload vers Storage", {
+      level: "warning",
+      extra: {
+        path,
+        attempt,
+        localBytesLength: bytes.length,
+        downloadedBytesLength: downloadedBytes.length,
+        // Distingue une corruption déjà présente AVANT l'envoi (buffers
+        // identiques -- pointerait vers sharp/l'encodage lui-même) d'une
+        // vraie corruption en transit (buffers différents malgré une même
+        // taille, ou taille différente -- pointerait vers le réseau/Storage).
+        bytesIdenticalToLocal: bytes.equals(downloadedBytes),
+        sharpError: sharpError instanceof Error ? sharpError.message : String(sharpError),
+      },
+    });
     if (attempt >= 2) {
       await supabase.storage.from("event-photos").remove([path]);
       return false;
