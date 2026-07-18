@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { finalizeDatePoll, voteDateOption } from "@/app/[locale]/actions/date-poll";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 type DateOptionWithVotes = {
   id: string;
@@ -49,7 +50,10 @@ export function DatePollVoting({
   function handleToggle(optionId: string, checked: boolean) {
     startTransition(async () => {
       setOptimisticVote({ optionId, checked });
-      await voteDateOption(eventId, optionId, checked, shortCode);
+      const result = await voteDateOption(eventId, optionId, checked, shortCode);
+      if (!result.ok && result.error === "not_authenticated") {
+        notifySessionExpired();
+      }
     });
   }
 
@@ -57,7 +61,10 @@ export function DatePollVoting({
     if (!confirmingOptionId) return;
     const optionId = confirmingOptionId;
     startTransition(async () => {
-      await finalizeDatePoll(eventId, optionId, shortCode);
+      const result = await finalizeDatePoll(eventId, optionId, shortCode);
+      if (!result.ok && result.error === "not_authenticated") {
+        notifySessionExpired();
+      }
       setConfirmingOptionId(null);
     });
   }

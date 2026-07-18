@@ -11,7 +11,7 @@ import { pushMessages } from "@/lib/push-messages";
 
 export type SubmitRsvpResult =
   | { ok: true }
-  | { ok: false; error: "invalid" | "already_rsvped" | "blocked" | "rate_limited" | "unknown" };
+  | { ok: false; error: "invalid" | "not_authenticated" | "already_rsvped" | "blocked" | "rate_limited" | "unknown" };
 
 // Crée la participation de l'appelant (statut "pending", brief 1.3 étape 3),
 // une fois connecté (retour Thomas : porte unique de connexion, plus de
@@ -38,7 +38,7 @@ export async function submitRsvp(
   const supabase = await createClient();
   const user = await requireUser(supabase);
   if (!user) {
-    return { ok: false, error: "unknown" };
+    return { ok: false, error: "not_authenticated" };
   }
 
   // Se souvenir de l'identité sur ce compte pour la prochaine fois (brief

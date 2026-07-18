@@ -8,6 +8,7 @@ import { uploadAvatarPhoto } from "@/app/[locale]/actions/avatar";
 import { PRESET_AVATARS } from "@/lib/avatars";
 import { Button } from "@/components/ui/Button";
 import { PhotoSourceModal } from "@/components/ui/PhotoSourceModal";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 type InitialProfile = {
   firstName: string;
@@ -70,6 +71,8 @@ export function ProfileCompletionForm({
     setAvatarUploading(false);
     if (result.ok) {
       setAvatarValue(result.path);
+    } else if (result.error === "not_authenticated") {
+      notifySessionExpired();
     } else {
       setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorPhoto"));
     }
@@ -119,6 +122,8 @@ export function ProfileCompletionForm({
             router.back();
             router.refresh();
           }, 900);
+        } else if (result.error === "not_authenticated") {
+          notifySessionExpired();
         } else {
           setError(
             result.error === "invalid"
@@ -136,7 +141,11 @@ export function ProfileCompletionForm({
       // sur l'échec.
       const result = await completeProfile(payload, next ?? "/mes-evenements");
       if (!result.ok) {
-        setError(result.error === "invalid" ? t("errorInvalid") : t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(result.error === "invalid" ? t("errorInvalid") : t("errorUnknown"));
+        }
       }
     });
   }

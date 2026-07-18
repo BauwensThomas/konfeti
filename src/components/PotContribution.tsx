@@ -6,6 +6,7 @@ import { createPotContribution } from "@/app/[locale]/actions/pot";
 import { feeBreakdownFromNet } from "@/lib/pot-fees";
 import { Button } from "@/components/ui/Button";
 import { StickerConfetti } from "@/components/stickers";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 const SUGGESTED_AMOUNTS_CENTS = [1000, 2000, 5000, 10000];
 
@@ -49,6 +50,8 @@ export function PotContribution({
       const result = await createPotContribution({ eventId, netCents: breakdown.netCents });
       if (result.ok) {
         window.location.href = result.url;
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
         setError(t(`error.${result.error}`));
       }

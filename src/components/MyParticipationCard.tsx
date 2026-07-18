@@ -6,6 +6,7 @@ import { useRouter } from "@/i18n/navigation";
 import { updateMyAnswer, leaveEvent } from "@/app/[locale]/actions/participants";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 type Answer = "yes" | "maybe" | "no";
 
@@ -57,6 +58,8 @@ export function MyParticipationCard({
       if (result.ok) {
         setConfirmingNo(false);
         router.refresh();
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
         setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
       }
@@ -79,6 +82,8 @@ export function MyParticipationCard({
       if (result.ok) {
         setConfirmingLeave(false);
         router.refresh();
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
         // "organizer_protected" : filet de sécurité, ce bouton n'est de
         // toute façon jamais affiché à l'organisateur (voir page.tsx).

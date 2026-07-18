@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { deleteAccount } from "@/app/[locale]/actions/auth";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 // Suppression de compte en libre-service (retour Thomas : "on doit pouvoir
 // supprimer son compte, et effacer toutes les données") -- même pattern de
@@ -24,6 +25,8 @@ export function DeleteAccountButton() {
       const result = await deleteAccount();
       if (result.ok) {
         window.location.href = "/";
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
         setError(
           result.error === "still_hosting"

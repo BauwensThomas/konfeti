@@ -8,6 +8,7 @@ import { AvatarPlaceholder } from "@/components/AvatarPlaceholder";
 import { Modal } from "@/components/ui/Modal";
 import { PhotoSourceModal } from "@/components/ui/PhotoSourceModal";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 /**
  * Photo de couverture affichée dans la bannière de la page événement. Pour
@@ -65,7 +66,11 @@ export function EventPhotoEditor({
     setUploading(false);
 
     if (!result.ok) {
-      setError(result.error === "rate_limited" ? t("photoUploadRateLimited") : t("photoUploadError"));
+      if (result.error === "not_authenticated") {
+        notifySessionExpired();
+      } else {
+        setError(result.error === "rate_limited" ? t("photoUploadRateLimited") : t("photoUploadError"));
+      }
       return;
     }
 
@@ -74,6 +79,8 @@ export function EventPhotoEditor({
       const updateResult = await updateEventCoverPhoto(eventId, result.path);
       if (updateResult.ok) {
         setPhotoUrl(previewUrl);
+      } else if (updateResult.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
         setError(t("photoUploadError"));
       }
@@ -85,6 +92,8 @@ export function EventPhotoEditor({
       const result = await updateEventCoverPhoto(eventId, null);
       if (result.ok) {
         setPhotoUrl(null);
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       }
       setConfirmingDelete(false);
       setMenuOpen(false);

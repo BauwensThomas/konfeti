@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { startPotOnboarding } from "@/app/[locale]/actions/pot";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 // Bouton "Configurer les paiements" (brief 4.5 : onboarding Stripe Connect
 // Express) -- redirige vers Stripe dès la réponse de l'action serveur,
@@ -19,8 +20,10 @@ export function StartOnboardingButton({ eventId }: { eventId: string }) {
       const result = await startPotOnboarding(eventId);
       if (result.ok) {
         window.location.href = result.url;
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
-        setError(t("error.unknown"));
+        setError(t(`error.${result.error}`));
       }
     });
   }

@@ -4,6 +4,7 @@ import { useOptimistic, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { markArrivedHome } from "@/app/[locale]/actions/participants";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 // "Je suis bien rentré" (brief 4.11), extrait de `JourJActions.tsx` --
 // indépendant du Mode Jour J/Terminé (retour Thomas : reste utile même une
@@ -28,7 +29,10 @@ export function GoHomeActions({
     const next = !optimisticArrivedHome;
     startTransition(async () => {
       setOptimisticArrivedHome(next);
-      await markArrivedHome(rsvpId, shortCode, next);
+      const result = await markArrivedHome(rsvpId, shortCode, next);
+      if (!result.ok && result.error === "not_authenticated") {
+        notifySessionExpired();
+      }
     });
   }
 

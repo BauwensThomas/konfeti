@@ -7,6 +7,7 @@ import { approvePoll, proposePoll, rejectPoll, setPollVote } from "@/app/[locale
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 export type PollOptionView = {
   id: string;
@@ -134,7 +135,11 @@ export function PollsListClient({
       setOptimisticVote({ optionId, quantity });
       const result = await setPollVote(eventId, viewerRsvpId, shortCode, { optionId, quantity });
       if (!result.ok) {
-        setError(result.error === "quota_exceeded" ? t("quotaExceeded") : t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(result.error === "quota_exceeded" ? t("quotaExceeded") : t("errorUnknown"));
+        }
         return;
       }
       router.refresh();
@@ -155,7 +160,11 @@ export function PollsListClient({
         choiceMode: proposeChoiceMode,
       });
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       setProposeQuestion("");
@@ -171,7 +180,11 @@ export function PollsListClient({
     startTransition(async () => {
       const result = await approvePoll(shortCode, pollId);
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();
@@ -183,7 +196,11 @@ export function PollsListClient({
     startTransition(async () => {
       const result = await rejectPoll(shortCode, pollId);
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();
@@ -203,7 +220,11 @@ export function PollsListClient({
     startTransition(async () => {
       const result = await rejectPoll(shortCode, pollId);
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();

@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { endEvent } from "@/app/[locale]/actions/events";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 // "Rouvrir" (admin) : annule un clic accidentel sur "Terminer", même
 // principe re-cliquable que le reste du Mode Jour J (retour Thomas). Sans
@@ -16,7 +17,10 @@ export function EventFinishedActions({ eventId, shortCode }: { eventId: string; 
 
   function handleReopen() {
     startTransition(async () => {
-      await endEvent(eventId, shortCode, false);
+      const result = await endEvent(eventId, shortCode, false);
+      if (!result.ok && result.error === "not_authenticated") {
+        notifySessionExpired();
+      }
     });
   }
 

@@ -17,7 +17,7 @@ import {
 
 export type ChatActionResult =
   | { ok: true }
-  | { ok: false; error: "invalid" | "rate_limited" | "unauthorized" | "unknown" };
+  | { ok: false; error: "invalid" | "not_authenticated" | "rate_limited" | "unauthorized" | "unknown" };
 
 // L'hôte n'a jamais de ligne rsvps automatique (voir date-poll.ts). Pour un
 // participant normal, une ligne existe déjà depuis son onboarding (identité
@@ -40,7 +40,7 @@ export async function ensureMyChatRsvpId(
 
 export type SendMessageResult =
   | { ok: true; messageId: string }
-  | { ok: false; error: "invalid" | "rate_limited" | "unknown" };
+  | { ok: false; error: "invalid" | "not_authenticated" | "rate_limited" | "unknown" };
 
 // Pas de `revalidatePath` : le chat est piloté par Realtime (l'expéditeur
 // voit son propre message via l'abonnement, comme tout le monde), pas par
@@ -55,7 +55,7 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
   const supabase = await createClient();
   const user = await requireUser(supabase);
   if (!user) {
-    return { ok: false, error: "unknown" };
+    return { ok: false, error: "not_authenticated" };
   }
 
   if (isRateLimited(`sendMessage:${user.id}`, 30, 60 * 1000)) {
@@ -127,7 +127,7 @@ export async function editOwnMessage(messageId: string, body: string): Promise<C
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return { ok: false, error: "unknown" };
+    return { ok: false, error: "not_authenticated" };
   }
 
   const { error } = await supabase.rpc("edit_own_message", {
@@ -157,7 +157,7 @@ export async function moderateDeleteMessage(messageId: string): Promise<ChatActi
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return { ok: false, error: "unknown" };
+    return { ok: false, error: "not_authenticated" };
   }
 
   const { data: updated, error } = await supabase
@@ -193,7 +193,7 @@ export async function setReaction(
   const supabase = await createClient();
   const user = await requireUser(supabase);
   if (!user) {
-    return { ok: false, error: "unknown" };
+    return { ok: false, error: "not_authenticated" };
   }
 
   if (isRateLimited(`setReaction:${user.id}`, 60, 60 * 1000)) {

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { usePushSubscription } from "@/lib/usePushSubscription";
 import { updatePushCategoryPreference } from "@/app/[locale]/actions/push";
 import type { PushCategoryInput } from "@/lib/validation/push";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 const CATEGORIES: PushCategoryInput[] = ["invitations", "chat", "organisation", "jourj"];
 
@@ -27,10 +28,19 @@ export function PushNotificationSettings({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // Session expirée pendant l'abonnement/désabonnement push (hook partagé
+  // avec `PushNotificationPrompt.tsx`, même garde) : passe par le bandeau
+  // global plutôt qu'un texte local, `subscriptionError` n'étant fiable
+  // qu'une fois React re-rendu avec la nouvelle valeur (pas dans le closure
+  // du gestionnaire de clic qui a déclenché l'appel).
+  useEffect(() => {
+    if (subscriptionError === "not_authenticated") notifySessionExpired();
+  }, [subscriptionError]);
+
   async function handleSubscribe() {
     setError(null);
     const ok = await subscribe();
-    if (!ok) {
+    if (!ok && subscriptionError !== "not_authenticated") {
       setError(subscriptionError === "permission_denied" ? t("pushErrorPermissionDenied") : t("errorUnknown"));
     }
   }
@@ -42,7 +52,11 @@ export function PushNotificationSettings({
       const result = await updatePushCategoryPreference(category, next);
       if (!result.ok) {
         setPreferences((prev) => ({ ...prev, [category]: !next }));
-        setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
+        }
       }
     });
   }

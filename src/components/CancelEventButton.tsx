@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { cancelEvent } from "@/app/[locale]/actions/events";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 export function CancelEventButton({ eventId }: { eventId: string }) {
   const t = useTranslations("EventPage");
@@ -42,7 +43,10 @@ export function CancelEventButton({ eventId }: { eventId: string }) {
             disabled={isPending}
             onClick={() =>
               startTransition(async () => {
-                await cancelEvent(eventId);
+                const result = await cancelEvent(eventId);
+                if (!result.ok && result.error === "not_authenticated") {
+                  notifySessionExpired();
+                }
               })
             }
           >

@@ -3,6 +3,10 @@
     "camera": "Prendre une photo",
     "gallery": "Choisir depuis la galerie"
   },
+  "SessionExpired": {
+    "message": "Ta session a expiré.",
+    "reconnect": "Se reconnecter"
+  },
   "Home": {
     "title": "Konfeti",
     "subtitle": "Des invitations qui donnent envie de venir.",
@@ -665,9 +669,9 @@
     "contributing": "Un instant...",
     "error": {
       "invalid": "Vérifie le montant saisi.",
-      "not_authenticated": "Reconnecte-toi pour contribuer.",
       "rate_limited": "Trop de tentatives, réessaie dans un instant.",
       "pot_unavailable": "La cagnotte n'est pas disponible pour le moment.",
+      "unauthorized": "Tu n'es pas autorisé à faire cette action.",
       "unknown": "Oups, quelque chose s'est mal passé. Réessaie dans un instant."
     },
     "adminHeading": "Tableau de bord cagnotte",

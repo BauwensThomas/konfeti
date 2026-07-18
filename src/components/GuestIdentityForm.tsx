@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { PhotoSourceModal } from "@/components/ui/PhotoSourceModal";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 type CompanionKind = "partner" | "child" | "friend" | "family";
 type Companion = { kind: CompanionKind; firstName: string };
@@ -83,6 +84,8 @@ export function GuestIdentityForm({
     setAvatarUploading(false);
     if (result.ok) {
       setAvatarValue(result.path);
+    } else if (result.error === "not_authenticated") {
+      notifySessionExpired();
     } else {
       setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorPhoto"));
     }
@@ -134,6 +137,8 @@ export function GuestIdentityForm({
       const result = await submitRsvp(eventId, shortCode, payload);
       if (result.ok) {
         onSuccess();
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
         setError(
           result.error === "rate_limited"

@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { endEvent } from "@/app/[locale]/actions/events";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 // "Terminer" (brief 4.11, proposé par Thomas) : tout en bas de la page
 // Accueil, même largeur que les autres boutons Jour J (retour Thomas), en
@@ -16,7 +17,10 @@ export function EndEventButton({ eventId, shortCode }: { eventId: string; shortC
 
   function handleEndEvent() {
     startTransition(async () => {
-      await endEvent(eventId, shortCode, true);
+      const result = await endEvent(eventId, shortCode, true);
+      if (!result.ok && result.error === "not_authenticated") {
+        notifySessionExpired();
+      }
     });
   }
 

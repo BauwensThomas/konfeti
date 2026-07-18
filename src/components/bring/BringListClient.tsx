@@ -20,6 +20,7 @@ import { UnitPickerButton } from "@/components/bring/UnitPickerButton";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 export type BringClaimView = {
   id: string;
@@ -173,7 +174,11 @@ export function BringListClient({
         quantity,
       });
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();
@@ -186,7 +191,11 @@ export function BringListClient({
     startTransition(async () => {
       const result = await deleteBringClaim(shortCode, viewerRsvpId, { itemId: item.id });
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();
@@ -198,7 +207,11 @@ export function BringListClient({
     startTransition(async () => {
       const result = await toggleBringBrought(shortCode, { claimId, brought });
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();
@@ -218,7 +231,11 @@ export function BringListClient({
         quantityNeeded: quantity,
       });
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       setProposeLabel("");
@@ -236,7 +253,11 @@ export function BringListClient({
     startTransition(async () => {
       const result = await approveBringItem(shortCode, itemId, quantityNeeded);
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       setPendingQuantityDrafts((prev) => {
@@ -263,7 +284,11 @@ export function BringListClient({
         ownQuantity,
       });
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       setAddLabel("");
@@ -280,7 +305,11 @@ export function BringListClient({
     startTransition(async () => {
       const result = await rejectBringItem(shortCode, itemId);
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();
@@ -293,7 +322,11 @@ export function BringListClient({
     startTransition(async () => {
       const result = await mergeBringItemProposal(shortCode, { pendingItemId, targetItemId });
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();
@@ -309,7 +342,11 @@ export function BringListClient({
     startTransition(async () => {
       const result = await updateBringItemQuantity(shortCode, { itemId: item.id, quantityNeeded });
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       setItemQuantityDrafts((prev) => {
@@ -327,7 +364,11 @@ export function BringListClient({
     startTransition(async () => {
       const result = await deleteBringItem(shortCode, itemId);
       if (!result.ok) {
-        setError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();

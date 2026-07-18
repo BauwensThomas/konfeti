@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { AvatarPlaceholder } from "@/components/AvatarPlaceholder";
 import { joinNames } from "@/lib/joinNames";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 export type ParticipantRow = {
   id: string;
@@ -136,7 +137,11 @@ export function ParticipantsList({
 
   function handleApprove(rsvpId: string, role: "guest" | "beneficiary") {
     startTransition(async () => {
-      await approveRsvp(rsvpId, shortCode, role);
+      const result = await approveRsvp(rsvpId, shortCode, role);
+      if (!result.ok && result.error === "not_authenticated") {
+        notifySessionExpired();
+        return;
+      }
       router.refresh();
     });
   }
@@ -151,13 +156,17 @@ export function ParticipantsList({
       // mais autant afficher l'erreur plutôt que l'ignorer en silence si un
       // état affiché était périmé.
       if (!result.ok) {
-        setRoleError(
-          result.error === "organizer_protected"
-            ? t("errorOrganizerProtected")
-            : result.error === "still_owns_pot"
-              ? t("errorStillOwnsPot")
-              : t("errorUnknown"),
-        );
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setRoleError(
+            result.error === "organizer_protected"
+              ? t("errorOrganizerProtected")
+              : result.error === "still_owns_pot"
+                ? t("errorStillOwnsPot")
+                : t("errorUnknown"),
+          );
+        }
         return;
       }
       router.refresh();
@@ -169,13 +178,17 @@ export function ParticipantsList({
     startTransition(async () => {
       const result = await setParticipantRole(rsvpId, shortCode, role);
       if (!result.ok) {
-        setRoleError(
-          result.error === "last_admin"
-            ? t("errorLastAdmin")
-            : result.error === "organizer_protected"
-              ? t("errorOrganizerProtected")
-              : t("errorUnknown"),
-        );
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setRoleError(
+            result.error === "last_admin"
+              ? t("errorLastAdmin")
+              : result.error === "organizer_protected"
+                ? t("errorOrganizerProtected")
+                : t("errorUnknown"),
+          );
+        }
         return;
       }
       router.refresh();
@@ -188,7 +201,11 @@ export function ParticipantsList({
       const result = await transferEventHost(eventId, newHostProfileId, shortCode);
       setConfirmingTransferId(null);
       if (!result.ok) {
-        setTransferError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setTransferError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();
@@ -197,21 +214,33 @@ export function ParticipantsList({
 
   function handleGrantPotAccess(rsvpId: string) {
     startTransition(async () => {
-      await grantPotAccess(rsvpId, shortCode);
+      const result = await grantPotAccess(rsvpId, shortCode);
+      if (!result.ok && result.error === "not_authenticated") {
+        notifySessionExpired();
+        return;
+      }
       router.refresh();
     });
   }
 
   function handleDenyPotAccess(rsvpId: string) {
     startTransition(async () => {
-      await denyPotAccess(rsvpId, shortCode);
+      const result = await denyPotAccess(rsvpId, shortCode);
+      if (!result.ok && result.error === "not_authenticated") {
+        notifySessionExpired();
+        return;
+      }
       router.refresh();
     });
   }
 
   function handleRevokePotAccess(rsvpId: string) {
     startTransition(async () => {
-      await revokePotAccess(rsvpId, shortCode);
+      const result = await revokePotAccess(rsvpId, shortCode);
+      if (!result.ok && result.error === "not_authenticated") {
+        notifySessionExpired();
+        return;
+      }
       router.refresh();
     });
   }
@@ -222,7 +251,11 @@ export function ParticipantsList({
       const result = await blockParticipant(rsvpId, shortCode);
       setConfirmingBlockId(null);
       if (!result.ok) {
-        setRoleError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setRoleError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();
@@ -234,7 +267,11 @@ export function ParticipantsList({
     startTransition(async () => {
       const result = await unblockParticipant(rsvpId, shortCode);
       if (!result.ok) {
-        setRoleError(t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setRoleError(t("errorUnknown"));
+        }
         return;
       }
       router.refresh();

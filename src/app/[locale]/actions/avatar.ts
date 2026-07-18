@@ -8,7 +8,7 @@ import { uploadAndVerify } from "@/lib/upload-and-verify";
 
 export type UploadAvatarResult =
   | { ok: true; path: string }
-  | { ok: false; error: "invalid" | "too_large" | "rate_limited" | "unknown" };
+  | { ok: false; error: "not_authenticated" | "invalid" | "too_large" | "rate_limited" | "unknown" };
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 Mo, avant redimensionnement
 const AVATAR_DIMENSION = 500; // px, côté le plus long
@@ -20,7 +20,7 @@ export async function uploadAvatarPhoto(formData: FormData): Promise<UploadAvata
   const user = await requireUser(supabase);
 
   if (!user) {
-    return { ok: false, error: "unknown" };
+    return { ok: false, error: "not_authenticated" };
   }
 
   // Limité par IP en plus de l'utilisateur : défense en profondeur contre un

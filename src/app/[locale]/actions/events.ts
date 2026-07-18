@@ -437,7 +437,9 @@ export async function updateEvent(
   redirect(`/e/${shortCode}`);
 }
 
-export async function cancelEvent(eventId: string): Promise<{ ok: boolean }> {
+export async function cancelEvent(
+  eventId: string,
+): Promise<{ ok: true } | { ok: false; error: "not_authenticated" | "unknown" }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -446,7 +448,7 @@ export async function cancelEvent(eventId: string): Promise<{ ok: boolean }> {
   // Même raison que updateEvent ci-dessus : un admin promu a les mêmes
   // droits que l'hôte, aucune restriction supplémentaire ici.
   if (!user) {
-    return { ok: false };
+    return { ok: false, error: "not_authenticated" };
   }
 
   const { error } = await supabase
@@ -455,7 +457,7 @@ export async function cancelEvent(eventId: string): Promise<{ ok: boolean }> {
     .eq("id", eventId);
 
   if (error) {
-    return { ok: false };
+    return { ok: false, error: "unknown" };
   }
 
   try {
@@ -481,13 +483,17 @@ export async function cancelEvent(eventId: string): Promise<{ ok: boolean }> {
 // cliqué par erreur peut rouvrir. RLS `events_update_by_admin` est la vraie
 // frontière de sécurité, pas de vérification `isAdmin` ici (même principe que
 // `cancelEvent` juste au-dessus).
-export async function endEvent(eventId: string, shortCode: string, ended: boolean): Promise<{ ok: boolean }> {
+export async function endEvent(
+  eventId: string,
+  shortCode: string,
+  ended: boolean,
+): Promise<{ ok: true } | { ok: false; error: "not_authenticated" | "unknown" }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return { ok: false };
+    return { ok: false, error: "not_authenticated" };
   }
 
   const { error } = await supabase
@@ -496,7 +502,7 @@ export async function endEvent(eventId: string, shortCode: string, ended: boolea
     .eq("id", eventId);
 
   if (error) {
-    return { ok: false };
+    return { ok: false, error: "unknown" };
   }
 
   revalidatePath(`/e/${shortCode}`);
@@ -512,7 +518,7 @@ export async function endEvent(eventId: string, shortCode: string, ended: boolea
 export async function updateEventCoverPhoto(
   eventId: string,
   path: string | null,
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: true } | { ok: false; error: "not_authenticated" | "unknown" }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -521,7 +527,7 @@ export async function updateEventCoverPhoto(
   // Même raison que updateEvent ci-dessus : un admin promu a les mêmes
   // droits que l'hôte, aucune restriction supplémentaire ici.
   if (!user) {
-    return { ok: false };
+    return { ok: false, error: "not_authenticated" };
   }
 
   const { data: current } = await supabase
@@ -536,7 +542,7 @@ export async function updateEventCoverPhoto(
     .eq("id", eventId);
 
   if (error) {
-    return { ok: false };
+    return { ok: false, error: "unknown" };
   }
 
   if (current?.cover_photo_path && current.cover_photo_path !== path) {

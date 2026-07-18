@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export type DatePollResult = { ok: boolean };
+export type DatePollResult = { ok: true } | { ok: false; error: "not_authenticated" | "unknown" };
 
 export async function voteDateOption(
   eventId: string,
@@ -17,28 +17,28 @@ export async function voteDateOption(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { ok: false };
+    return { ok: false, error: "not_authenticated" };
   }
 
   const { data: rsvpId, error: rsvpError } = await supabase.rpc("ensure_own_rsvp", {
     p_event_id: eventId,
   });
   if (rsvpError || !rsvpId) {
-    return { ok: false };
+    return { ok: false, error: "unknown" };
   }
 
   if (checked) {
     const { error } = await supabase
       .from("date_votes")
       .upsert({ option_id: optionId, rsvp_id: rsvpId }, { onConflict: "option_id,rsvp_id" });
-    if (error) return { ok: false };
+    if (error) return { ok: false, error: "unknown" };
   } else {
     const { error } = await supabase
       .from("date_votes")
       .delete()
       .eq("option_id", optionId)
       .eq("rsvp_id", rsvpId);
-    if (error) return { ok: false };
+    if (error) return { ok: false, error: "unknown" };
   }
 
   revalidatePath(`/e/${shortCode}`);
@@ -56,7 +56,7 @@ export async function finalizeDatePoll(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { ok: false };
+    return { ok: false, error: "not_authenticated" };
   }
 
   const { data: option, error: optionError } = await supabase
@@ -67,7 +67,7 @@ export async function finalizeDatePoll(
     .maybeSingle();
 
   if (optionError || !option) {
-    return { ok: false };
+    return { ok: false, error: "unknown" };
   }
 
   // RLS (events_update_by_admin) rejette silencieusement (0 ligne modifiée)
@@ -78,7 +78,7 @@ export async function finalizeDatePoll(
     .eq("id", eventId);
 
   if (error) {
-    return { ok: false };
+    return { ok: false, error: "unknown" };
   }
 
   revalidatePath(`/e/${shortCode}`);

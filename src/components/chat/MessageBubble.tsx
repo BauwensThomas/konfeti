@@ -10,6 +10,7 @@ import { ReactionPills } from "@/components/chat/ReactionPills";
 import { EmojiPicker } from "@/components/chat/EmojiPicker";
 import type { ChatReactionEmoji } from "@/lib/validation/chat";
 import type { ChatMessageView, ChatReactionSummary } from "@/components/chat/types";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 const EDIT_WINDOW_MS = 30_000;
 
@@ -101,7 +102,10 @@ export function MessageBubble({
     onOptimisticSetReaction(message.id, myCurrentReaction, newEmoji);
     setPickerOpen(false);
     startTransition(async () => {
-      await setReaction(message.id, viewerRsvpId, newEmoji);
+      const result = await setReaction(message.id, viewerRsvpId, newEmoji);
+      if (!result.ok && result.error === "not_authenticated") {
+        notifySessionExpired();
+      }
     });
   }
 
@@ -113,6 +117,8 @@ export function MessageBubble({
       const result = await editOwnMessage(message.id, trimmed);
       if (result.ok) {
         setEditing(false);
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
         setEditError(t("sendError"));
       }
@@ -333,7 +339,10 @@ export function MessageBubble({
             disabled={isPending}
             onClick={() =>
               startTransition(async () => {
-                await moderateDeleteMessage(message.id);
+                const result = await moderateDeleteMessage(message.id);
+                if (!result.ok && result.error === "not_authenticated") {
+                  notifySessionExpired();
+                }
                 setConfirmingModerate(false);
               })
             }

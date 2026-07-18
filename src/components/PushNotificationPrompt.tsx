@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 import { usePushSubscription } from "@/lib/usePushSubscription";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 const DISMISSED_KEY = "konfeti-push-prompt-dismissed";
 
@@ -40,6 +41,13 @@ export function PushNotificationPrompt() {
   const [error, setError] = useState<string | null>(null);
   const [isSubscribing, setIsSubscribing] = useState(false);
 
+  // Voir PushNotificationSettings.tsx : `subscriptionError` n'est fiable
+  // qu'une fois re-rendu, jamais dans le closure du clic qui a déclenché
+  // `subscribe()`.
+  useEffect(() => {
+    if (subscriptionError === "not_authenticated") notifySessionExpired();
+  }, [subscriptionError]);
+
   function handleDismiss() {
     localStorage.setItem(DISMISSED_KEY, "1");
     setJustDismissed(true);
@@ -52,7 +60,7 @@ export function PushNotificationPrompt() {
     setIsSubscribing(false);
     if (ok) {
       handleDismiss();
-    } else {
+    } else if (subscriptionError !== "not_authenticated") {
       setError(subscriptionError === "permission_denied" ? t("pushPromptErrorPermissionDenied") : t("pushPromptErrorUnknown"));
     }
   }

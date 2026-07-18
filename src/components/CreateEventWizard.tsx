@@ -17,6 +17,7 @@ import { joinNames } from "@/lib/joinNames";
 import { UnitPickerButton, type BringUnit } from "@/components/bring/UnitPickerButton";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
 import { RestaurantPollPicker } from "@/components/RestaurantPollPicker";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 type DateOption = { startsAt: string; label: string };
 
@@ -257,6 +258,8 @@ export function CreateEventWizard({
     setPhotoUploading(false);
     if (result.ok) {
       update("coverPhotoPath", result.path);
+    } else if (result.error === "not_authenticated") {
+      notifySessionExpired();
     } else {
       setPhotoError(result.error === "rate_limited" ? t("step1.photoRateLimited") : t("step1.photoError"));
     }
@@ -425,7 +428,11 @@ export function CreateEventWizard({
           : await createEvent(payload);
 
       if (result && !result.ok) {
-        setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
+        }
       }
     });
   }

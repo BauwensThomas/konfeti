@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { createExpressDashboardLink } from "@/app/[locale]/actions/pot";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 // Retour Thomas : une fois onboardé, le porteur de la cagnotte doit pouvoir
 // modifier ses propres infos bancaires -- redirige vers le vrai tableau de
@@ -19,8 +20,10 @@ export function ManagePaymentInfoButton({ eventId }: { eventId: string }) {
       const result = await createExpressDashboardLink(eventId);
       if (result.ok) {
         window.location.href = result.url;
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
-        setError(t("error.unknown"));
+        setError(t(`error.${result.error}`));
       }
     });
   }

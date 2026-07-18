@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { checkIn } from "@/app/[locale]/actions/participants";
 import { useTabNavigation } from "@/components/EventTabs";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 // Mode Jour J (brief 4.11) : "Je suis arrivé" + raccourcis vers Chat/
 // Participer. "Je suis bien rentré" vit dans `GoHomeActions.tsx`, "Terminer"
@@ -37,7 +38,10 @@ export function JourJActions({
     const next = !optimisticCheckedIn;
     startTransition(async () => {
       setOptimisticCheckedIn(next);
-      await checkIn(rsvpId, shortCode, next);
+      const result = await checkIn(rsvpId, shortCode, next);
+      if (!result.ok && result.error === "not_authenticated") {
+        notifySessionExpired();
+      }
     });
   }
 

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { updateReminderPreference } from "@/app/[locale]/actions/profile";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 // Réglage global "recevoir des rappels par email" (retour Thomas : "dans le
 // profil il faut pouvoir cocher ou décocher de recevoir les mails") --
@@ -21,7 +22,11 @@ export function ReminderPreferenceToggle({ initialValue }: { initialValue: boole
       const result = await updateReminderPreference(next);
       if (!result.ok) {
         setChecked(!next);
-        setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
+        }
       }
     });
   }

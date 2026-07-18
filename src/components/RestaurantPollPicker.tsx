@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { searchNearbyRestaurants, type NearbyRestaurant } from "@/app/[locale]/actions/places";
 import type { PollOptionRow } from "@/components/CreateEventWizard";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 // Sondage resto (brief 4.6, V1.1) : recherche de vrais restaurants proches
 // (Google Places) au lieu de taper des options à la main -- affiché quand
@@ -35,7 +36,11 @@ export function RestaurantPollPicker({
     const result = await searchNearbyRestaurants(locationLat, locationLng);
     setLoading(false);
     if (!result.ok) {
-      setError(t("step4.restaurantSearchError"));
+      if (result.error === "not_authenticated") {
+        notifySessionExpired();
+      } else {
+        setError(t("step4.restaurantSearchError"));
+      }
       return;
     }
     setResults(result.restaurants);

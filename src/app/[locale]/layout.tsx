@@ -9,6 +9,7 @@ import { routing } from "@/i18n/routing";
 import { ConfettiBackground } from "@/components/ConfettiBackground";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { SessionExpiredBanner } from "@/components/SessionExpiredBanner";
 import "./globals.css";
 
 const balooTwo = Baloo_2({
@@ -102,6 +103,7 @@ export default async function LocaleLayout({
       <body className="min-h-full flex flex-col">
         <ConfettiBackground />
         <NextIntlClientProvider>
+          <SessionExpiredBanner />
           {/* Header toujours en haut (`pt-safe` : marge pour l'encoche/la
               caméra/la batterie, portée par le header lui-même puisque c'est
               désormais le premier élément affiché). Footer toujours en bas,

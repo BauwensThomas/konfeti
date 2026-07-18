@@ -72,7 +72,7 @@ export async function uploadMessagePhoto(formData: FormData): Promise<UploadPhot
   const user = await requireUser(supabase);
 
   if (!user) {
-    return { ok: false, error: "unknown" };
+    return { ok: false, error: "not_authenticated" };
   }
 
   // Coupe-circuit global (back-office /admin, retour Thomas) : désactivé, plus

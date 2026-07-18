@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { MyParticipationCard } from "@/components/MyParticipationCard";
 import { PotContribution } from "@/components/PotContribution";
 import { useLiveRsvpRefresh } from "@/lib/supabase/use-live-rsvp-refresh";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 type PotInfo = {
   pot_enabled: boolean;
@@ -66,6 +67,8 @@ export function GuestRestrictedScreen({
       const result = await requestPotAccess(rsvpId, shortCode);
       if (result.ok) {
         router.refresh();
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
         setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
       }

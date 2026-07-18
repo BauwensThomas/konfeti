@@ -54,7 +54,7 @@ export function usePushSubscription() {
       });
       const result = await subscribeToPush(subscription.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } });
       if (!result.ok) {
-        setError("unknown");
+        setError(result.error);
         return false;
       }
       setStatus("subscribed");
@@ -71,7 +71,10 @@ export function usePushSubscription() {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
-        await unsubscribeFromPush(subscription.endpoint);
+        const result = await unsubscribeFromPush(subscription.endpoint);
+        if (!result.ok && result.error === "not_authenticated") {
+          setError("not_authenticated");
+        }
         await subscription.unsubscribe();
       }
       setStatus("unsubscribed");

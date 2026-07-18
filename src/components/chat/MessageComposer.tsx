@@ -6,6 +6,7 @@ import { sendMessage } from "@/app/[locale]/actions/chat";
 import { uploadMessagePhoto } from "@/app/[locale]/actions/upload";
 import { PhotoSourceModal } from "@/components/ui/PhotoSourceModal";
 import type { ChatMessageView } from "@/components/chat/types";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 // Brouillon persisté (brief 4.3, retour Thomas : le texte en cours de frappe
 // ne doit pas se perdre en changeant d'onglet). Le panneau de chat se
@@ -135,7 +136,11 @@ export function MessageComposer({
       } else {
         // Bulle optimiste retirée (voir ChatRoom.handleSendSettled), texte
         // remis dans le champ pour pouvoir renvoyer sans tout retaper.
-        setError(t("sendError"));
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("sendError"));
+        }
         updateBody(trimmed);
         onSendSettled(tempId, { ok: false });
       }
@@ -155,7 +160,11 @@ export function MessageComposer({
     setUploading(false);
 
     if (!uploadResult.ok) {
-      setError(uploadResult.error === "disabled" ? t("composer.photosDisabled") : t("sendError"));
+      if (uploadResult.error === "not_authenticated") {
+        notifySessionExpired();
+      } else {
+        setError(uploadResult.error === "disabled" ? t("composer.photosDisabled") : t("sendError"));
+      }
       return;
     }
 
@@ -175,7 +184,13 @@ export function MessageComposer({
         photoUrl: uploadResult.path,
         replyTo,
       });
-      if (!result.ok) setError(t("sendError"));
+      if (!result.ok) {
+        if (result.error === "not_authenticated") {
+          notifySessionExpired();
+        } else {
+          setError(t("sendError"));
+        }
+      }
     });
   }
 

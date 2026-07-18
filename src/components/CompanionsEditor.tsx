@@ -9,6 +9,7 @@ import { setPollVote } from "@/app/[locale]/actions/polls";
 import { formatQuantity, type BringUnit } from "@/lib/bring-units";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { notifySessionExpired } from "@/lib/session-expired";
 
 type CompanionKind = "partner" | "child" | "friend" | "family";
 type Companion = { id: string; kind: CompanionKind; firstName: string | null };
@@ -87,6 +88,8 @@ export function CompanionsEditor({
       if (result.ok) {
         setAdding(false);
         router.refresh();
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
         setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
       }
@@ -156,6 +159,8 @@ export function CompanionsEditor({
         closeRemove();
         if (adjustmentFailed) setError(t("companionRemoveAdjustmentFailed"));
         router.refresh();
+      } else if (result.error === "not_authenticated") {
+        notifySessionExpired();
       } else {
         setError(result.error === "rate_limited" ? t("errorRateLimited") : t("errorUnknown"));
       }
