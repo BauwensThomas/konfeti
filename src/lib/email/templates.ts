@@ -25,17 +25,26 @@ function assetUrl(path: string): string {
   return `${EMAIL_ASSET_BASE}${path}`;
 }
 
+// Dispersion aléatoire de confettis sur le fond rosé (retour Thomas, en 3
+// temps : "sur le fond rosé, pas la mascotte", puis "dispersés sur TOUTE la
+// partie rose", puis "comme sur mon site, en arrière-plan aléatoire" -- pas
+// des rangées alignées). `position:absolute` ignoré par Gmail (confirmé sur
+// un vrai envoi -- les confettis se sont empilés en un tas), et une grille de
+// rangées ne rend pas "aléatoire". Solution retenue : une vraie image de
+// fond répétable (`confetti-bg-tile.png`, générée une fois via
+// `sharp.composite` avec des formes à positions/rotations pseudo-aléatoires,
+// même palette que `StickerConfetti` du site), posée en `background-image`
+// sur la table extérieure -- dégrade proprement vers `background-color` seul
+// sur les rares clients qui ignorent les fonds d'image (ex. Outlook desktop).
+const CONFETTI_BG = `background-color:${BRAND.cream};background-image:url('${assetUrl("/confetti-bg-tile.png")}');background-repeat:repeat;`;
+
 function wrapper(bodyHtml: string): string {
   return `<!DOCTYPE html>
 <html lang="fr">
-<body style="margin:0;padding:0;background-color:${BRAND.cream};font-family:sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${BRAND.cream};padding:32px 16px;">
+<body style="margin:0;padding:0;${CONFETTI_BG}font-family:sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="${CONFETTI_BG}padding:32px 16px;">
     <tr>
-      <td align="center" style="position:relative;">
-        <img src="${assetUrl("/icon-confetti.png")}" alt="" width="30" height="30" style="position:absolute;top:0;left:8px;" />
-        <img src="${assetUrl("/icon-confetti.png")}" alt="" width="26" height="26" style="position:absolute;top:6px;right:12px;transform:rotate(90deg);" />
-        <img src="${assetUrl("/icon-confetti.png")}" alt="" width="26" height="26" style="position:absolute;bottom:6px;left:14px;transform:rotate(-90deg);" />
-        <img src="${assetUrl("/icon-confetti.png")}" alt="" width="30" height="30" style="position:absolute;bottom:0;right:8px;transform:rotate(180deg);" />
+      <td align="center" style="${CONFETTI_BG}padding:32px 16px;">
         <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background-color:#ffffff;border-radius:20px;overflow:hidden;">
           <tr>
             <td align="center" style="background-color:${BRAND.grey};padding:24px;border:3px solid ${BRAND.primary};border-radius:20px 20px 0 0;">
