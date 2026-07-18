@@ -9,9 +9,13 @@
   jamais brandé -- corrigé ici avec exactement le même habillage que
   magic-link.html (même variable `{{ .ConfirmationURL }}`, texte adapté pour
   une première inscription plutôt qu'une reconnexion).
+
+  Localisation (2026-07-18) : même mécanisme que magic-link.html, voir son
+  commentaire -- `{{ .Data.locale }}` choisit le bloc de texte, retombe sur
+  le français par défaut.
 -->
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ if .Data.locale }}{{ .Data.locale }}{{ else }}fr{{ end }}">
 <body style="margin:0;padding:0;background-color:#FFF7F5;background-image:url('https://tibinblvqxqcygzmxouv.supabase.co/storage/v1/object/public/email-assets/confetti-bg-tile.png');background-repeat:repeat;font-family:sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#FFF7F5;background-image:url('https://tibinblvqxqcygzmxouv.supabase.co/storage/v1/object/public/email-assets/confetti-bg-tile.png');background-repeat:repeat;padding:32px 16px;">
     <tr>
@@ -24,6 +28,67 @@
           </tr>
           <tr>
             <td style="padding:32px 28px;color:#2E1065;font-size:16px;line-height:1.6;">
+              {{ if eq .Data.locale "nl" }}
+              <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Welkom bij Konfeti!</p>
+              <p style="margin:0 0 12px;">Klik op de knop hieronder om je adres te bevestigen en je account aan te maken.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td align="center" style="border-radius:999px;background-color:#7C3AED;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">Account bevestigen</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">Deze link is 1 uur geldig en werkt maar één keer.</p>
+              <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">Heb je dit niet aangevraagd? Dan kun je deze e-mail gerust negeren.</p>
+              {{ else if eq .Data.locale "en" }}
+              <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Welcome to Konfeti!</p>
+              <p style="margin:0 0 12px;">Click the button below to confirm your email and create your account.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td align="center" style="border-radius:999px;background-color:#7C3AED;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">Confirm my account</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">This link is valid for 1 hour and works only once.</p>
+              <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">Didn't request this? You can safely ignore this email.</p>
+              {{ else if eq .Data.locale "es" }}
+              <p style="margin:0 0 16px;font-size:18px;font-weight:700;">¡Te damos la bienvenida a Konfeti!</p>
+              <p style="margin:0 0 12px;">Haz clic en el botón de abajo para confirmar tu dirección y crear tu cuenta.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td align="center" style="border-radius:999px;background-color:#7C3AED;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">Confirmar mi cuenta</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">Este enlace es válido durante 1 hora y solo funciona una vez.</p>
+              <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">¿No has pedido esto? Puedes ignorar este correo sin problema.</p>
+              {{ else if eq .Data.locale "pt" }}
+              <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Boas-vindas ao Konfeti!</p>
+              <p style="margin:0 0 12px;">Clica no botão abaixo para confirmar o teu endereço e criar a tua conta.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td align="center" style="border-radius:999px;background-color:#7C3AED;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">Confirmar a minha conta</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">Este link é válido durante 1 hora e só funciona uma vez.</p>
+              <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">Não pediste isto? Podes ignorar este email sem problema.</p>
+              {{ else if eq .Data.locale "de" }}
+              <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Willkommen bei Konfeti!</p>
+              <p style="margin:0 0 12px;">Klicke auf den Button unten, um deine Adresse zu bestätigen und dein Konto zu erstellen.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td align="center" style="border-radius:999px;background-color:#7C3AED;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">Konto bestätigen</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">Dieser Link ist 1 Stunde gültig und funktioniert nur einmal.</p>
+              <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">Du hast das nicht angefordert? Du kannst diese E-Mail einfach ignorieren.</p>
+              {{ else }}
               <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Bienvenue sur Konfeti !</p>
               <p style="margin:0 0 12px;">Clique sur le bouton ci-dessous pour confirmer ton adresse et créer ton compte.</p>
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
@@ -35,6 +100,7 @@
               </table>
               <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">Ce lien est valable 1 heure et ne fonctionne qu'une seule fois.</p>
               <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">Tu n'as rien demandé ? Tu peux ignorer cet email sans risque.</p>
+              {{ end }}
             </td>
           </tr>
           <tr>
@@ -57,7 +123,7 @@
           </tr>
           <tr>
             <td align="center" style="padding:0 28px 28px;color:#9CA3AF;font-size:12px;">
-              Konfeti, un projet BelgaCai &middot; <a href="mailto:konfeti@belgacai.com" style="color:#9CA3AF;">konfeti@belgacai.com</a>
+              {{ if eq .Data.locale "nl" }}Konfeti, een project van BelgaCai{{ else if eq .Data.locale "en" }}Konfeti, a BelgaCai project{{ else if eq .Data.locale "es" }}Konfeti, un proyecto de BelgaCai{{ else if eq .Data.locale "pt" }}Konfeti, um projeto da BelgaCai{{ else if eq .Data.locale "de" }}Konfeti, ein Projekt von BelgaCai{{ else }}Konfeti, un projet BelgaCai{{ end }} &middot; <a href="mailto:konfeti@belgacai.com" style="color:#9CA3AF;">konfeti@belgacai.com</a>
             </td>
           </tr>
         </table>

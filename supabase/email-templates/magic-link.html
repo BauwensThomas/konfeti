@@ -15,9 +15,18 @@
   même palette que le sticker confetti du site), posée en `background-image`
   sur la table extérieure -- dégrade proprement vers `background-color` seul
   sur les rares clients qui ignorent les fonds d'image (ex. Outlook desktop).
+
+  Localisation (2026-07-18) : Supabase n'a qu'un seul template par type
+  d'email pour tout le projet (pas de variante par langue nativement).
+  `sendMagicLink` (src/app/[locale]/actions/auth.ts) passe désormais la
+  langue active dans `options.data.locale`, exposée ici via `{{ .Data.locale }}`
+  (le raw_user_meta_data de la requête) -- un seul template qui choisit son
+  bloc de texte par langue via des conditions Go. Accès direct par lien
+  Google (pas de magic link) ou compte jamais recréé depuis cette fonctionnalité
+  retombent proprement sur le français (`else` final).
 -->
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ if .Data.locale }}{{ .Data.locale }}{{ else }}fr{{ end }}">
 <body style="margin:0;padding:0;background-color:#FFF7F5;background-image:url('https://tibinblvqxqcygzmxouv.supabase.co/storage/v1/object/public/email-assets/confetti-bg-tile.png');background-repeat:repeat;font-family:sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#FFF7F5;background-image:url('https://tibinblvqxqcygzmxouv.supabase.co/storage/v1/object/public/email-assets/confetti-bg-tile.png');background-repeat:repeat;padding:32px 16px;">
     <tr>
@@ -30,6 +39,67 @@
           </tr>
           <tr>
             <td style="padding:32px 28px;color:#2E1065;font-size:16px;line-height:1.6;">
+              {{ if eq .Data.locale "nl" }}
+              <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Daar gaan we!</p>
+              <p style="margin:0 0 12px;">Klik op de knop hieronder om in te loggen bij Konfeti.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td align="center" style="border-radius:999px;background-color:#7C3AED;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">Inloggen</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">Deze link is 1 uur geldig en werkt maar één keer.</p>
+              <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">Heb je dit niet aangevraagd? Dan kun je deze e-mail gerust negeren.</p>
+              {{ else if eq .Data.locale "en" }}
+              <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Let's go!</p>
+              <p style="margin:0 0 12px;">Click the button below to log in to Konfeti.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td align="center" style="border-radius:999px;background-color:#7C3AED;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">Log in</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">This link is valid for 1 hour and works only once.</p>
+              <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">Didn't request this? You can safely ignore this email.</p>
+              {{ else if eq .Data.locale "es" }}
+              <p style="margin:0 0 16px;font-size:18px;font-weight:700;">¡Vamos allá!</p>
+              <p style="margin:0 0 12px;">Haz clic en el botón de abajo para iniciar sesión en Konfeti.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td align="center" style="border-radius:999px;background-color:#7C3AED;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">Iniciar sesión</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">Este enlace es válido durante 1 hora y solo funciona una vez.</p>
+              <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">¿No has pedido esto? Puedes ignorar este correo sin problema.</p>
+              {{ else if eq .Data.locale "pt" }}
+              <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Vamos a isso!</p>
+              <p style="margin:0 0 12px;">Clica no botão abaixo para iniciares sessão no Konfeti.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td align="center" style="border-radius:999px;background-color:#7C3AED;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">Iniciar sessão</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">Este link é válido durante 1 hora e só funciona uma vez.</p>
+              <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">Não pediste isto? Podes ignorar este email sem problema.</p>
+              {{ else if eq .Data.locale "de" }}
+              <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Los geht's!</p>
+              <p style="margin:0 0 12px;">Klicke auf den Button unten, um dich bei Konfeti anzumelden.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td align="center" style="border-radius:999px;background-color:#7C3AED;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">Anmelden</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">Dieser Link ist 1 Stunde gültig und funktioniert nur einmal.</p>
+              <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">Du hast das nicht angefordert? Du kannst diese E-Mail einfach ignorieren.</p>
+              {{ else }}
               <p style="margin:0 0 16px;font-size:18px;font-weight:700;">C'est parti !</p>
               <p style="margin:0 0 12px;">Clique sur le bouton ci-dessous pour te connecter à Konfeti.</p>
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
@@ -41,6 +111,7 @@
               </table>
               <p style="margin:16px 0 0;font-size:13px;color:#6B7280;">Ce lien est valable 1 heure et ne fonctionne qu'une seule fois.</p>
               <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">Tu n'as rien demandé ? Tu peux ignorer cet email sans risque.</p>
+              {{ end }}
             </td>
           </tr>
           <tr>
@@ -63,7 +134,7 @@
           </tr>
           <tr>
             <td align="center" style="padding:0 28px 28px;color:#9CA3AF;font-size:12px;">
-              Konfeti, un projet BelgaCai &middot; <a href="mailto:konfeti@belgacai.com" style="color:#9CA3AF;">konfeti@belgacai.com</a>
+              {{ if eq .Data.locale "nl" }}Konfeti, een project van BelgaCai{{ else if eq .Data.locale "en" }}Konfeti, a BelgaCai project{{ else if eq .Data.locale "es" }}Konfeti, un proyecto de BelgaCai{{ else if eq .Data.locale "pt" }}Konfeti, um projeto da BelgaCai{{ else if eq .Data.locale "de" }}Konfeti, ein Projekt von BelgaCai{{ else }}Konfeti, un projet BelgaCai{{ end }} &middot; <a href="mailto:konfeti@belgacai.com" style="color:#9CA3AF;">konfeti@belgacai.com</a>
             </td>
           </tr>
         </table>

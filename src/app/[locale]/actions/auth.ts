@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
+import { getLocale } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { magicLinkSchema } from "@/lib/validation/auth";
 import { isRateLimited } from "@/lib/rate-limit";
@@ -38,10 +39,15 @@ export async function sendMagicLink(
   const next = sanitizeNextPath(formData.get("next"));
   const supabase = await createClient();
   const emailRedirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=${encodeURIComponent(next)}`;
+  const locale = await getLocale();
 
+  // `data` passe la langue active au template Supabase (magic-link.html /
+  // confirm-signup.html) via `{{ .Data.locale }}` -- seul moyen d'avoir un
+  // email localisé, Supabase n'a qu'un template par type d'email pour tout
+  // le projet (pas de variante par langue nativement).
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data.email,
-    options: { emailRedirectTo },
+    options: { emailRedirectTo, data: { locale } },
   });
 
   if (error) {
