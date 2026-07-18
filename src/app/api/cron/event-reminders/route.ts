@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
   const { data: events, error } = await supabase
     .from("events")
-    .select("id, short_code, title, starts_at, location_text")
+    .select("id, short_code, title, starts_at, location_text, locale")
     .eq("status", "active")
     .eq("date_mode", "fixed")
     .not("starts_at", "is", null);
@@ -72,11 +72,11 @@ export async function GET(request: Request) {
       let pushPayload: { title: string; body: string; url: string } | null = null;
 
       if (diffDays === 7 && recipient.answer !== "yes" && !recipient.reminder_j7_sent_at) {
-        template = undecidedReminderEmail({ firstName: recipient.first_name, eventTitle: event.title, eventUrl });
+        template = undecidedReminderEmail({ firstName: recipient.first_name, eventTitle: event.title, eventUrl, locale: event.locale });
         column = "reminder_j7_sent_at";
         pushPayload = pushMessages.reminderUndecided(event.short_code, event.title);
       } else if (diffDays === 2 && recipient.answer !== "yes" && !recipient.reminder_j2_sent_at) {
-        template = undecidedReminderEmail({ firstName: recipient.first_name, eventTitle: event.title, eventUrl });
+        template = undecidedReminderEmail({ firstName: recipient.first_name, eventTitle: event.title, eventUrl, locale: event.locale });
         column = "reminder_j2_sent_at";
         pushPayload = pushMessages.reminderUndecided(event.short_code, event.title);
       } else if (diffDays === 1 && recipient.answer === "yes" && !recipient.reminder_j1_sent_at) {
@@ -85,6 +85,7 @@ export async function GET(request: Request) {
           eventTitle: event.title,
           eventUrl,
           locationText: event.location_text,
+          locale: event.locale,
         });
         column = "reminder_j1_sent_at";
         pushPayload = pushMessages.reminderTomorrow(event.short_code, event.title);
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
         column = "reminder_jourj_sent_at";
         pushPayload = pushMessages.reminderJourJ(event.short_code, event.title);
       } else if (diffDays === -1 && recipient.answer === "yes" && !recipient.reminder_post_sent_at) {
-        template = postEventEmail({ firstName: recipient.first_name, eventTitle: event.title, eventUrl });
+        template = postEventEmail({ firstName: recipient.first_name, eventTitle: event.title, eventUrl, locale: event.locale });
         column = "reminder_post_sent_at";
         pushPayload = pushMessages.reminderPostEvent(event.short_code, event.title);
       }
