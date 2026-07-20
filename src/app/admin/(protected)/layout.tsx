@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Vue d'ensemble" },
+  { href: "/admin/events", label: "Événements" },
   { href: "/admin/users", label: "Utilisateurs" },
   { href: "/admin/blocked", label: "Bloqués" },
   { href: "/admin/flags", label: "Feature flags" },
