@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { Card } from "@/components/ui/Card";
 import { ResendMagicLinkForm } from "@/components/admin/ResendMagicLinkForm";
@@ -154,7 +155,10 @@ export default async function AdminOverviewPage({
                   {matchingEvents.map((event) => (
                     <li key={event.id} className="flex flex-col gap-2 rounded-konfeti border border-border p-3">
                       <p className="text-sm text-foreground/70">
-                        {event.short_code} ({event.status})
+                        {event.short_code} ({event.status}) ·{" "}
+                        <Link href={`/admin/events/${event.short_code}`} className="font-semibold text-primary">
+                          Voir en détail (lecture seule)
+                        </Link>
                       </p>
                       <EventCorrectionForm
                         eventId={event.id}
