@@ -32,6 +32,79 @@ type Message = {
 type Poll = { id: string; question: string; options: { id: string; label: string; voteCount: number }[] };
 type BringItem = { id: string; label: string; quantity_needed: number; claims: { rsvpId: string; quantity: number; brought: boolean }[] };
 type PotContribution = { name: string; amount: number; status: string };
+type DateOption = { id: string; starts_at: string; label: string | null; voteCount: number };
+
+// Toutes les colonnes de `events` (retour Thomas : "voir toutes les infos de
+// la liste de la création de l'événement... de l'étape 1 à la fin, pour
+// savoir ce que la personne a coché ou non") -- reprend exactement les
+// champs du wizard (`CreateEventWizard.tsx`, `CreateEvent.step1` à `step5`
+// dans `messages/fr.json`), affichés en lecture seule dans un nouvel onglet
+// "Configuration".
+type EventFull = {
+  title: string;
+  short_code: string;
+  status: string;
+  theme: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  date_mode: string;
+  location_text: string | null;
+  description: string | null;
+  instructions: string | null;
+  coverPhotoUrl: string | null;
+  pot_enabled: boolean;
+  pot_goal_cents: number | null;
+  pot_mode: string;
+  pot_label: string | null;
+  pot_close_at_goal: boolean;
+  occasion: string | null;
+  birthday_person: string | null;
+  birthday_date: string | null;
+  birthday_age: number | null;
+  show_age: boolean;
+  housewarming_hosts: string[] | null;
+  bachelor_person: string | null;
+  dress_code: string | null;
+  bring_general: string | null;
+  kids_allowed: string | null;
+  pets_allowed: string | null;
+  rsvp_deadline: string | null;
+  max_guests: number | null;
+  allow_companions: boolean;
+  auto_approve: boolean;
+  share_policy: string;
+  beneficiary_hidden_blocks: string[];
+};
+
+const OCCASION_LABELS: Record<string, string> = {
+  birthday: "Anniversaire",
+  housewarming: "Crémaillère",
+  bachelor: "Enterrement de vie de garçon/fille",
+  bbq: "Barbecue",
+  aperitif: "Apéro",
+  new_year: "Nouvel An",
+  other: "Autre",
+};
+const YES_NO_DETAILS_LABELS: Record<string, string> = { yes: "Oui", no: "Non", details: "Ça dépend" };
+const SHARE_POLICY_LABELS: Record<string, string> = { all: "Tout le monde", admins: "Les admins seulement" };
+const POT_MODE_LABELS: Record<string, string> = { goal: "Objectif fixe", open: "Montant libre" };
+const BENEFICIARY_BLOCK_LABELS: Record<string, string> = {
+  pot: "la cagnotte",
+  backstage: "le fil Coulisses",
+  chat: "le chat général",
+  bring: "\"qui apporte quoi\"",
+  polls: "les sondages",
+  participants: "la liste des participants",
+};
+
+function ConfigRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="flex flex-col gap-0.5 border-b border-border py-2 text-sm last:border-0">
+      <span className="text-xs font-semibold text-foreground/50">{label}</span>
+      <span className="text-foreground">{value || "Non renseigné"}</span>
+    </div>
+  );
+}
 
 const STATUS_LABELS: Record<string, string> = {
   approved: "Participants",
@@ -44,7 +117,7 @@ const STATUS_LABELS: Record<string, string> = {
 const ANSWER_LABELS: Record<string, string> = { yes: "Je viens", maybe: "Peut-être", no: "Je ne peux pas" };
 const ROLE_LABELS: Record<string, string> = { admin: "Organisateur", beneficiary: "Bénéficiaire" };
 
-const TABS = ["accueil", "personnes", "chat", "cagnotte", "sondages", "apporter"] as const;
+const TABS = ["accueil", "personnes", "chat", "cagnotte", "sondages", "apporter", "config"] as const;
 type TabKey = (typeof TABS)[number];
 const TAB_LABELS: Record<TabKey, string> = {
   accueil: "Accueil",
@@ -53,6 +126,7 @@ const TAB_LABELS: Record<TabKey, string> = {
   cagnotte: "Cagnotte",
   sondages: "Sondages",
   apporter: "Qui apporte quoi",
+  config: "Configuration",
 };
 
 function rsvpNameOf(r: { first_name: string | null; last_name: string | null } | undefined): string {
@@ -81,27 +155,16 @@ export function AdminEventViewer({
   polls,
   bringItems,
   pot,
+  dateOptions,
 }: {
-  event: {
-    title: string;
-    short_code: string;
-    status: string;
-    theme: string;
-    starts_at: string | null;
-    date_mode: string;
-    location_text: string | null;
-    description: string | null;
-    instructions: string | null;
-    coverPhotoUrl: string | null;
-    pot_enabled: boolean;
-    pot_goal_cents: number | null;
-  };
+  event: EventFull;
   host: { first_name: string | null; last_name: string | null };
   rsvps: Rsvp[];
   messages: Message[];
   polls: Poll[];
   bringItems: BringItem[];
   pot: { total: number; contributions: PotContribution[] } | null;
+  dateOptions: DateOption[];
 }) {
   const [active, setActive] = useState<TabKey>("accueil");
   const [chatChannel, setChatChannel] = useState<"main" | "backstage">("main");
@@ -357,6 +420,109 @@ export function AdminEventViewer({
             ))}
           </ul>
         </Card>
+      )}
+
+      {active === "config" && (
+        <div className="flex flex-col gap-4">
+          <Card className="flex flex-col">
+            <h2 className="mb-1 font-display text-base font-bold text-foreground">1. L&apos;essentiel</h2>
+            <ConfigRow label="Titre" value={event.title} />
+            <ConfigRow label="Thème visuel" value={event.theme} />
+            <ConfigRow
+              label="La date"
+              value={
+                event.date_mode === "poll"
+                  ? `Vote en cours (${dateOptions.length} date${dateOptions.length > 1 ? "s" : ""} proposée${dateOptions.length > 1 ? "s" : ""})`
+                  : event.starts_at
+                    ? new Date(event.starts_at).toLocaleString("fr-BE", { dateStyle: "full", timeStyle: "short" })
+                    : null
+              }
+            />
+            {event.date_mode === "poll" && dateOptions.length > 0 && (
+              <ul className="flex flex-col gap-1 py-2 text-sm">
+                {dateOptions.map((opt) => (
+                  <li key={opt.id} className="flex items-center justify-between">
+                    <span className="text-foreground/80">
+                      {new Date(opt.starts_at).toLocaleString("fr-BE", { dateStyle: "long", timeStyle: "short" })}
+                      {opt.label ? ` (${opt.label})` : ""}
+                    </span>
+                    <span className="text-foreground/60">{opt.voteCount} vote(s)</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <ConfigRow label="Date et heure de fin" value={event.ends_at ? new Date(event.ends_at).toLocaleString("fr-BE", { dateStyle: "full", timeStyle: "short" }) : null} />
+            <ConfigRow label="Lieu" value={event.location_text} />
+          </Card>
+
+          <Card className="flex flex-col">
+            <h2 className="mb-1 font-display text-base font-bold text-foreground">2. L&apos;occasion</h2>
+            <ConfigRow label="Pourquoi cette fête ?" value={event.occasion ? (OCCASION_LABELS[event.occasion] ?? event.occasion) : null} />
+            {event.occasion === "birthday" && (
+              <>
+                <ConfigRow label="L'anniversaire de qui ?" value={event.birthday_person} />
+                <ConfigRow
+                  label="Date officielle de l'anniversaire"
+                  value={event.birthday_date ? new Date(event.birthday_date).toLocaleDateString("fr-BE") : null}
+                />
+                <ConfigRow label="Âge fêté" value={event.birthday_age != null ? `${event.birthday_age} ans` : null} />
+                <ConfigRow label="Afficher l'âge sur l'invitation" value={event.show_age ? "Oui" : "Non"} />
+              </>
+            )}
+            {event.occasion === "housewarming" && (
+              <ConfigRow
+                label="C'est la crémaillère de qui ?"
+                value={event.housewarming_hosts && event.housewarming_hosts.length > 0 ? event.housewarming_hosts.join(", ") : null}
+              />
+            )}
+            {event.occasion === "bachelor" && (
+              <ConfigRow label="Le nom du futur marié ou de la future mariée" value={event.bachelor_person} />
+            )}
+            <ConfigRow label="Description libre" value={event.description} />
+          </Card>
+
+          <Card className="flex flex-col">
+            <h2 className="mb-1 font-display text-base font-bold text-foreground">3. Les consignes</h2>
+            <ConfigRow label="Ce que les invités doivent savoir" value={event.instructions} />
+            <ConfigRow label="Tenue / dress code" value={event.dress_code} />
+            <ConfigRow label="À prévoir" value={event.bring_general} />
+            <ConfigRow
+              label="Date limite de réponse"
+              value={event.rsvp_deadline ? new Date(event.rsvp_deadline).toLocaleString("fr-BE", { dateStyle: "full", timeStyle: "short" }) : null}
+            />
+            <ConfigRow label="Enfants bienvenus ?" value={event.kids_allowed ? (YES_NO_DETAILS_LABELS[event.kids_allowed] ?? event.kids_allowed) : null} />
+            <ConfigRow label="Animaux bienvenus ?" value={event.pets_allowed ? (YES_NO_DETAILS_LABELS[event.pets_allowed] ?? event.pets_allowed) : null} />
+          </Card>
+
+          <Card className="flex flex-col">
+            <h2 className="mb-1 font-display text-base font-bold text-foreground">4. Les extras</h2>
+            <ConfigRow label="Nombre maximum de participants" value={event.max_guests != null ? String(event.max_guests) : null} />
+            <ConfigRow label="Autoriser les accompagnants (+X)" value={event.allow_companions ? "Oui" : "Non"} />
+            <ConfigRow label="Approbation automatique des invités" value={event.auto_approve ? "Oui" : "Non"} />
+            <ConfigRow label="Qui peut partager le lien ?" value={SHARE_POLICY_LABELS[event.share_policy] ?? event.share_policy} />
+            <ConfigRow label="Cagnotte activée" value={event.pot_enabled ? "Oui" : "Non"} />
+            {event.pot_enabled && (
+              <>
+                <ConfigRow label="Type de cagnotte" value={POT_MODE_LABELS[event.pot_mode] ?? event.pot_mode} />
+                <ConfigRow label="Objectif" value={event.pot_goal_cents ? `${(event.pot_goal_cents / 100).toFixed(2)} €` : null} />
+                <ConfigRow label="Nom de la cagnotte" value={event.pot_label} />
+                <ConfigRow label="Fermeture auto à l'objectif atteint" value={event.pot_close_at_goal ? "Oui" : "Non"} />
+              </>
+            )}
+          </Card>
+
+          <Card className="flex flex-col">
+            <h2 className="mb-1 font-display text-base font-bold text-foreground">5. Ce que voient les bénéficiaires</h2>
+            <ConfigRow
+              label="Blocs masqués aux bénéficiaires"
+              value={
+                event.beneficiary_hidden_blocks.length > 0
+                  ? event.beneficiary_hidden_blocks.map((b) => BENEFICIARY_BLOCK_LABELS[b] ?? b).join(", ")
+                  : "Aucun, tout est visible"
+              }
+            />
+          </Card>
+        </div>
       )}
     </div>
   );

@@ -53,7 +53,7 @@ export default async function AdminEventDetailPage({ params }: { params: Promise
 
   await logAdminEvent("admin:event-view", "info", `Événement consulté en lecture seule : ${shortCode}`);
 
-  const [{ data: host }, { data: rsvpsRaw }, { data: messagesRaw }, { data: pollsRaw }, { data: bringItemsRaw }] =
+  const [{ data: host }, { data: rsvpsRaw }, { data: messagesRaw }, { data: pollsRaw }, { data: bringItemsRaw }, { data: dateOptionsRaw }] =
     await Promise.all([
       admin.from("profiles").select("first_name, last_name").eq("id", event.host_id).maybeSingle(),
       admin
@@ -71,6 +71,13 @@ export default async function AdminEventDetailPage({ params }: { params: Promise
         .from("bring_items")
         .select("id, label, quantity_needed, bring_claims(rsvp_id, quantity, brought)")
         .eq("event_id", event.id),
+      // Retour Thomas : "voir toutes les infos de la liste de la création de
+      // l'événement... de l'étape 1 à la fin" -- inclut le sondage de DATE
+      // (date_mode = 'poll'), distinct des sondages classiques (table `polls`)
+      // déjà affichés dans l'onglet Sondages.
+      event.date_mode === "poll"
+        ? admin.from("date_options").select("id, starts_at, label, date_votes(rsvp_id)").eq("event_id", event.id)
+        : Promise.resolve({ data: [] as { id: string; starts_at: string; label: string | null; date_votes: { rsvp_id: string }[] }[] }),
     ]);
 
   const rsvpsRawTyped = (rsvpsRaw ?? []) as Rsvp[];
@@ -143,28 +150,23 @@ export default async function AdminEventDetailPage({ params }: { params: Promise
     })),
   }));
 
+  const dateOptions = (dateOptionsRaw ?? []).map((opt) => ({
+    id: opt.id,
+    starts_at: opt.starts_at,
+    label: opt.label,
+    voteCount: opt.date_votes.length,
+  }));
+
   return (
     <AdminEventViewer
-      event={{
-        title: event.title,
-        short_code: event.short_code,
-        status: event.status,
-        theme: event.theme,
-        starts_at: event.starts_at,
-        date_mode: event.date_mode,
-        location_text: event.location_text,
-        description: event.description,
-        instructions: event.instructions,
-        coverPhotoUrl,
-        pot_enabled: event.pot_enabled,
-        pot_goal_cents: event.pot_goal_cents,
-      }}
+      event={{ ...event, coverPhotoUrl }}
       host={host ?? { first_name: null, last_name: null }}
       rsvps={rsvps}
       messages={messages}
       polls={polls}
       bringItems={bringItems}
       pot={pot}
+      dateOptions={dateOptions}
     />
   );
 }
