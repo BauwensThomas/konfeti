@@ -193,6 +193,13 @@ export default async function MyEventsPage() {
         </Link>
       </div>
 
+      <Link
+        href="/comment-installer"
+        className="w-full max-w-lg text-sm font-semibold text-primary underline-offset-2 hover:underline lg:max-w-2xl"
+      >
+        {t("installGuideLink")}
+      </Link>
+
       <PushNotificationPrompt />
 
       {events.length === 0 ? (
