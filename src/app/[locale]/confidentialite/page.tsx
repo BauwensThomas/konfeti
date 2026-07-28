@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { LegalPageLayout, LegalSection } from "@/components/LegalPageLayout";
+import { localizedPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Politique de confidentialité" };
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  return localizedPageMetadata({ locale, pathname: "/confidentialite", title: "Politique de confidentialité" });
+}
 
 export default async function ConfidentialitePage() {
   const t = await getTranslations("PrivacyPolicy");

@@ -1,9 +1,14 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { clearSession } from "@/app/[locale]/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { LegalPageLayout, LegalSection } from "@/components/LegalPageLayout";
+import { localizedPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Gérer les cookies" };
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  return localizedPageMetadata({ locale, pathname: "/cookies", title: "Gérer les cookies" });
+}
 
 export default async function CookiesPage() {
   const t = await getTranslations("CookieSettings");

@@ -1,7 +1,12 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { LegalPageLayout, LegalSection } from "@/components/LegalPageLayout";
+import { localizedPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Conditions générales d'utilisation" };
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  return localizedPageMetadata({ locale, pathname: "/cgu", title: "Conditions générales d'utilisation" });
+}
 
 export default async function CguPage() {
   const t = await getTranslations("Terms");
