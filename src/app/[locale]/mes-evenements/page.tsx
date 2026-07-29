@@ -9,6 +9,7 @@ import { computeUnreadCount } from "@/lib/chat/unread";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
+import { InstallGuideLink } from "@/components/InstallGuideLink";
 
 type EventRow = {
   id: string;
@@ -193,12 +194,7 @@ export default async function MyEventsPage() {
         </Link>
       </div>
 
-      <Link
-        href="/comment-installer"
-        className="w-full max-w-lg text-sm font-semibold text-primary underline-offset-2 hover:underline lg:max-w-2xl"
-      >
-        {t("installGuideLink")}
-      </Link>
+      <InstallGuideLink />
 
       <PushNotificationPrompt />
 
