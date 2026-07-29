@@ -85,5 +85,7 @@ android-twa/.gradle/
 android-twa/build/
 android-twa/app/build/
 android-twa/local.properties
+android-twa/manifest-checksum.txt
 android-twa/*.apk
+android-twa/*.apk.idsig
 android-twa/*.aab
