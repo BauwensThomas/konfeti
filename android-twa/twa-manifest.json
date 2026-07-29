@@ -20,8 +20,8 @@
     "path": "C:\\Users\\b-tho\\Desktop\\Projets\\konfeti\\android-twa\\android-keystore",
     "alias": "konfeti"
   },
-  "appVersionName": "1",
-  "appVersionCode": 1,
+  "appVersionName": "0.1.1",
+  "appVersionCode": 2,
   "shortcuts": [],
   "generatorApp": "unknown",
   "webManifestUrl": "https://konfeti.belgacai.com/manifest.webmanifest",
@@ -43,5 +43,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "1"
+  "appVersion": "0.1.1"
 }
