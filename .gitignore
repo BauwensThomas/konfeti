@@ -72,3 +72,18 @@ AGENTS.md
 # dumps SQL
 *.sql.dump
 *.dump
+
+# --- Android TWA (Phase 10, Bubblewrap) : la clé de signature ne doit
+# jamais finir sur GitHub, même en dépôt privé -- perdue ou compromise,
+# impossible de remettre à jour l'app sur le Play Store sous la même fiche,
+# pour toujours. Sauvegardée par Thomas lui-même, hors Git (retour Thomas,
+# 2026-07-29). Le reste du projet Android (généré par Bubblewrap) reste
+# suivi normalement, seuls la clé et les artefacts de build habituels de
+# Gradle sont exclus.
+android-twa/android-keystore
+android-twa/.gradle/
+android-twa/build/
+android-twa/app/build/
+android-twa/local.properties
+android-twa/*.apk
+android-twa/*.aab

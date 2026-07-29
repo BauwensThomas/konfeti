@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.belgacai.konfeti",
+      "sha256_cert_fingerprints": [
+        "74:3D:BD:89:F1:8B:83:6A:E0:B8:DD:75:C9:3F:70:8C:80:17:C5:33:C5:F5:92:4E:82:8E:D6:75:45:61:E7:C4"
+      ]
+    }
+  }
+]
