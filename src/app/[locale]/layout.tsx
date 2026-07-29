@@ -53,6 +53,14 @@ export async function generateMetadata({
       title,
       description,
     },
+    // Vérification du site sur Bing Webmaster Tools (retour Thomas) : la
+    // méthode "fichier XML" ne convient pas à un déploiement Git/Vercel (pas
+    // d'upload manuel possible sur le serveur) -- la balise META est le
+    // choix naturel ici, un simple changement de code plutôt qu'un fichier à
+    // déposer à la main.
+    verification: {
+      other: { "msvalidate.01": "8ABCB6EDE93FF1A2E1C99FA1281F33E7" },
+    },
     // iOS ne respecte pas `manifest.ts`/`display: "standalone"` pour "Ajouter
     // à l'écran d'accueil" (comportement Chrome/Android) : ces balises meta
     // spécifiques sont nécessaires pour qu'un lancement depuis l'icône ouvre
