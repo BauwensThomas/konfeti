@@ -12,22 +12,11 @@ import { useTranslations } from "next-intl";
 // hasard à chaque affichage, jamais les deux à la fois.
 const ADS_BASE = "https://tibinblvqxqcygzmxouv.supabase.co/storage/v1/object/public/ads-assets";
 
+// Le texte descriptif de chaque pub (ex. BonVoleur) doit être intégré
+// directement à l'image par Thomas -- pas de légende HTML séparée ici.
 const HOUSE_ADS = [
-  {
-    href: "https://www.mespoilus.com",
-    image: `${ADS_BASE}/mespoilus-banner.png`,
-    alt: "Mes Poilus",
-    caption: null,
-  },
-  {
-    href: "https://www.bonvoleur.com",
-    image: `${ADS_BASE}/bonvoleur-banner.png`,
-    alt: "BonVoleur",
-    // Retour Thomas : "il faut écrire un texte... pour dire aux gens ce que
-    // c'est" -- contrairement à Mes Poilus, l'image seule (avion + logo) ne
-    // dit pas ce qu'est le service.
-    caption: "BonVoleur : bons plans vols pas chers, alertes par email.",
-  },
+  { href: "https://www.mespoilus.com", image: `${ADS_BASE}/mespoilus-banner.png`, alt: "Mes Poilus" },
+  { href: "https://www.bonvoleur.com", image: `${ADS_BASE}/bonvoleur-banner.png`, alt: "BonVoleur" },
 ];
 
 export function HouseAd() {
@@ -45,7 +34,6 @@ export function HouseAd() {
       <a href={ad.href} target="_blank" rel="noopener noreferrer">
         {/* eslint-disable-next-line @next/next/no-img-element -- image statique simple, pas besoin du pipeline next/image ici */}
         <img src={ad.image} alt={ad.alt} className="w-full rounded-konfeti" />
-        {ad.caption && <p className="mt-2 text-center text-sm font-semibold text-foreground/70">{ad.caption}</p>}
       </a>
     </div>
   );

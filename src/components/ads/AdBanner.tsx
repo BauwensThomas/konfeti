@@ -77,7 +77,7 @@ export function AdBanner() {
         style={{ display: "block" }}
         data-ad-client={clientId}
         data-ad-slot={slotId}
-        data-ad-format="auto"
+        data-ad-format="horizontal"
         data-full-width-responsive="true"
       />
     </div>
