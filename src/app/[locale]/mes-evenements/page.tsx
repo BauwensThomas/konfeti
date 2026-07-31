@@ -200,7 +200,12 @@ export default async function MyEventsPage() {
   const adPositionByEventId = new Map(events.map((e, i) => [e.id, i]));
   function EventCardWithAd(props: { event: EventRow; isHosted: boolean; isPending?: boolean }) {
     const position = adPositionByEventId.get(props.event.id) ?? -1;
-    const showAd = adsEnabled && position >= 0 && (position + 1) % 3 === 0;
+    // Retour Thomas : "il faut que la pub soit visible si moins de 3, ensuite
+    // tous les 3 événements" -- avec moins de 3 événements au total, l'étape
+    // "tous les 3" ne se déclencherait jamais : on affiche alors la pub
+    // après le dernier événement de la liste.
+    const isLastOfShortList = events.length < 3 && position === events.length - 1;
+    const showAd = adsEnabled && position >= 0 && ((position + 1) % 3 === 0 || isLastOfShortList);
     return (
       <>
         <EventCard event={props.event} isHosted={props.isHosted} isPending={props.isPending} />
