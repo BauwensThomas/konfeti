@@ -777,7 +777,9 @@
     "rightsItem2": "Vous pouvez supprimer votre compte à tout moment depuis votre profil",
     "rightsItem3": "Pour toute autre demande (accès, rectification, opposition), écrivez à <a>konfeti@belgacai.com</a>",
     "cookiesHeading": "Cookies",
-    "cookiesBody": "Konfeti utilise un cookie technique nécessaire au fonctionnement du service. Voir notre page <a>Gérer les cookies</a> pour le détail."
+    "cookiesBody": "Konfeti utilise un cookie technique nécessaire au fonctionnement du service. Voir notre page <a>Gérer les cookies</a> pour le détail.",
+    "adsHeading": "Publicités",
+    "adsBody": "Konfeti peut afficher des publicités fournies par Google AdSense. Dans ce cas, Google peut déposer des cookies publicitaires et utiliser certaines données (comme votre position approximative ou votre historique de navigation) pour proposer des annonces pertinentes. Vous pouvez gérer vos préférences publicitaires sur <a>adssettings.google.com</a>."
   },
   "Terms": {
     "title": "Conditions générales d'utilisation",

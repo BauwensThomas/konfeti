@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import { InstallGuideLink } from "@/components/InstallGuideLink";
+import { AdBanner } from "@/components/ads/AdBanner";
 
 type EventRow = {
   id: string;
@@ -32,6 +33,13 @@ export default async function MyEventsPage() {
   if (!user) {
     redirect("/connexion?next=/mes-evenements");
   }
+
+  // Retour Thomas : "j'aimerais rajouter des pub admob" -- même flag global
+  // que "pot"/"chat_photos" (feature_flags), désactivé par défaut : le
+  // composant AdBanner n'est même pas rendu tant que Thomas ne l'active pas
+  // depuis /admin/flags.
+  const { data: adsFlag } = await supabase.from("feature_flags").select("enabled").eq("key", "ads").maybeSingle();
+  const adsEnabled = !!adsFlag?.enabled;
 
   const { data: hostedData } = await supabase
     .from("events")
@@ -271,6 +279,8 @@ export default async function MyEventsPage() {
           )}
         </div>
       )}
+
+      {adsEnabled && <AdBanner />}
     </main>
   );
 }
