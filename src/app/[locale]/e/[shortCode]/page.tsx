@@ -524,7 +524,8 @@ export default async function EventPage({
             />
           }
           personnes={
-            isParticipantsListHidden ? (
+            <>
+            {isParticipantsListHidden ? (
               <Card className="text-center text-sm text-foreground/60">
                 {t("participantsListHidden")}
               </Card>
@@ -556,16 +557,19 @@ export default async function EventPage({
                 viewerIsPotOwner={viewerIsPotOwner}
                 potOwnerStripeConnected={potOwnerStripeConnected}
               />
-            )
+            )}
+            {adsEnabled && <AdBanner />}
+            </>
           }
           pendingCount={pendingCount}
           pendingBringCount={pendingBringCount}
           pendingPollsCount={pendingPollsCount}
           chat={
-            // Retour Thomas : quelqu'un qui a dit "je ne peux pas" (tout en
-            // restant admin invisible) n'a aucune raison de suivre une
-            // discussion pour un événement où il ne vient pas.
-            viewerAnsweredNoStillAdmin ? (
+            <>
+            {/* Retour Thomas : quelqu'un qui a dit "je ne peux pas" (tout en
+                restant admin invisible) n'a aucune raison de suivre une
+                discussion pour un événement où il ne vient pas. */}
+            {viewerAnsweredNoStillAdmin ? (
               <Card className="text-center text-sm text-foreground/60">{t("chatHiddenNotAttending")}</Card>
             ) : (
               <EventChat
@@ -576,7 +580,9 @@ export default async function EventPage({
                 isBackstageHidden={isBackstageHiddenForBeneficiaries}
                 isChatHidden={isChatHiddenForBeneficiaries}
               />
-            )
+            )}
+            {adsEnabled && <AdBanner />}
+            </>
           }
           participer={
             <ParticiperTabs
@@ -612,6 +618,7 @@ export default async function EventPage({
                       hideApprovedList={viewerAnsweredNoStillAdmin}
                     />
                   )}
+                  {adsEnabled && <AdBanner />}
                 </>
               }
               bring={
@@ -640,6 +647,7 @@ export default async function EventPage({
                       hideApprovedList={viewerAnsweredNoStillAdmin}
                     />
                   )}
+                  {adsEnabled && <AdBanner />}
                 </>
               }
               cagnotte={
