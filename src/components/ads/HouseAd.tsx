@@ -30,7 +30,7 @@ export function HouseAd() {
 
   return (
     <div className="w-full max-w-lg rounded-konfeti border border-border bg-surface p-3 shadow-konfeti lg:max-w-2xl">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground/40">{t("label")}</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground/60">{t("label")}</p>
       <a href={ad.href} target="_blank" rel="noopener noreferrer">
         {/* eslint-disable-next-line @next/next/no-img-element -- image statique simple, pas besoin du pipeline next/image ici */}
         <img src={ad.image} alt={ad.alt} className="w-full rounded-konfeti" />
