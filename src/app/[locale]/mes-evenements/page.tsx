@@ -245,6 +245,7 @@ export default async function MyEventsPage() {
           />
           <p className="font-display text-lg text-foreground">{t("emptyTitle")}</p>
           <p className="text-base text-foreground/70">{t("emptyText")}</p>
+          {adsEnabled && <AdBanner />}
         </div>
       ) : (
         <div className="flex w-full max-w-lg lg:max-w-2xl flex-col gap-6">
