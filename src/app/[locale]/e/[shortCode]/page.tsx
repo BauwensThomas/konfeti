@@ -651,40 +651,56 @@ export default async function EventPage({
                 </>
               }
               cagnotte={
-                <>
-                {event.pot_enabled && isBeneficiary ? (
-                  // Contrairement à bring/polls/chat, la cagnotte n'a aucun
-                  // mode "masqué mais visible qu'il y a quelque chose" (brief
-                  // 1.4) : l'écran de contribution/suivi reste TOUJOURS
-                  // inaccessible à un bénéficiaire, peu importe le réglage
-                  // (seul le résumé de l'Accueil, plus haut, respecte ce
-                  // réglage -- jamais les détails contributeurs/montant ici).
-                  <Card className="text-center text-sm text-foreground/60">{t("potListHidden")}</Card>
-                ) : potFeatureEnabled ? (
-                  <div className="flex flex-col gap-4">
-                    {beneficiaryNames.length > 0 && (
-                      <p className="text-center text-xs font-semibold text-accent-coral">
-                        {t("beneficiaryNoAccessNote", {
-                          count: beneficiaryNames.length,
-                          names: joinNames(beneficiaryNames),
-                        })}
-                      </p>
-                    )}
-                    <PotContribution
-                      eventId={event.id}
-                      label={event.pot_label}
-                      mode={event.pot_mode as "goal" | "open"}
-                      goalCents={event.pot_goal_cents}
-                      collectedCents={potCollectedCents}
-                      closedAt={event.pot_closed_at}
-                    />
-                    {isAdmin && (
-                      <PotAdminDashboard eventId={event.id} potOwnerId={event.pot_owner} viewerId={user?.id ?? null} />
-                    )}
-                  </div>
-                ) : null}
-                {adsEnabled && <AdBanner />}
-                </>
+                // Bug corrigé : un Fragment enveloppant systématiquement la
+                // pub restait "vrai" même quand `potContent` valait `null`,
+                // ce qui empêchait l'onglet Cagnotte de disparaître quand la
+                // cagnotte est désactivée (retour Thomas). La pub ne
+                // s'ajoute désormais QUE si la cagnotte a réellement un
+                // contenu à montrer -- `null` reste `null` sinon, comme
+                // avant l'ajout des pubs.
+                (() => {
+                  const potContent =
+                    event.pot_enabled && isBeneficiary ? (
+                      // Contrairement à bring/polls/chat, la cagnotte n'a
+                      // aucun mode "masqué mais visible qu'il y a quelque
+                      // chose" (brief 1.4) : l'écran de contribution/suivi
+                      // reste TOUJOURS inaccessible à un bénéficiaire, peu
+                      // importe le réglage (seul le résumé de l'Accueil,
+                      // plus haut, respecte ce réglage -- jamais les
+                      // détails contributeurs/montant ici).
+                      <Card className="text-center text-sm text-foreground/60">{t("potListHidden")}</Card>
+                    ) : potFeatureEnabled ? (
+                      <div className="flex flex-col gap-4">
+                        {beneficiaryNames.length > 0 && (
+                          <p className="text-center text-xs font-semibold text-accent-coral">
+                            {t("beneficiaryNoAccessNote", {
+                              count: beneficiaryNames.length,
+                              names: joinNames(beneficiaryNames),
+                            })}
+                          </p>
+                        )}
+                        <PotContribution
+                          eventId={event.id}
+                          label={event.pot_label}
+                          mode={event.pot_mode as "goal" | "open"}
+                          goalCents={event.pot_goal_cents}
+                          collectedCents={potCollectedCents}
+                          closedAt={event.pot_closed_at}
+                        />
+                        {isAdmin && (
+                          <PotAdminDashboard eventId={event.id} potOwnerId={event.pot_owner} viewerId={user?.id ?? null} />
+                        )}
+                      </div>
+                    ) : null;
+
+                  if (!potContent) return null;
+                  return (
+                    <>
+                      {potContent}
+                      {adsEnabled && <AdBanner />}
+                    </>
+                  );
+                })()
               }
             />
           }
