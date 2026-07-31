@@ -651,7 +651,8 @@ export default async function EventPage({
                 </>
               }
               cagnotte={
-                event.pot_enabled && isBeneficiary ? (
+                <>
+                {event.pot_enabled && isBeneficiary ? (
                   // Contrairement à bring/polls/chat, la cagnotte n'a aucun
                   // mode "masqué mais visible qu'il y a quelque chose" (brief
                   // 1.4) : l'écran de contribution/suivi reste TOUJOURS
@@ -681,7 +682,9 @@ export default async function EventPage({
                       <PotAdminDashboard eventId={event.id} potOwnerId={event.pot_owner} viewerId={user?.id ?? null} />
                     )}
                   </div>
-                ) : null
+                ) : null}
+                {adsEnabled && <AdBanner />}
+                </>
               }
             />
           }
