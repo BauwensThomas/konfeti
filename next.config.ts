@@ -26,13 +26,23 @@ const supabaseWsUrl = supabaseUrl.replace(/^https:/, "wss:");
 // développement (`script.debug.js`) -- en production, `<Analytics />`
 // utilise le proxy same-origin de Next (`/_vercel/insights/...`), déjà
 // couvert par 'self', jamais besoin de ce domaine externe.
+// Domaines Google AdSense (retour Thomas : script bloqué par la CSP à
+// l'activation des pubs) -- ensemble large en wildcard recommandé par Google
+// lui-même pour AdSense (script/iframe/tracking répartis sur plusieurs
+// sous-domaines googlesyndication/doubleclick/google, pas un seul hôte fixe).
+const adsenseScriptSrc = "https://*.googlesyndication.com https://*.google.com https://*.doubleclick.net https://*.googletagservices.com";
+const adsenseImgSrc = "https://*.googlesyndication.com https://*.google.com https://*.doubleclick.net https://*.gstatic.com";
+const adsenseFrameSrc = "https://*.googlesyndication.com https://*.google.com https://*.doubleclick.net";
+const adsenseConnectSrc = "https://*.googlesyndication.com https://*.google.com https://*.doubleclick.net";
+
 const cspHeader = `
   default-src 'self';
-  script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' https://va.vercel-scripts.com" : ""};
+  script-src 'self' 'unsafe-inline' ${adsenseScriptSrc} ${isDev ? "'unsafe-eval' https://va.vercel-scripts.com" : ""};
   style-src 'self' 'unsafe-inline';
-  img-src 'self' data: blob: ${supabaseUrl};
+  img-src 'self' data: blob: ${supabaseUrl} ${adsenseImgSrc};
   font-src 'self';
-  connect-src 'self' ${supabaseUrl} ${supabaseWsUrl} https://*.sentry.io https://*.ingest.sentry.io https://photon.komoot.io;
+  connect-src 'self' ${supabaseUrl} ${supabaseWsUrl} https://*.sentry.io https://*.ingest.sentry.io https://photon.komoot.io ${adsenseConnectSrc};
+  frame-src ${adsenseFrameSrc};
   object-src 'none';
   base-uri 'self';
   form-action 'self';

@@ -139,6 +139,9 @@
     "deleteAccountErrorPotBalance": "Il reste des fonds non versés sur ton compte Stripe lié à une cagnotte : attends le versement ou contacte-nous avant de supprimer ton compte.",
     "deleteAccountErrorUnknown": "Une erreur est survenue, réessaie."
   },
+  "Ads": {
+    "label": "Publicité"
+  },
   "MyEvents": {
     "heading": "Mes événements",
     "installGuideLink": "Comment installer l'application ?",

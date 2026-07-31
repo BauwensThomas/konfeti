@@ -139,6 +139,9 @@
     "deleteAccountErrorPotBalance": "Auf deinem mit einer Kasse verknüpften Stripe-Konto stehen noch nicht ausgezahlte Gelder: warte auf die Auszahlung oder kontaktiere uns, bevor du dein Konto löschst.",
     "deleteAccountErrorUnknown": "Ein Fehler ist aufgetreten, versuch es erneut."
   },
+  "Ads": {
+    "label": "Werbung"
+  },
   "MyEvents": {
     "heading": "Meine Events",
     "installGuideLink": "Wie installiere ich die App?",

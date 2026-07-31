@@ -139,6 +139,9 @@
     "deleteAccountErrorPotBalance": "Ainda há fundos por transferir na tua conta Stripe associada a um saco comum: aguarda a transferência ou contacta-nos antes de eliminares a tua conta.",
     "deleteAccountErrorUnknown": "Ocorreu um erro, tenta novamente."
   },
+  "Ads": {
+    "label": "Publicidade"
+  },
   "MyEvents": {
     "heading": "Os meus eventos",
     "installGuideLink": "Como instalo a aplicação?",

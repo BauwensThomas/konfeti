@@ -139,6 +139,9 @@
     "deleteAccountErrorPotBalance": "Todavía quedan fondos pendientes en tu cuenta de Stripe vinculada a un bote: espera el pago o contáctanos antes de eliminar tu cuenta.",
     "deleteAccountErrorUnknown": "Se ha producido un error, inténtalo de nuevo."
   },
+  "Ads": {
+    "label": "Publicidad"
+  },
   "MyEvents": {
     "heading": "Mis eventos",
     "installGuideLink": "¿Cómo instalo la aplicación?",

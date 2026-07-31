@@ -139,6 +139,9 @@
     "deleteAccountErrorPotBalance": "There are still unpaid funds on your Stripe account linked to a pot: wait for the payout or contact us before deleting your account.",
     "deleteAccountErrorUnknown": "Something went wrong, please try again."
   },
+  "Ads": {
+    "label": "Advertisement"
+  },
   "MyEvents": {
     "heading": "My events",
     "installGuideLink": "How do I install the app?",

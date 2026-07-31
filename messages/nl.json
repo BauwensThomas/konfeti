@@ -139,6 +139,9 @@
     "deleteAccountErrorPotBalance": "Er staat nog geld klaar op je Stripe-rekening gekoppeld aan een spaarpot: wacht op de uitbetaling of neem contact met ons op voor je je account verwijdert.",
     "deleteAccountErrorUnknown": "Er is een fout opgetreden, probeer opnieuw."
   },
+  "Ads": {
+    "label": "Advertentie"
+  },
   "MyEvents": {
     "heading": "Mijn evenementen",
     "installGuideLink": "Hoe installeer ik de app?",

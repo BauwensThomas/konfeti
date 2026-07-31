@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import Script from "next/script";
+import { HouseAd } from "./HouseAd";
 
 // Retour Thomas : "j'aimerais rajouter des pub admob" -- AdMob est pensé
 // pour une vraie app native, alors que l'Android de Konfeti n'est qu'un
@@ -14,10 +16,23 @@ import Script from "next/script";
 // (voir mes-evenements/page.tsx), donc le script Google n'est jamais
 // chargé non plus (pas de cookie/traqueur publicitaire posé pour rien).
 export function AdBanner() {
+  const t = useTranslations("Ads");
   const insRef = useRef<HTMLModElement>(null);
   const pushed = useRef(false);
+  // Retour Thomas : "possible de mettre mes pubs bonvoleur.com et mes
+  // poilus.com... tant que adsense n'est pas accepté, une fois accepté ça
+  // passe d'office avant, si il y a un bug google on voit les miennes" --
+  // Google pose l'attribut `data-ad-status` sur le <ins> une fois la
+  // tentative de remplissage terminée : "filled" (vraie pub Google) ou
+  // "unfilled" (aucune pub disponible). Un `MutationObserver` regarde ce
+  // changement ; un minuteur de secours couvre aussi le cas où le script
+  // Google ne charge pas du tout (attribut jamais posé).
+  const [showHouseAd, setShowHouseAd] = useState(false);
+  const clientId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
+  const slotId = process.env.NEXT_PUBLIC_ADSENSE_SLOT_ID;
 
   useEffect(() => {
+    if (!clientId || !slotId) return;
     if (pushed.current) return;
     pushed.current = true;
     try {
@@ -26,24 +41,30 @@ export function AdBanner() {
     } catch {
       // Best-effort : une pub qui ne charge pas ne doit jamais casser la page.
     }
-  }, []);
 
-  const clientId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
-  const slotId = process.env.NEXT_PUBLIC_ADSENSE_SLOT_ID;
-  if (!clientId || !slotId) {
-    // TEMPORAIRE (retour Thomas : "j'aimerais voir en localhost où se
-    // trouvent les cadres") -- à retirer une fois la position confirmée,
-    // pour revenir à `return null` en prod tant qu'aucun identifiant
-    // AdSense réel n'est configuré.
-    return (
-      <div className="flex h-24 w-full items-center justify-center rounded-konfeti border-2 border-dashed border-primary/40 bg-primary/5 text-sm text-primary/60">
-        Emplacement publicité (AdSense)
-      </div>
-    );
-  }
+    const el = insRef.current;
+    if (!el) return;
+
+    const checkStatus = () => {
+      if (el.getAttribute("data-ad-status") === "unfilled") setShowHouseAd(true);
+    };
+    const observer = new MutationObserver(checkStatus);
+    observer.observe(el, { attributes: true, attributeFilter: ["data-ad-status"] });
+    const fallbackTimer = setTimeout(() => {
+      if (el.getAttribute("data-ad-status") !== "filled") setShowHouseAd(true);
+    }, 4000);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(fallbackTimer);
+    };
+  }, [clientId, slotId]);
+
+  if (!clientId || !slotId || showHouseAd) return <HouseAd />;
 
   return (
-    <div className="w-full max-w-lg lg:max-w-2xl">
+    <div className="w-full max-w-lg rounded-konfeti border border-border bg-surface p-3 shadow-konfeti lg:max-w-2xl">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground/40">{t("label")}</p>
       <Script
         async
         src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${clientId}`}
