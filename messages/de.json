@@ -777,7 +777,9 @@
     "rightsItem2": "Du kannst dein Konto jederzeit über dein Profil löschen",
     "rightsItem3": "Für jede andere Anfrage (Zugang, Berichtigung, Widerspruch) schreib an <a>konfeti@belgacai.com</a>",
     "cookiesHeading": "Cookies",
-    "cookiesBody": "Konfeti verwendet ein technisches Cookie, das für den Betrieb des Dienstes notwendig ist. Siehe unsere Seite <a>Cookies verwalten</a> für Details."
+    "cookiesBody": "Konfeti verwendet ein technisches Cookie, das für den Betrieb des Dienstes notwendig ist. Siehe unsere Seite <a>Cookies verwalten</a> für Details.",
+    "adsHeading": "Werbung",
+    "adsBody": "Konfeti kann Werbeanzeigen von Google AdSense anzeigen. In diesem Fall kann Google Werbe-Cookies setzen und bestimmte Daten (wie deinen ungefähren Standort oder deinen Browserverlauf) verwenden, um relevante Anzeigen anzubieten. Du kannst deine Werbeeinstellungen unter <a>adssettings.google.com</a> verwalten."
   },
   "Terms": {
     "title": "Allgemeine Nutzungsbedingungen",
@@ -815,6 +817,8 @@
     "notItem2": "Keine seitenübergreifenden Tracking-Cookies",
     "notItem3": "Kein Weiterverkauf von Navigationsdaten an Dritte",
     "notBody": "Sollte Konfeti eines Tages ein Tool zur Reichweitenmessung einführen, bevorzugen wir eine Lösung, die kein Cookie setzt und keine personenbezogenen Daten sammelt; diese Seite wird dann entsprechend aktualisiert.",
+    "adsHeading": "Werbe-Cookies",
+    "adsBody": "Wenn Werbung aktiviert ist, kann Google AdSense Werbe-Cookies auf deinem Gerät setzen, um relevante Anzeigen zu zeigen und deren Leistung zu messen. Du kannst deine Werbeeinstellungen unter <a>adssettings.google.com</a> verwalten.",
     "manageHeading": "Wie du dieses Cookie verwaltest",
     "manageBody": "Du kannst dieses Cookie jederzeit über die Einstellungen deines Browsers löschen, oder direkt unten. Beachte, dass dies dich von Konfeti abmeldet.",
     "manageButton": "Meine Cookies löschen",

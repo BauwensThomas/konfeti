@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { LegalPageLayout, LegalSection } from "@/components/LegalPageLayout";
 import { localizedPageMetadata } from "@/lib/seo";
 
@@ -16,6 +17,19 @@ export default async function ConfidentialitePage() {
       {chunks}
     </a>
   );
+  const adSettingsLink = (chunks: React.ReactNode) => (
+    <a href="https://adssettings.google.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary">
+      {chunks}
+    </a>
+  );
+
+  // Section "Publicités" seulement si le flag est actif (retour Thomas :
+  // "tu ne dois pas dire qu'on utilise les pubs ?") -- reste honnête tant
+  // que la fonctionnalité est désactivée, apparaît automatiquement le jour
+  // où Thomas active le flag depuis /admin/flags, sans retouche manuelle.
+  const supabase = await createClient();
+  const { data: adsFlag } = await supabase.from("feature_flags").select("enabled").eq("key", "ads").maybeSingle();
+  const adsEnabled = !!adsFlag?.enabled;
 
   return (
     <LegalPageLayout title={t("title")} updatedAt={t("updatedAt")}>
@@ -86,6 +100,12 @@ export default async function ConfidentialitePage() {
           })}
         </p>
       </LegalSection>
+
+      {adsEnabled && (
+        <LegalSection heading={t("adsHeading")}>
+          <p>{t.rich("adsBody", { a: adSettingsLink })}</p>
+        </LegalSection>
+      )}
     </LegalPageLayout>
   );
 }

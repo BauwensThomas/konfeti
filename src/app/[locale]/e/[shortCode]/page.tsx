@@ -28,6 +28,7 @@ import { EventWeather } from "@/components/EventWeather";
 import { shouldShowWeather } from "@/lib/weather";
 import { BringAccueilGauges } from "@/components/bring/BringAccueilGauges";
 import { PollsAccueilSummary } from "@/components/polls/PollsAccueilSummary";
+import { AdBanner } from "@/components/ads/AdBanner";
 import { PollsQuotaWarningSection } from "@/components/polls/PollsQuotaWarningSection";
 import { JourJCard } from "@/components/JourJCard";
 import { ArrivalInfoBlock } from "@/components/ArrivalInfoBlock";
@@ -282,6 +283,13 @@ export default async function EventPage({
     // "toujours masquée... ni montant, ni contributeurs, ni existence" --
     // contrairement à bring/polls/chat, aucun mode "masqué mais visible
     // qu'il y a quelque chose").
+    // Retour Thomas : pub aussi sur la page événement (Accueil), pas
+    // seulement "Mes événements" -- même flag global "ads", indépendant de
+    // pot_enabled (contrairement à la cagnotte, la pub n'a aucune raison
+    // d'être liée à cette configuration d'événement précise).
+    const { data: adsFlag } = await supabase.from("feature_flags").select("enabled").eq("key", "ads").maybeSingle();
+    const adsEnabled = !!adsFlag?.enabled;
+
     let potFeatureEnabled = false;
     let potCollectedCents = 0;
     // Retour Thomas : plutôt que le total cumulé (trop d'infos d'un coup,
@@ -456,6 +464,7 @@ export default async function EventPage({
               isHost={isHost}
               isAdmin={isAdmin}
               isBeneficiary={isBeneficiary}
+              adsEnabled={adsEnabled}
               potFeatureEnabled={potFeatureEnabled}
               viewerIsPotOwner={viewerIsPotOwner}
               potOwnerStripeConnected={potOwnerStripeConnected}
@@ -859,6 +868,7 @@ async function EventAccueil({
   isHost,
   isAdmin,
   isBeneficiary,
+  adsEnabled,
   potFeatureEnabled,
   viewerIsPotOwner,
   potOwnerStripeConnected,
@@ -882,6 +892,9 @@ async function EventAccueil({
   isHost: boolean;
   isAdmin: boolean;
   isBeneficiary: boolean;
+  // Retour Thomas : pub AdSense en bas de l'Accueil, même flag global "ads"
+  // que "Mes événements" (voir mes-evenements/page.tsx).
+  adsEnabled: boolean;
   // Feature flag `pot` (retour Thomas : "il faut que tout ce qui parle de la
   // cagnotte disparaisse si désactivé") -- `event.pot_enabled` seul (réglage
   // de CET événement) ne suffit pas, il faut aussi que le flag global soit
@@ -1332,6 +1345,8 @@ async function EventAccueil({
       {isAdmin && isJourJ(event.starts_at, event.date_mode, event.ends_at, event.ended_at) && (
         <EndEventButton eventId={event.id} shortCode={event.short_code} />
       )}
+
+      {adsEnabled && <AdBanner />}
     </div>
   );
 }

@@ -191,6 +191,28 @@ export default async function MyEventsPage() {
     );
   }
 
+  // Retour Thomas : "la pub doit être tous les 3 événements, sinon quelqu'un
+  // avec beaucoup d'événements ne la verra jamais" -- position calculée à
+  // l'avance (pure, pas de mutation pendant le rendu) sur l'ordre combiné
+  // hébergé/participe/en attente, pour qu'un pas de 3 s'applique à
+  // l'ensemble réellement affiché peu importe comment la page est
+  // découpée en sections.
+  const adPositionByEventId = new Map(events.map((e, i) => [e.id, i]));
+  function EventCardWithAd(props: { event: EventRow; isHosted: boolean; isPending?: boolean }) {
+    const position = adPositionByEventId.get(props.event.id) ?? -1;
+    const showAd = adsEnabled && position >= 0 && (position + 1) % 3 === 0;
+    return (
+      <>
+        <EventCard event={props.event} isHosted={props.isHosted} isPending={props.isPending} />
+        {showAd && (
+          <li className="list-none">
+            <AdBanner />
+          </li>
+        )}
+      </>
+    );
+  }
+
   return (
     <main className="flex flex-1 flex-col items-center gap-8 px-6 py-12 sm:py-16">
       <div className="flex w-full max-w-lg lg:max-w-2xl items-center justify-between">
@@ -234,7 +256,7 @@ export default async function MyEventsPage() {
                   </h2>
                   <ul className="flex flex-col gap-4">
                     {hostedEvents.map((event) => (
-                      <EventCard key={event.id} event={event} isHosted />
+                      <EventCardWithAd key={event.id} event={event} isHosted />
                     ))}
                   </ul>
                 </div>
@@ -246,7 +268,7 @@ export default async function MyEventsPage() {
                   </h2>
                   <ul className="flex flex-col gap-4">
                     {attendingEvents.map((event) => (
-                      <EventCard key={event.id} event={event} isHosted={false} />
+                      <EventCardWithAd key={event.id} event={event} isHosted={false} />
                     ))}
                   </ul>
                 </div>
@@ -258,7 +280,7 @@ export default async function MyEventsPage() {
                   </h2>
                   <ul className="flex flex-col gap-4">
                     {pendingEvents.map((event) => (
-                      <EventCard key={event.id} event={event} isHosted={false} isPending />
+                      <EventCardWithAd key={event.id} event={event} isHosted={false} isPending />
                     ))}
                   </ul>
                 </div>
@@ -267,20 +289,18 @@ export default async function MyEventsPage() {
           ) : (
             <ul className="flex flex-col gap-4">
               {hostedEvents.map((event) => (
-                <EventCard key={event.id} event={event} isHosted />
+                <EventCardWithAd key={event.id} event={event} isHosted />
               ))}
               {attendingEvents.map((event) => (
-                <EventCard key={event.id} event={event} isHosted={false} />
+                <EventCardWithAd key={event.id} event={event} isHosted={false} />
               ))}
               {pendingEvents.map((event) => (
-                <EventCard key={event.id} event={event} isHosted={false} isPending />
+                <EventCardWithAd key={event.id} event={event} isHosted={false} isPending />
               ))}
             </ul>
           )}
         </div>
       )}
-
-      {adsEnabled && <AdBanner />}
     </main>
   );
 }

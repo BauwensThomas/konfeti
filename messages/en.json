@@ -777,7 +777,9 @@
     "rightsItem2": "You can delete your account at any time from your profile",
     "rightsItem3": "For any other request (access, rectification, objection), write to <a>konfeti@belgacai.com</a>",
     "cookiesHeading": "Cookies",
-    "cookiesBody": "Konfeti uses one technical cookie necessary for the service to work. See our <a>Manage cookies</a> page for details."
+    "cookiesBody": "Konfeti uses one technical cookie necessary for the service to work. See our <a>Manage cookies</a> page for details.",
+    "adsHeading": "Advertising",
+    "adsBody": "Konfeti may display ads served by Google AdSense. When it does, Google may set advertising cookies and use certain data (such as your approximate location or browsing history) to serve relevant ads. You can manage your ad preferences at <a>adssettings.google.com</a>."
   },
   "Terms": {
     "title": "Terms of use",
@@ -815,6 +817,8 @@
     "notItem2": "No cross-site tracking cookies",
     "notItem3": "No reselling of browsing data to third parties",
     "notBody": "If Konfeti ever adds an audience measurement tool, we'll favor a solution that doesn't set a cookie and doesn't collect any personally identifiable data; this page will be updated accordingly.",
+    "adsHeading": "Advertising cookies",
+    "adsBody": "When ads are enabled, Google AdSense may set advertising cookies on your device to serve relevant ads and measure their performance. You can manage your ad preferences at <a>adssettings.google.com</a>.",
     "manageHeading": "How to manage this cookie",
     "manageBody": "You can delete this cookie at any time from your browser's settings, or directly below. Note that this will log you out of Konfeti.",
     "manageButton": "Delete my cookies",

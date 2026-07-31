@@ -817,6 +817,8 @@
     "notItem2": "Aucun cookie de traçage entre sites",
     "notItem3": "Aucune revente de données de navigation à des tiers",
     "notBody": "Si Konfeti active un jour un outil de mesure d'audience, nous privilégierons une solution qui ne dépose pas de cookie et qui ne collecte aucune donnée personnellement identifiable ; cette page sera mise à jour en conséquence.",
+    "adsHeading": "Cookies publicitaires",
+    "adsBody": "Lorsque les publicités sont activées, Google AdSense peut déposer des cookies publicitaires sur votre appareil, pour proposer des annonces pertinentes et mesurer leur performance. Vous pouvez gérer vos préférences publicitaires sur <a>adssettings.google.com</a>.",
     "manageHeading": "Comment gérer ce cookie",
     "manageBody": "Vous pouvez à tout moment supprimer ce cookie depuis les réglages de votre navigateur, ou directement ci-dessous. Sachez que cela vous déconnectera de Konfeti.",
     "manageButton": "Supprimer mes cookies",

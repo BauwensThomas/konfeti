@@ -777,7 +777,9 @@
     "rightsItem2": "Je kan je account op elk moment verwijderen vanuit je profiel",
     "rightsItem3": "Voor elke andere aanvraag (toegang, rectificatie, bezwaar), schrijf naar <a>konfeti@belgacai.com</a>",
     "cookiesHeading": "Cookies",
-    "cookiesBody": "Konfeti gebruikt een technische cookie die noodzakelijk is voor de werking van de dienst. Zie onze pagina <a>Cookies beheren</a> voor de details."
+    "cookiesBody": "Konfeti gebruikt een technische cookie die noodzakelijk is voor de werking van de dienst. Zie onze pagina <a>Cookies beheren</a> voor de details.",
+    "adsHeading": "Advertenties",
+    "adsBody": "Konfeti kan advertenties tonen die worden aangeleverd door Google AdSense. In dat geval kan Google advertentiecookies plaatsen en bepaalde gegevens gebruiken (zoals je geschatte locatie of je browsegeschiedenis) om relevante advertenties te tonen. Je kunt je advertentievoorkeuren beheren via <a>adssettings.google.com</a>."
   },
   "Terms": {
     "title": "Algemene gebruiksvoorwaarden",
@@ -815,6 +817,8 @@
     "notItem2": "Geen enkele trackingcookie tussen sites",
     "notItem3": "Geen enkele doorverkoop van navigatiegegevens aan derden",
     "notBody": "Als Konfeti ooit een bezoekersanalysetool activeert, geven we de voorkeur aan een oplossing die geen cookie plaatst en geen enkel persoonlijk identificeerbaar gegeven verzamelt; deze pagina wordt dan dienovereenkomstig bijgewerkt.",
+    "adsHeading": "Advertentiecookies",
+    "adsBody": "Wanneer advertenties zijn ingeschakeld, kan Google AdSense advertentiecookies op je apparaat plaatsen om relevante advertenties te tonen en de prestaties ervan te meten. Je kunt je advertentievoorkeuren beheren via <a>adssettings.google.com</a>.",
     "manageHeading": "Hoe deze cookie beheren",
     "manageBody": "Je kan deze cookie op elk moment verwijderen via de instellingen van je browser, of rechtstreeks hieronder. Weet dat dit je zal uitloggen van Konfeti.",
     "manageButton": "Mijn cookies verwijderen",
