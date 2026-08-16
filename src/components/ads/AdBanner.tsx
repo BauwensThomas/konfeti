@@ -17,7 +17,6 @@ import { HouseAd } from "./HouseAd";
 export function AdBanner() {
   const t = useTranslations("Ads");
   const insRef = useRef<HTMLModElement>(null);
-  const pushed = useRef(false);
   // Retour Thomas : "possible de mettre mes pubs bonvoleur.com et mes
   // poilus.com... tant que adsense n'est pas accepté, une fois accepté ça
   // passe d'office avant, si il y a un bug google on voit les miennes" --
@@ -37,8 +36,8 @@ export function AdBanner() {
 
   useEffect(() => {
     if (!clientId || !slotId) return;
-    if (pushed.current) return;
-    pushed.current = true;
+    const el = insRef.current;
+    if (!el) return;
 
     // Script injecté manuellement (pas `next/script`) : Next.js y ajoute un
     // attribut `data-nscript` que le script Google ne reconnaît pas
@@ -55,15 +54,24 @@ export function AdBanner() {
       document.head.appendChild(script);
     }
 
-    try {
-      // @ts-expect-error -- adsbygoogle est injecté globalement par le script Google, pas typé
-      (window.adsbygoogle = window.adsbygoogle || []).push({});
-    } catch {
-      // Best-effort : une pub qui ne charge pas ne doit jamais casser la page.
+    // Bug réel remonté par Sentry (utilisateur réel, "All 'ins' elements...
+    // already have ads in them") : un simple ref booléen (`pushed.current`)
+    // ne protège pas contre une réutilisation du même noeud DOM `<ins>` par
+    // React lors d'une réconciliation (ex. la liste "Mes événements" change
+    // légèrement de position pour la pub suite à un rafraîchissement) --
+    // le ref repart à `false` sur le "nouveau" montage, mais l'`<ins>` réel
+    // a déjà été traité par Google. Vérifier l'attribut que Google pose
+    // lui-même sur l'élément (`data-adsbygoogle-status`, "done" une fois
+    // traité) est la protection recommandée par Google, directement sur le
+    // DOM plutôt que sur un état React qui peut se désynchroniser.
+    if (!el.getAttribute("data-adsbygoogle-status")) {
+      try {
+        // @ts-expect-error -- adsbygoogle est injecté globalement par le script Google, pas typé
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
+      } catch {
+        // Best-effort : une pub qui ne charge pas ne doit jamais casser la page.
+      }
     }
-
-    const el = insRef.current;
-    if (!el) return;
 
     const checkStatus = () => {
       const status = el.getAttribute("data-ad-status");
