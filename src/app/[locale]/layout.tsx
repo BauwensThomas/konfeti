@@ -59,6 +59,7 @@ export async function generateMetadata({
     // choix naturel ici, un simple changement de code plutôt qu'un fichier à
     // déposer à la main.
     verification: {
+      google: "EMPLmzipb2swyii7hKstIMKK_n1lTrwbnjO3y-WB8f4",
       other: { "msvalidate.01": "8ABCB6EDE93FF1A2E1C99FA1281F33E7" },
     },
     // iOS ne respecte pas `manifest.ts`/`display: "standalone"` pour "Ajouter
