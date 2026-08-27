@@ -60,7 +60,7 @@ export async function generateMetadata({
     // déposer à la main.
     verification: {
       google: "EMPLmzipb2swyii7hKstIMKK_n1lTrwbnjO3y-WB8f4",
-      other: { "msvalidate.01": "8ABCB6EDE93FF1A2E1C99FA1281F33E7" },
+      other: { "msvalidate.01": "83EE57CB502C7BC5F3A83EBA319E856B" },
     },
     // iOS ne respecte pas `manifest.ts`/`display: "standalone"` pour "Ajouter
     // à l'écran d'accueil" (comportement Chrome/Android) : ces balises meta
